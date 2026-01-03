@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -24,11 +25,18 @@ import com.prodash.reminders.R
 
 @Composable
 fun SignInScreen(
+    onSignedIn: () -> Unit,
     onLaunchGoogleSignIn: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SignInViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    LaunchedEffect(state.signedIn) {
+        if (state.signedIn) {
+            viewModel.consumeSignedIn()
+            onSignedIn()
+        }
+    }
 
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
