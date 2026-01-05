@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
@@ -67,7 +68,22 @@ class SignInViewModel(application: Application) : AndroidViewModel(application) 
             val account = task.getResult(ApiException::class.java)
             onGoogleResult(account)
         } catch (e: ApiException) {
-            _uiState.value = SignInUiState(error = e.message ?: "Google sign-in failed")
+            val errorMessage = when (e.statusCode) {
+                CommonStatusCodes.DEVELOPER_ERROR -> {
+                    "Google Sign-In config error (code 10). Add your app debug SHA-1 in Firebase, " +
+                        "download a fresh google-services.json, and enable Google provider in Firebase Auth."
+                }
+                CommonStatusCodes.NETWORK_ERROR -> {
+                    "Network error while signing in. Check internet and try again."
+                }
+                CommonStatusCodes.CANCELED -> {
+                    "Sign-in canceled."
+                }
+                else -> {
+                    "Google sign-in failed (code ${e.statusCode}). ${e.localizedMessage ?: ""}".trim()
+                }
+            }
+            _uiState.value = SignInUiState(error = errorMessage)
         }
     }
 
