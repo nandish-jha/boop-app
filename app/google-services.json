@@ -1,31 +1,44 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "REPLACE_ME_IN_FIREBASE_CONSOLE",
-    "storage_bucket": "REPLACE_ME_IN_FIREBASE_CONSOLE.appspot.com"
+    "project_number": "948809119707",
+    "project_id": "prodash-reminders",
+    "storage_bucket": "prodash-reminders.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "mobilesdk_app_id": "1:948809119707:android:caed851ce6ddecab6719fe",
         "android_client_info": {
           "package_name": "com.prodash.reminders"
         }
       },
       "oauth_client": [
         {
-          "client_id": "000000000000-REPLACE.apps.googleusercontent.com",
+          "client_id": "948809119707-e19df4dl3ict2k8jvfoaevcmgqtjgp91.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.prodash.reminders",
+            "certificate_hash": "3912fbb8f7a2ea948f6a2d2fded04de870e2f7fa"
+          }
+        },
+        {
+          "client_id": "948809119707-spaplnadjur8eogs9sbavv4pqj9l259i.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "REPLACE_WITH_FIREBASE_CONSOLE_KEY"
+          "current_key": "AIzaSyDVgNljprvdSnhj_P7xTNRsky_SQwXzwvA"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "948809119707-spaplnadjur8eogs9sbavv4pqj9l259i.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
