@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import com.prodash.reminders.data.Reminder
+import com.prodash.reminders.data.ReminderType
 import com.prodash.reminders.receiver.ReminderAlarmReceiver
 
 object ReminderScheduler {
@@ -23,6 +24,7 @@ object ReminderScheduler {
     }
 
     fun schedule(context: Context, reminder: Reminder) {
+        if (reminder.type != ReminderType.TASK) return
         if (reminder.completed) return
         val due = reminder.dueEpochMillis
         if (due <= System.currentTimeMillis()) return

@@ -4,6 +4,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.WriteBatch
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -41,7 +42,10 @@ class ReminderRepository(
     suspend fun upsert(reminder: Reminder): String {
         val col = collection() ?: return reminder.id
         val payload = mapOf(
+            "type" to reminder.type.name,
             "title" to reminder.title,
+            "body" to reminder.body,
+            "imageUri" to reminder.imageUri,
             "dueEpochMillis" to reminder.dueEpochMillis,
             "completed" to reminder.completed,
             "createdEpochMillis" to reminder.createdEpochMillis,
@@ -66,6 +70,26 @@ class ReminderRepository(
         col.document(reminderId).update("dueEpochMillis", dueEpochMillis).await()
     }
 
+    suspend fun deleteCompletedTaskItems(idsToCancel: List<String>): Int {
+        if (idsToCancel.isEmpty()) return 0
+        val col = collection() ?: return 0
+        var deleted = 0
+        var batch: WriteBatch = firestore.batch()
+        var count = 0
+        idsToCancel.forEachIndexed { index, id ->
+            batch.delete(col.document(id))
+            count++
+            val flush = count == 450 || index == idsToCancel.lastIndex
+            if (flush) {
+                batch.commit().await()
+                deleted += count
+                batch = firestore.batch()
+                count = 0
+            }
+        }
+        return deleted
+    }
+
     suspend fun fetchAllOnce(): List<Reminder> {
         val col = collection() ?: return emptyList()
         val snap = col.orderBy("dueEpochMillis", Query.Direction.ASCENDING).get().await()
@@ -81,13 +105,21 @@ class ReminderRepository(
 
     private fun com.google.firebase.firestore.DocumentSnapshot.toReminder(): Reminder? {
         val id = id ?: return null
+        val type = getString("type")
+            ?.let { value -> runCatching { ReminderType.valueOf(value) }.getOrNull() }
+            ?: ReminderType.TASK
         val title = getString("title") ?: return null
+        val body = getString("body") ?: ""
+        val imageUri = getString("imageUri")
         val due = getLong("dueEpochMillis") ?: return null
         val completed = getBoolean("completed") ?: false
         val created = getLong("createdEpochMillis") ?: System.currentTimeMillis()
         return Reminder(
             id = id,
+            type = type,
             title = title,
+            body = body,
+            imageUri = imageUri,
             dueEpochMillis = due,
             completed = completed,
             createdEpochMillis = created,
