@@ -1,0 +1,11 @@
+{
+  "name": "Nandish Productivity",
+  "short_name": "Productivity",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": []
+}
