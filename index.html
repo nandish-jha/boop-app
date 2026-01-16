@@ -9,9 +9,16 @@
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="app">
-    <header><h1>Productivity</h1></header>
-    <main id="view">Loading…</main>
+  <div class="app">
+    <header class="topbar" id="pageTitle">Home</header>
+    <main id="view" class="view"></main>
+    <nav class="bottom-nav">
+      <button class="nav-btn active" data-tab="home">Home</button>
+      <button class="nav-btn" data-tab="tasks">Tasks</button>
+      <button class="nav-btn" data-tab="habits">Habits</button>
+      <button class="nav-btn" data-tab="budget">Budget</button>
+      <button class="nav-btn" data-tab="more">More</button>
+    </nav>
   </div>
   <script src="app.js"></script>
   <script>

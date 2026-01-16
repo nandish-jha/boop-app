@@ -1,6 +1,29 @@
-:root { --bg:#000; --text:#f5f5f5; }
-* { box-sizing: border-box; }
-body { margin:0; background:var(--bg); color:var(--text); font-family: system-ui, sans-serif; }
-header { padding: 20px; border-bottom: 1px solid #1f1f1f; }
-h1 { margin: 0; font-size: 20px; }
-main { padding: 20px; }
+/* AMOLED dark theme */
+:root {
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #121212;
+  --border: #1f1f1f;
+  --text: #f5f5f5;
+  --text-2: #b4b4b4;
+  --text-3: #6e6e6e;
+  --accent: #e8e8e8;
+  --radius: 18px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; font-size: 15px; }
+.app { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+
+.topbar { position: sticky; top: 0; padding: 14px 20px; background: rgba(0,0,0,0.9); border-bottom: 1px solid var(--border); font-weight: 700; font-size: 20px; }
+.view { flex: 1; padding: 16px; padding-bottom: 90px; }
+
+.bottom-nav {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: 68px;
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  background: #000; border-top: 1px solid var(--border);
+}
+.nav-btn { background: none; border: none; color: var(--text-3); font-size: 12px; cursor: pointer; padding: 8px; display:flex; flex-direction:column; align-items:center; gap:2px; }
+.nav-btn.active { color: var(--text); }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
