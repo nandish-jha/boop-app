@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,14 +20,12 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -43,39 +42,36 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.prodash.reminders.R
 import com.prodash.reminders.data.Reminder
 import com.prodash.reminders.data.ReminderType
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private enum class HomeTab { HOME, REMINDERS, NOTES }
+private enum class HomeTab { HOME, REMINDERS, CALENDAR, NOTES }
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun HomeScreen(
     onAddReminder: () -> Unit,
     onOpenReminder: (String) -> Unit,
-    onSignedOut: () -> Unit,
+    onOpenAccount: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel(),
 ) {
     val reminders by viewModel.reminders.collectAsState()
-    var menuExpanded by rememberSaveable { mutableStateOf(false) }
-    var selectedTab by rememberSaveable { mutableStateOf(HomeTab.HOME) }
+    val selectedTab = rememberSaveable { androidx.compose.runtime.mutableStateOf(HomeTab.HOME) }
 
     val notes = remember(reminders) { reminders.filter { it.type == ReminderType.NOTE } }
     val tasks = remember(reminders) { reminders.filter { it.type == ReminderType.TASK } }
@@ -89,26 +85,19 @@ fun HomeScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Luminous", fontWeight = FontWeight.ExtraBold) },
+                title = { Text("Boop", fontWeight = FontWeight.ExtraBold) },
                 actions = {
-                    IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = null)
-                    }
-                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Delete completed tasks") },
-                            onClick = {
-                                menuExpanded = false
-                                viewModel.deleteCompletedTasks()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.sign_out)) },
-                            onClick = {
-                                menuExpanded = false
-                                viewModel.signOut(onSignedOut)
-                            },
-                        )
+                    IconButton(onClick = onOpenAccount) {
+                        Surface(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(MaterialTheme.shapes.small),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("👤")
+                            }
+                        }
                     }
                 },
             )
@@ -121,33 +110,33 @@ fun HomeScreen(
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)) {
                 NavigationBarItem(
-                    selected = selectedTab == HomeTab.HOME,
-                    onClick = { selectedTab = HomeTab.HOME },
+                    selected = selectedTab.value == HomeTab.HOME,
+                    onClick = { selectedTab.value = HomeTab.HOME },
                     icon = { Icon(Icons.Default.Home, null) },
                     label = { Text("Home") },
                 )
                 NavigationBarItem(
-                    selected = selectedTab == HomeTab.REMINDERS,
-                    onClick = { selectedTab = HomeTab.REMINDERS },
+                    selected = selectedTab.value == HomeTab.REMINDERS,
+                    onClick = { selectedTab.value = HomeTab.REMINDERS },
                     icon = { Icon(Icons.Default.Notifications, null) },
                     label = { Text("Reminders") },
                 )
                 NavigationBarItem(
-                    selected = false,
-                    onClick = onAddReminder,
-                    icon = { Icon(Icons.Default.Add, null) },
-                    label = { Text("Create") },
+                    selected = selectedTab.value == HomeTab.CALENDAR,
+                    onClick = { selectedTab.value = HomeTab.CALENDAR },
+                    icon = { Icon(Icons.Default.CalendarMonth, null) },
+                    label = { Text("Calendar") },
                 )
                 NavigationBarItem(
-                    selected = selectedTab == HomeTab.NOTES,
-                    onClick = { selectedTab = HomeTab.NOTES },
+                    selected = selectedTab.value == HomeTab.NOTES,
+                    onClick = { selectedTab.value = HomeTab.NOTES },
                     icon = { Icon(Icons.Default.Description, null) },
                     label = { Text("Notes") },
                 )
             }
         },
     ) { padding ->
-        when (selectedTab) {
+        when (selectedTab.value) {
             HomeTab.HOME -> HomeDashboard(
                 modifier = Modifier.padding(padding),
                 urgent = urgent,
@@ -162,11 +151,54 @@ fun HomeScreen(
                 onOpenReminder = onOpenReminder,
                 onChecked = { item, checked -> viewModel.setCompleted(item, checked) },
             )
+            HomeTab.CALENDAR -> CalendarScreen(
+                modifier = Modifier.padding(padding),
+                tasks = tasks,
+                onOpenReminder = onOpenReminder,
+            )
             HomeTab.NOTES -> NotesGallery(
                 modifier = Modifier.padding(padding),
                 notes = notes,
                 onOpenReminder = onOpenReminder,
             )
+        }
+    }
+}
+
+@Composable
+private fun CalendarScreen(
+    modifier: Modifier,
+    tasks: List<Reminder>,
+    onOpenReminder: (String) -> Unit,
+) {
+    val today = remember { LocalDate.now() }
+    val monthLabel = remember { today.format(DateTimeFormatter.ofPattern("MMMM")) }
+    val upcoming = remember(tasks) { tasks.filter { !it.completed }.sortedBy { it.dueEpochMillis } }
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            Text("SCHEDULE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(monthLabel, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+        }
+        item {
+            ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Today's Focus", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    upcoming.take(3).forEach { task ->
+                        Column(Modifier.clickable { onOpenReminder(task.id) }) {
+                            Text(task.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                formatDateTime(task.dueEpochMillis),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
