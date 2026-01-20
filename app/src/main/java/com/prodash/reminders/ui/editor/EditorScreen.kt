@@ -21,6 +21,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,9 +29,6 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -212,23 +210,17 @@ fun EditorScreen(
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FilterChip(
                     selected = viewModel.type == ReminderType.NOTE,
                     onClick = { viewModel.updateType(ReminderType.NOTE) },
-                    shape = SegmentedButtonDefaults.itemShape(
-                        index = 0,
-                        count = 2,
-                    ),
-                ) { Text("Note") }
-                SegmentedButton(
+                    label = { Text("Notes") },
+                )
+                FilterChip(
                     selected = viewModel.type == ReminderType.TASK,
                     onClick = { viewModel.updateType(ReminderType.TASK) },
-                    shape = SegmentedButtonDefaults.itemShape(
-                        index = 1,
-                        count = 2,
-                    ),
-                ) { Text("Task") }
+                    label = { Text("Tasks") },
+                )
             }
             Spacer(modifier = Modifier.height(16.dp))
             Surface(
