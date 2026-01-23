@@ -27,10 +27,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TimePickerDefaults
@@ -234,21 +235,37 @@ fun EditorScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    OutlinedTextField(
+                    TextField(
                         value = viewModel.title,
                         onValueChange = viewModel::updateTitle,
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("What needs doing?") },
+                        placeholder = { Text("What needs doing?") },
                         singleLine = true,
+                        textStyle = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                            unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                        ),
                     )
                     if (viewModel.type == ReminderType.NOTE) {
-                        OutlinedTextField(
+                        TextField(
                             value = viewModel.body,
                             onValueChange = viewModel::updateBody,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(220.dp),
-                            label = { Text("Start your thought here...") },
+                                .height(280.dp),
+                            placeholder = { Text("Start your thought here...") },
+                            textStyle = MaterialTheme.typography.titleLarge,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                            ),
                         )
                     }
                 }

@@ -55,7 +55,6 @@ import coil.compose.AsyncImage
 import com.prodash.reminders.data.Reminder
 import com.prodash.reminders.data.ReminderType
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -159,44 +158,6 @@ fun HomeScreen(
                 onFilterChange = { selectedFilter.value = it },
                 onOpenReminder = onOpenReminder,
             )
-        }
-    }
-}
-
-@Composable
-private fun CalendarScreen(
-    modifier: Modifier,
-    tasks: List<Reminder>,
-    onOpenReminder: (String) -> Unit,
-) {
-    val today = remember { LocalDate.now() }
-    val monthLabel = remember { today.format(DateTimeFormatter.ofPattern("MMMM")) }
-    val upcoming = remember(tasks) { tasks.filter { !it.completed }.sortedBy { it.dueEpochMillis } }
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            Text("SCHEDULE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(monthLabel, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
-        }
-        item {
-            ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Today's Focus", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    upcoming.take(3).forEach { task ->
-                        Column(Modifier.clickable { onOpenReminder(task.id) }) {
-                            Text(task.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                formatDateTime(task.dueEpochMillis),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
