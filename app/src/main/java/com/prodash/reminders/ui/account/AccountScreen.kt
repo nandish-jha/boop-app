@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun AccountScreen(
     onBack: () -> Unit,
+    onSyncGoogleCalendar: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     val push = remember { mutableStateOf(true) }
@@ -58,10 +59,24 @@ fun AccountScreen(
             Text("Boop", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
             Text("Premium member • Since 2023", color = MaterialTheme.colorScheme.onSurfaceVariant)
 
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Calendar Integration", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Sync your Google Calendar to manage schedules seamlessly with Boop.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(onClick = onSyncGoogleCalendar, modifier = Modifier.fillMaxWidth()) {
+                        Text("Sync Google Calendar")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
             Text("Alert Preferences", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             PrefRow("Push Notifications", push.value) { push.value = it }
-            PrefRow("Daily Summary", daily.value) { daily.value = it }
-            PrefRow("Urgent Reminders", urgent.value) { urgent.value = it }
+            PrefRow("Email Digests", daily.value) { daily.value = it }
+            PrefRow("SMS Reminders", urgent.value) { urgent.value = it }
 
             Spacer(Modifier.height(18.dp))
             Button(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {

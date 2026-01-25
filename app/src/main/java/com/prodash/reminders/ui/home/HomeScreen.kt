@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
@@ -55,10 +56,11 @@ import coil.compose.AsyncImage
 import com.prodash.reminders.data.Reminder
 import com.prodash.reminders.data.ReminderType
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private enum class HomeTab { HOME, REMINDERS, NOTES }
+private enum class HomeTab { HOME, REMINDERS, CALENDAR, NOTES }
 private enum class ItemFilter { ALL, TASKS, NOTES, COMPLETED }
 
 @Composable
@@ -129,6 +131,12 @@ fun HomeScreen(
                     label = { Text("Reminders") },
                 )
                 NavigationBarItem(
+                    selected = selectedTab.value == HomeTab.CALENDAR,
+                    onClick = { selectedTab.value = HomeTab.CALENDAR },
+                    icon = { Icon(Icons.Default.CalendarMonth, null) },
+                    label = { Text("Calendar") },
+                )
+                NavigationBarItem(
                     selected = selectedTab.value == HomeTab.NOTES,
                     onClick = { selectedTab.value = HomeTab.NOTES },
                     icon = { Icon(Icons.Default.Description, null) },
@@ -151,6 +159,11 @@ fun HomeScreen(
                 onOpenReminder = onOpenReminder,
                 onChecked = { item, checked -> viewModel.setCompleted(item, checked) },
             )
+            HomeTab.CALENDAR -> CalendarScreen(
+                modifier = Modifier.padding(padding),
+                tasks = tasks,
+                onOpenReminder = onOpenReminder,
+            )
             HomeTab.NOTES -> NotesGallery(
                 modifier = Modifier.padding(padding),
                 notes = filteredNotes,
@@ -158,6 +171,56 @@ fun HomeScreen(
                 onFilterChange = { selectedFilter.value = it },
                 onOpenReminder = onOpenReminder,
             )
+        }
+    }
+}
+
+@Composable
+private fun CalendarScreen(
+    modifier: Modifier,
+    tasks: List<Reminder>,
+    onOpenReminder: (String) -> Unit,
+) {
+    val now = remember { LocalDate.now() }
+    val monthLabel = remember { now.format(DateTimeFormatter.ofPattern("MMMM")) }
+    val upcoming = remember(tasks) { tasks.filter { !it.completed }.sortedBy { it.dueEpochMillis } }
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            Text("SCHEDULE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(monthLabel, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+        }
+        item {
+            ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Today's Focus", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    if (upcoming.isEmpty()) {
+                        Text("No scheduled events", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        upcoming.take(4).forEach { task ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenReminder(task.id) },
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(task.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        formatDateTime(task.dueEpochMillis),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Text("⋮", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -65,12 +65,18 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun EditorScreen(
     reminderId: String?,
+    initialType: ReminderType = ReminderType.TASK,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: EditorViewModel = viewModel(),
 ) {
     LaunchedEffect(reminderId) {
         viewModel.load(reminderId)
+    }
+    LaunchedEffect(reminderId, initialType) {
+        if (reminderId == null) {
+            viewModel.updateType(initialType)
+        }
     }
 
     if (!viewModel.loaded) {
