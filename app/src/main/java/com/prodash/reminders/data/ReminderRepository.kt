@@ -70,6 +70,11 @@ class ReminderRepository(
         col.document(reminderId).update("dueEpochMillis", dueEpochMillis).await()
     }
 
+    suspend fun delete(reminderId: String) {
+        val col = collection() ?: return
+        col.document(reminderId).delete().await()
+    }
+
     suspend fun deleteCompletedTaskItems(idsToCancel: List<String>): Int {
         if (idsToCancel.isEmpty()) return 0
         val col = collection() ?: return 0

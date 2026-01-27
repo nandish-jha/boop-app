@@ -1,8 +1,6 @@
 package com.prodash.reminders
 
 import android.Manifest
-import android.content.Intent
-import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.ComponentActivity
@@ -29,6 +27,7 @@ import com.prodash.reminders.ui.editor.EditorScreen
 import com.prodash.reminders.ui.home.HomeScreen
 import com.prodash.reminders.ui.account.AccountScreen
 import com.prodash.reminders.ui.create.CreateItemScreen
+import com.prodash.reminders.ui.profile.ProfileScreen
 import com.prodash.reminders.ui.signin.SignInScreen
 import com.prodash.reminders.ui.signin.SignInViewModel
 import com.prodash.reminders.ui.theme.AppTheme
@@ -126,25 +125,25 @@ private fun RootNav(
         }
         composable("home") {
             HomeScreen(
-                onAddReminder = { navController.navigate("create") },
+                onAddReminder = { navController.navigate("create-item") },
                 onOpenReminder = { id -> navController.navigate("editor/$id") },
-                onOpenAccount = { navController.navigate("account") },
+                onOpenSettings = { navController.navigate("account") },
+                onOpenProfile = { navController.navigate("profile") },
             )
         }
-        composable("create") {
+        composable("create-item") {
             CreateItemScreen(
-                onClose = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
                 onCreateNote = { navController.navigate("editor/new?type=note") },
                 onCreateReminder = { navController.navigate("editor/new?type=task") },
             )
         }
+        composable("profile") {
+            ProfileScreen(onBack = { navController.popBackStack() })
+        }
         composable("account") {
             AccountScreen(
                 onBack = { navController.popBackStack() },
-                onSyncGoogleCalendar = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://calendar.google.com"))
-                    navController.context.startActivity(intent)
-                },
                 onSignOut = {
                     FirebaseAuth.getInstance().signOut()
                     navController.navigate("signin") {
@@ -155,10 +154,10 @@ private fun RootNav(
             )
         }
         composable("editor/new?type={type}") { entry ->
-            val typeArg = entry.arguments?.getString("type")
+            val type = entry.arguments?.getString("type")
             EditorScreen(
                 reminderId = null,
-                initialType = if (typeArg == "note") com.prodash.reminders.data.ReminderType.NOTE else com.prodash.reminders.data.ReminderType.TASK,
+                initialType = type,
                 onBack = { navController.popBackStack() },
             )
         }
