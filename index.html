@@ -2,23 +2,38 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
 <meta name="theme-color" content="#000000" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>Productivity</title>
 <link rel="manifest" href="manifest.webmanifest" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app">
-    <header class="topbar" id="pageTitle">Home</header>
+    <header class="topbar">
+      <div class="title" id="pageTitle">Home</div>
+    </header>
     <main id="view" class="view"></main>
-    <nav class="bottom-nav">
-      <button class="nav-btn active" data-tab="home">Home</button>
-      <button class="nav-btn" data-tab="tasks">Tasks</button>
-      <button class="nav-btn" data-tab="habits">Habits</button>
-      <button class="nav-btn" data-tab="budget">Budget</button>
-      <button class="nav-btn" data-tab="more">More</button>
+    <nav class="bottom-nav" role="navigation">
+      <button class="nav-btn active" data-tab="home"><span class="nav-ico">◎</span><span>Home</span></button>
+      <button class="nav-btn" data-tab="tasks"><span class="nav-ico">✓</span><span>Tasks</span></button>
+      <button class="nav-btn" data-tab="habits"><span class="nav-ico">◈</span><span>Habits</span></button>
+      <button class="nav-btn" data-tab="budget"><span class="nav-ico">$</span><span>Budget</span></button>
+      <button class="nav-btn" data-tab="more"><span class="nav-ico">≡</span><span>More</span></button>
     </nav>
+    <button class="fab" id="fab" aria-label="Add">+</button>
+  </div>
+  <div class="sheet" id="sheet" aria-hidden="true">
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel">
+      <div class="sheet-handle"></div>
+      <div class="sheet-content" id="sheetContent"></div>
+    </div>
   </div>
   <script src="app.js"></script>
   <script>
