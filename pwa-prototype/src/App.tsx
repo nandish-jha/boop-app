@@ -1,13 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  updateDoc,
+} from 'firebase/firestore'
+import { auth, db, googleProvider } from './firebase'
 
-type Reminder = { id: string; title: string; meta: string; completed: boolean; context?: string }
+type Reminder = { id: string; title: string; dueEpochMillis: number; completed: boolean; context?: string }
 type Note = { id: string; title: string; text: string }
 
 const defaultReminders: Reminder[] = [
-  { id: '1', title: 'Review architectural drafts', meta: '09:00 AM', completed: false },
-  { id: '2', title: 'Synchronize database nodes', meta: '01:30 PM', completed: false },
-  { id: '3', title: 'Gallery opening reception', meta: '07:00 PM • URGENT', completed: false },
+  { id: '1', title: 'Review architectural drafts', dueEpochMillis: Date.now() + 3600000, completed: false },
+  { id: '2', title: 'Synchronize database nodes', dueEpochMillis: Date.now() + 5400000, completed: false },
+  { id: '3', title: 'Gallery opening reception', dueEpochMillis: Date.now() + 7200000, completed: false },
 ]
 
 const defaultNotes: Note[] = [
@@ -18,6 +30,8 @@ const defaultNotes: Note[] = [
 
 function App() {
   const location = useLocation()
+  const [user, setUser] = useState<User | null>(null)
+  const [loadingAuth, setLoadingAuth] = useState(true)
   const [reminders, setReminders] = useState<Reminder[]>(() => readStore('boop-reminders', defaultReminders))
   const [notes, setNotes] = useState<Note[]>(() => readStore('boop-notes', defaultNotes))
   const fullFocus = location.pathname === '/new-note' || location.pathname === '/new-reminder'
@@ -25,26 +39,82 @@ function App() {
   const incompleteReminders = useMemo(() => reminders.filter((r) => !r.completed), [reminders])
   const completedReminders = useMemo(() => reminders.filter((r) => r.completed), [reminders])
 
-  useEffect(() => {
-    window.localStorage.setItem('boop-reminders', JSON.stringify(reminders))
-  }, [reminders])
+  useEffect(() => onAuthStateChanged(auth, (next) => {
+    setUser(next)
+    setLoadingAuth(false)
+  }), [])
 
   useEffect(() => {
-    window.localStorage.setItem('boop-notes', JSON.stringify(notes))
-  }, [notes])
+    if (!user) return
+    const q = query(collection(db, 'users', user.uid, 'reminders'), orderBy('dueEpochMillis', 'asc'))
+    return onSnapshot(q, (snap) => {
+      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      setReminders(
+        rows
+          .filter((r: any) => r.type === 'TASK')
+          .map((r: any) => ({
+            id: r.id,
+            title: r.title ?? 'Untitled reminder',
+            dueEpochMillis: r.dueEpochMillis ?? Date.now(),
+            completed: !!r.completed,
+            context: r.body ?? '',
+          })),
+      )
+      setNotes(
+        rows
+          .filter((r: any) => r.type === 'NOTE')
+          .map((r: any) => ({
+            id: r.id,
+            title: r.title ?? 'Untitled note',
+            text: r.body ?? '',
+          })),
+      )
+    })
+  }, [user])
 
-  const addNote = (title: string, text: string) =>
-    setNotes((prev) => [{ id: crypto.randomUUID(), title, text }, ...prev])
+  const addNote = async (title: string, text: string) => {
+    if (!user) return
+    await addDoc(collection(db, 'users', user.uid, 'reminders'), {
+      type: 'NOTE',
+      title,
+      body: text,
+      imageUri: null,
+      dueEpochMillis: Date.now(),
+      completed: false,
+      createdEpochMillis: Date.now(),
+    })
+  }
 
-  const deleteNote = (id: string) => setNotes((prev) => prev.filter((n) => n.id !== id))
+  const deleteNote = async (id: string) => {
+    if (!user) return
+    await deleteDoc(doc(db, 'users', user.uid, 'reminders', id))
+  }
 
-  const addReminder = (title: string, meta: string, context: string) =>
-    setReminders((prev) => [{ id: crypto.randomUUID(), title, meta, completed: false, context }, ...prev])
+  const addReminder = async (title: string, dueEpochMillis: number, context: string) => {
+    if (!user) return
+    await addDoc(collection(db, 'users', user.uid, 'reminders'), {
+      type: 'TASK',
+      title,
+      body: context,
+      imageUri: null,
+      dueEpochMillis,
+      completed: false,
+      createdEpochMillis: Date.now(),
+    })
+  }
 
-  const toggleReminder = (id: string) =>
-    setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, completed: !r.completed } : r)))
+  const toggleReminder = async (id: string, completed: boolean) => {
+    if (!user) return
+    await updateDoc(doc(db, 'users', user.uid, 'reminders', id), { completed: !completed })
+  }
 
-  const deleteReminder = (id: string) => setReminders((prev) => prev.filter((r) => r.id !== id))
+  const deleteReminder = async (id: string) => {
+    if (!user) return
+    await deleteDoc(doc(db, 'users', user.uid, 'reminders', id))
+  }
+
+  if (loadingAuth) return <div className="app-shell"><div className="phone-shell"><main className="content"><p className="muted">Loading...</p></main></div></div>
+  if (!user) return <SignInScreen />
 
   return (
     <div className="app-shell">
@@ -67,7 +137,7 @@ function App() {
             />
             <Route path="/notes" element={<NotesScreen notes={notes} onDelete={deleteNote} />} />
             <Route path="/calendar" element={<CalendarScreen reminders={incompleteReminders} />} />
-            <Route path="/account" element={<AccountScreen />} />
+            <Route path="/account" element={<AccountScreen onSignOut={() => signOut(auth)} />} />
             <Route path="/profile" element={<ProfileScreen />} />
             <Route path="/create" element={<CreateScreen />} />
             <Route path="/new-note" element={<NewNoteScreen onCreate={addNote} />} />
@@ -80,6 +150,27 @@ function App() {
           </NavLink>
         )}
         {!fullFocus && <BottomNav />}
+      </div>
+    </div>
+  )
+}
+
+function SignInScreen() {
+  return (
+    <div className="app-shell">
+      <div className="phone-shell">
+        <main className="content">
+          <section className="stack">
+            <h1 className="title">BOOP</h1>
+            <p className="muted">Sign in to sync your reminders and notes.</p>
+            <button
+              className="btn-primary"
+              onClick={() => signInWithPopup(auth, googleProvider)}
+            >
+              CONTINUE WITH GOOGLE
+            </button>
+          </section>
+        </main>
       </div>
     </div>
   )
@@ -123,7 +214,7 @@ function HomeScreen({ reminders, notes }: { reminders: Reminder[]; notes: Note[]
           <article key={item.id} className="list-item">
             <div>
               <h4>{item.title}</h4>
-              <p className="tiny">{item.meta}</p>
+              <p className="tiny">{formatDue(item.dueEpochMillis)}</p>
             </div>
           </article>
         ))}
@@ -150,7 +241,7 @@ function RemindersScreen({
 }: {
   reminders: Reminder[]
   completedReminders: Reminder[]
-  onToggle: (id: string) => void
+  onToggle: (id: string, completed: boolean) => void
   onDelete: (id: string) => void
 }) {
   return (
@@ -161,10 +252,10 @@ function RemindersScreen({
       {reminders.length === 0 && <p className="muted">No pending reminders.</p>}
       {reminders.map((item) => (
         <article key={item.id} className="list-item">
-          <button className="checkbox btn-ghost" onClick={() => onToggle(item.id)} aria-label="Mark completed" />
+          <button className="checkbox btn-ghost" onClick={() => onToggle(item.id, item.completed)} aria-label="Mark completed" />
           <div>
             <h4>{item.title}</h4>
-            <p className="tiny">{item.meta}</p>
+            <p className="tiny">{formatDue(item.dueEpochMillis)}</p>
           </div>
           <button className="icon-button small ml-auto" aria-label="Delete reminder" onClick={() => onDelete(item.id)}>
             <span className="material-symbols-outlined">delete</span>
@@ -175,10 +266,10 @@ function RemindersScreen({
       {completedReminders.length === 0 && <p className="muted">No completed reminders yet.</p>}
       {completedReminders.map((item) => (
         <article key={item.id} className="list-item dimmed">
-          <button className="checkbox done btn-ghost" onClick={() => onToggle(item.id)} aria-label="Mark not completed" />
+          <button className="checkbox done btn-ghost" onClick={() => onToggle(item.id, item.completed)} aria-label="Mark not completed" />
           <div>
             <p>{item.title}</p>
-            <p className="tiny">{item.meta}</p>
+            <p className="tiny">{formatDue(item.dueEpochMillis)}</p>
           </div>
         </article>
       ))}
@@ -219,7 +310,7 @@ function CalendarScreen({ reminders }: { reminders: Reminder[] }) {
       <h3>Today's Focus</h3>
       {reminders.slice(0, 2).map((r) => (
         <article key={r.id} className="list-item">
-          <div className="time">{r.meta?.split(' ')[0]}</div>
+          <div className="time">{formatHour(r.dueEpochMillis)}</div>
           <div>
             <h4>{r.title}</h4>
             <p className="muted">Task block</p>
@@ -230,7 +321,7 @@ function CalendarScreen({ reminders }: { reminders: Reminder[] }) {
   )
 }
 
-function AccountScreen() {
+function AccountScreen({ onSignOut }: { onSignOut: () => void }) {
   return (
     <section className="stack">
       <p className="section-label">ACCOUNT DASHBOARD</p>
@@ -246,7 +337,7 @@ function AccountScreen() {
         <Preference label="Email Digests" />
         <Preference label="SMS Reminders" on />
       </section>
-      <button className="btn-danger">SIGN OUT</button>
+      <button className="btn-danger" onClick={onSignOut}>SIGN OUT</button>
     </section>
   )
 }
@@ -337,7 +428,7 @@ function NewNoteScreen({ onCreate }: { onCreate: (title: string, text: string) =
   )
 }
 
-function NewReminderScreen({ onCreate }: { onCreate: (title: string, meta: string, context: string) => void }) {
+function NewReminderScreen({ onCreate }: { onCreate: (title: string, dueEpochMillis: number, context: string) => void }) {
   const navigate = useNavigate()
   const [title, setTitle] = useState('')
   const [date, setDate] = useState('')
@@ -346,8 +437,8 @@ function NewReminderScreen({ onCreate }: { onCreate: (title: string, meta: strin
 
   const save = () => {
     const safeTitle = title.trim() || 'Untitled reminder'
-    const meta = [time || '--:--', date || 'No date'].join(' • ')
-    onCreate(safeTitle, meta, context)
+    const dueEpochMillis = parseDateTime(date, time)
+    onCreate(safeTitle, dueEpochMillis, context)
     navigate('/reminders')
   }
 
@@ -395,3 +486,23 @@ function NavItem({ to, label, icon }: { to: string; label: string; icon: string 
 }
 
 export default App
+
+function formatDue(epochMillis: number) {
+  return new Date(epochMillis).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function formatHour(epochMillis: number) {
+  return new Date(epochMillis).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function parseDateTime(date: string, time: string) {
+  if (!date) return Date.now() + 3600000
+  const normalizedTime = time && time.length >= 4 ? time : '09:00'
+  const value = new Date(`${date}T${normalizedTime}:00`)
+  return Number.isNaN(value.getTime()) ? Date.now() + 3600000 : value.getTime()
+}
