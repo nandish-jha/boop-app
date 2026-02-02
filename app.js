@@ -65,7 +65,7 @@ function taskItem(t) {
 }
 
 function editTask(id) {
-  const t = id ? state.tasks.find(x=>x.id===id) : { id: uid(), title:'', priority:'medium', type:'personal', due:'', done:false };
+  const t = id ? state.tasks.find(x=>x.id===id) : { id: uid(), title:'', priority:'medium', type:'personal', due:'', recurrence:'none', done:false };
   openSheet(`
     <h2 style="margin:0 0 12px;">${id ? 'Edit task' : 'New task'}</h2>
     <div class="field"><label>Title</label><input class="input" id="tt" value="${escapeAttr(t.title)}"></div>
@@ -82,6 +82,7 @@ function editTask(id) {
         <option value="errand" ${t.type==='errand'?'selected':''}>Errand</option>
       </select></div>
     <div class="field"><label>Due date</label><input class="input" id="td" type="date" value="${t.due||''}"></div>
+    <div class="field"><label>Recurrence</label><select class="select" id="tr"><option value="none" ${t.recurrence==='none'?'selected':''}>None</option><option value="daily" ${t.recurrence==='daily'?'selected':''}>Daily</option><option value="weekly" ${t.recurrence==='weekly'?'selected':''}>Weekly</option><option value="monthly" ${t.recurrence==='monthly'?'selected':''}>Monthly</option></select></div>
     <button class="btn primary btn-block" id="sv">Save</button>
   `, root => {
     root.querySelector('#sv').onclick = () => {
@@ -90,6 +91,7 @@ function editTask(id) {
       t.priority = root.querySelector('#tp').value;
       t.type = root.querySelector('#ty').value;
       t.due = root.querySelector('#td').value;
+      t.recurrence = root.querySelector('#tr').value;
       if (!id) state.tasks.push(t);
       save(); closeSheet(); render();
     };
