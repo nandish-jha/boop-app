@@ -2,9 +2,11 @@ package com.prodash.reminders
 
 import android.Manifest
 import android.app.AlarmManager
+import android.app.DatePickerDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.TimePickerDialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,11 +36,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -69,6 +75,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {
@@ -118,7 +127,7 @@ private fun BoopApp() {
 
     val darkBg = Color(0xFF0C0C0D)
     val darkSurface = Color(0xFF151517)
-    val accent = Color(0xFFE4E4E4)
+    val accent = Color(0xFFFFFFFF)
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
             background = darkBg,
@@ -126,6 +135,7 @@ private fun BoopApp() {
             primary = accent,
             onSurface = Color(0xFFF3F3F3),
             onBackground = Color(0xFFF3F3F3),
+            onPrimary = Color.Black,
         ),
         typography = MaterialTheme.typography.copy(
             titleLarge = MaterialTheme.typography.titleLarge.copy(
@@ -139,7 +149,7 @@ private fun BoopApp() {
             Scaffold(
                 containerColor = darkBg,
                 bottomBar = {
-                    NavigationBar(containerColor = darkSurface) {
+                    NavigationBar(containerColor = Color.White) {
                         listOf("Home", "Tasks", "Notes", "Habits").forEachIndexed { index, label ->
                             val icon = when (label) {
                                 "Home" -> Icons.Outlined.Dashboard
@@ -150,8 +160,8 @@ private fun BoopApp() {
                             NavigationBarItem(
                                 selected = selectedTab == index,
                                 onClick = { selectedTab = index },
-                                icon = { Icon(icon, contentDescription = label) },
-                                label = { Text(label) },
+                                icon = { Icon(icon, contentDescription = label, tint = Color.Black) },
+                                label = { Text(label, color = Color.Black) },
                             )
                         }
                     }
@@ -159,15 +169,20 @@ private fun BoopApp() {
             ) { padding ->
                 Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
                     when (selectedTab) {
-                        0 -> DashboardScreen(tasks, notes, habits)
+                        0 -> DashboardScreen(
+                            tasks = tasks,
+                            notes = notes,
+                            habits = habits,
+                            onQuickAdd = { selectedTab = it },
+                        )
                         1 -> TaskScreen(
                             tasks = tasks,
-                            onAddTask = { title, timeMs ->
-                                val newTask = BoopTask(UUID.randomUUID().toString(), title, timeMs, false)
-                                repository.saveTask(newTask)
-                                ReminderScheduler.schedule(AppContextHolder.context, newTask)
+                            onSaveTask = { task ->
+                                repository.saveTask(task)
+                                ReminderScheduler.schedule(AppContextHolder.context, task)
                                 refresh()
                             },
+                            onDeleteTask = { id -> repository.deleteTask(id); refresh() },
                             onToggle = { task ->
                                 repository.saveTask(task.copy(done = !task.done))
                                 refresh()
@@ -175,24 +190,13 @@ private fun BoopApp() {
                         )
                         2 -> NotesScreen(
                             notes = notes,
-                            onAddNote = { title, body, attachment ->
-                                repository.saveNote(
-                                    BoopNote(
-                                        id = UUID.randomUUID().toString(),
-                                        title = title,
-                                        body = body,
-                                        attachmentUri = attachment?.toString(),
-                                    ),
-                                )
-                                refresh()
-                            },
+                            onSaveNote = { note -> repository.saveNote(note); refresh() },
+                            onDeleteNote = { id -> repository.deleteNote(id); refresh() },
                         )
                         else -> HabitScreen(
                             habits = habits,
-                            onAddHabit = { label, goal ->
-                                repository.saveHabit(BoopHabit(UUID.randomUUID().toString(), label, goal, 0))
-                                refresh()
-                            },
+                            onSaveHabit = { habit -> repository.saveHabit(habit); refresh() },
+                            onDeleteHabit = { id -> repository.deleteHabit(id); refresh() },
                             onProgress = { habit ->
                                 repository.saveHabit(habit.copy(progress = (habit.progress + 1).coerceAtMost(habit.goal)))
                                 refresh()
@@ -206,17 +210,30 @@ private fun BoopApp() {
 }
 
 @Composable
-private fun DashboardScreen(tasks: List<BoopTask>, notes: List<BoopNote>, habits: List<BoopHabit>) {
+private fun DashboardScreen(
+    tasks: List<BoopTask>,
+    notes: List<BoopNote>,
+    habits: List<BoopHabit>,
+    onQuickAdd: (Int) -> Unit,
+) {
     val completedTasks = tasks.count { it.done }
     val activeGoals = habits.count { it.progress < it.goal }
     val completion = if (habits.isEmpty()) 0 else habits.sumOf { (it.progress * 100) / it.goal } / habits.size
+    var showQuickAdd by rememberSaveable { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Boop Dashboard", style = MaterialTheme.typography.titleLarge)
         DashboardCard("Tasks done", "$completedTasks / ${tasks.size}", Icons.Outlined.CheckCircle)
         DashboardCard("Notes", "${notes.size} captured", Icons.Outlined.EditNote)
         DashboardCard("Active goals", "$activeGoals running", Icons.Outlined.Flag)
         DashboardCard("Habit completion", "$completion%", Icons.Outlined.Dashboard)
-        Text("Minimal. Dark. Synced.", color = Color(0xFFBFBFBF))
+        BoopWhiteButton(label = if (showQuickAdd) "Close add menu" else "Add item") { showQuickAdd = !showQuickAdd }
+        if (showQuickAdd) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BoopWhiteButton(label = "Task") { onQuickAdd(1) }
+                BoopWhiteButton(label = "Note") { onQuickAdd(2) }
+                BoopWhiteButton(label = "Habit") { onQuickAdd(3) }
+            }
+        }
     }
 }
 
@@ -240,24 +257,62 @@ private fun DashboardCard(title: String, subtitle: String, icon: androidx.compos
 @Composable
 private fun TaskScreen(
     tasks: List<BoopTask>,
-    onAddTask: (String, Long) -> Unit,
+    onSaveTask: (BoopTask) -> Unit,
+    onDeleteTask: (String) -> Unit,
     onToggle: (BoopTask) -> Unit,
 ) {
+    val context = AppContextHolder.context
     var title by rememberSaveable { mutableStateOf("") }
-    var minutes by rememberSaveable { mutableStateOf("30") }
+    var taskToEditId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedMillis by rememberSaveable { mutableStateOf(System.currentTimeMillis() + 30 * 60_000) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Tasks + Reminders", style = MaterialTheme.typography.titleLarge)
-        OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Task") })
-        OutlinedTextField(value = minutes, onValueChange = { minutes = it }, label = { Text("Remind in minutes") })
-        Button(onClick = {
-            val mins = minutes.toLongOrNull() ?: 30L
-            if (title.isNotBlank()) {
-                onAddTask(title.trim(), System.currentTimeMillis() + mins * 60_000)
-                title = ""
+        OutlinedTextField(
+            value = title,
+            onValueChange = { title = it },
+            label = { Text("Task") },
+            shape = RoundedCornerShape(999.dp),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text("Reminder: ${formatDateTime(selectedMillis)}", color = Color.White)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BoopWhiteButton(label = "Pick date") {
+                val calendar = Calendar.getInstance().apply { timeInMillis = selectedMillis }
+                DatePickerDialog(
+                    context,
+                    { _, year, month, day ->
+                        val next = Calendar.getInstance().apply { timeInMillis = selectedMillis }
+                        next.set(year, month, day)
+                        selectedMillis = next.timeInMillis
+                    },
+                    calendar.get(Calendar.YEAR),
+                    calendar.get(Calendar.MONTH),
+                    calendar.get(Calendar.DAY_OF_MONTH),
+                ).show()
             }
-        }) {
-            Icon(Icons.Outlined.Add, contentDescription = null)
-            Text(" Add")
+            BoopWhiteButton(label = "Pick time") {
+                val calendar = Calendar.getInstance().apply { timeInMillis = selectedMillis }
+                TimePickerDialog(
+                    context,
+                    { _, hour, minute ->
+                        val next = Calendar.getInstance().apply { timeInMillis = selectedMillis }
+                        next.set(Calendar.HOUR_OF_DAY, hour)
+                        next.set(Calendar.MINUTE, minute)
+                        next.set(Calendar.SECOND, 0)
+                        selectedMillis = next.timeInMillis
+                    },
+                    calendar.get(Calendar.HOUR_OF_DAY),
+                    calendar.get(Calendar.MINUTE),
+                    false,
+                ).show()
+            }
+        }
+        BoopWhiteButton(label = if (taskToEditId == null) "Add task" else "Update task") {
+            if (title.isNotBlank()) {
+                onSaveTask(BoopTask(taskToEditId ?: UUID.randomUUID().toString(), title.trim(), selectedMillis, false))
+                title = ""
+                taskToEditId = null
+            }
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(tasks, key = { it.id }) { task ->
@@ -269,9 +324,18 @@ private fun TaskScreen(
                                 if (task.done) "Completed" else "Reminder pending",
                                 color = Color(0xFFBFBFBF),
                             )
+                            Text(formatDateTime(task.reminderAt), color = Color(0xFFBFBFBF))
+                        }
+                        IconButton(onClick = {
+                            taskToEditId = task.id
+                            title = task.title
+                            selectedMillis = task.reminderAt
+                        }) { Icon(Icons.Outlined.Edit, contentDescription = "Edit task", tint = Color.White) }
+                        IconButton(onClick = { onDeleteTask(task.id) }) {
+                            Icon(Icons.Outlined.Delete, contentDescription = "Delete task", tint = Color.White)
                         }
                         IconButton(onClick = { onToggle(task) }) {
-                            Icon(Icons.Outlined.CheckCircle, contentDescription = "Toggle task")
+                            Icon(Icons.Outlined.CheckCircle, contentDescription = "Toggle task", tint = Color.White)
                         }
                     }
                 }
@@ -283,31 +347,50 @@ private fun TaskScreen(
 @Composable
 private fun NotesScreen(
     notes: List<BoopNote>,
-    onAddNote: (String, String, Uri?) -> Unit,
+    onSaveNote: (BoopNote) -> Unit,
+    onDeleteNote: (String) -> Unit,
 ) {
     var title by rememberSaveable { mutableStateOf("") }
     var body by rememberSaveable { mutableStateOf("") }
+    var noteToEditId by rememberSaveable { mutableStateOf<String?>(null) }
     var attachment by remember { mutableStateOf<Uri?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         attachment = it
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Notes + Files", style = MaterialTheme.typography.titleLarge)
-        OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") })
-        OutlinedTextField(value = body, onValueChange = { body = it }, label = { Text("Note") })
+        OutlinedTextField(
+            value = title,
+            onValueChange = { title = it },
+            label = { Text("Title") },
+            shape = RoundedCornerShape(999.dp),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = body,
+            onValueChange = { body = it },
+            label = { Text("Note") },
+            shape = RoundedCornerShape(999.dp),
+            modifier = Modifier.fillMaxWidth(),
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { picker.launch("*/*") }) {
-                Icon(Icons.Outlined.Photo, contentDescription = null)
-                Text(" Attach")
-            }
-            Button(onClick = {
+            BoopWhiteButton(label = "Attach") { picker.launch("*/*") }
+            BoopWhiteButton(label = if (noteToEditId == null) "Save note" else "Update note") {
                 if (title.isNotBlank() || body.isNotBlank()) {
-                    onAddNote(title.trim(), body.trim(), attachment)
+                    onSaveNote(
+                        BoopNote(
+                            id = noteToEditId ?: UUID.randomUUID().toString(),
+                            title = title.trim(),
+                            body = body.trim(),
+                            attachmentUri = attachment?.toString(),
+                        ),
+                    )
                     title = ""
                     body = ""
                     attachment = null
+                    noteToEditId = null
                 }
-            }) { Text("Save note") }
+            }
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(notes, key = { it.id }) { note ->
@@ -315,6 +398,17 @@ private fun NotesScreen(
                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold)
                         if (note.body.isNotBlank()) Text(note.body, color = Color(0xFFCECECE))
+                        Row {
+                            IconButton(onClick = {
+                                noteToEditId = note.id
+                                title = note.title
+                                body = note.body
+                                attachment = note.attachmentUri?.let(Uri::parse)
+                            }) { Icon(Icons.Outlined.Edit, contentDescription = "Edit note", tint = Color.White) }
+                            IconButton(onClick = { onDeleteNote(note.id) }) {
+                                Icon(Icons.Outlined.Delete, contentDescription = "Delete note", tint = Color.White)
+                            }
+                        }
                         note.attachmentUri?.let { uri ->
                             Spacer(Modifier.height(8.dp))
                             AsyncImage(model = uri, contentDescription = "Attachment", modifier = Modifier.height(120.dp).fillMaxWidth().background(Color.Black))
@@ -330,22 +424,37 @@ private fun NotesScreen(
 @Composable
 private fun HabitScreen(
     habits: List<BoopHabit>,
-    onAddHabit: (String, Int) -> Unit,
+    onSaveHabit: (BoopHabit) -> Unit,
+    onDeleteHabit: (String) -> Unit,
     onProgress: (BoopHabit) -> Unit,
 ) {
     var label by rememberSaveable { mutableStateOf("") }
     var goal by rememberSaveable { mutableStateOf("30") }
+    var habitToEditId by rememberSaveable { mutableStateOf<String?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Habits + Goals", style = MaterialTheme.typography.titleLarge)
-        OutlinedTextField(value = label, onValueChange = { label = it }, label = { Text("Habit / Goal") })
-        OutlinedTextField(value = goal, onValueChange = { goal = it }, label = { Text("Target days") })
-        Button(onClick = {
+        OutlinedTextField(
+            value = label,
+            onValueChange = { label = it },
+            label = { Text("Habit / Goal") },
+            shape = RoundedCornerShape(999.dp),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = goal,
+            onValueChange = { goal = it },
+            label = { Text("Target days") },
+            shape = RoundedCornerShape(999.dp),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        BoopWhiteButton(label = if (habitToEditId == null) "Create goal" else "Update goal") {
             val target = goal.toIntOrNull() ?: 30
             if (label.isNotBlank()) {
-                onAddHabit(label.trim(), target)
+                onSaveHabit(BoopHabit(habitToEditId ?: UUID.randomUUID().toString(), label.trim(), target, 0))
                 label = ""
+                habitToEditId = null
             }
-        }) { Text("Create goal") }
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(habits, key = { it.id }) { habit ->
                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151517))) {
@@ -354,13 +463,34 @@ private fun HabitScreen(
                             Text(habit.title)
                             Text("${habit.progress}/${habit.goal} complete", color = Color(0xFFBFBFBF))
                         }
+                        IconButton(onClick = {
+                            habitToEditId = habit.id
+                            label = habit.title
+                            goal = habit.goal.toString()
+                        }) { Icon(Icons.Outlined.Edit, contentDescription = "Edit habit", tint = Color.White) }
+                        IconButton(onClick = { onDeleteHabit(habit.id) }) {
+                            Icon(Icons.Outlined.Delete, contentDescription = "Delete habit", tint = Color.White)
+                        }
                         IconButton(onClick = { onProgress(habit) }) {
-                            Icon(Icons.Outlined.Add, contentDescription = "Progress")
+                            Icon(Icons.Outlined.Add, contentDescription = "Progress", tint = Color.White)
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BoopWhiteButton(label: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.White,
+            contentColor = Color.Black,
+        ),
+    ) {
+        Text(label)
     }
 }
 
@@ -427,11 +557,26 @@ private class BoopRepository(private val store: LocalStore) {
         upsertTasks(readTasks(), task)
     }
 
+    fun deleteTask(id: String) {
+        val updated = readTasks().filterNot { it.id == id }
+        upsertTasks(updated, null)
+    }
+
     fun saveNote(note: BoopNote) {
         val updated = readNotes().toMutableList().apply {
             removeAll { it.id == note.id }
             add(0, note)
         }
+        val arr = JSONArray()
+        updated.forEach {
+            arr.put(JSONObject().put("id", it.id).put("title", it.title).put("body", it.body).put("attachmentUri", it.attachmentUri ?: ""))
+        }
+        store.save("notes", arr.toString())
+        sync("notes", arr.toString())
+    }
+
+    fun deleteNote(id: String) {
+        val updated = readNotes().filterNot { it.id == id }
         val arr = JSONArray()
         updated.forEach {
             arr.put(JSONObject().put("id", it.id).put("title", it.title).put("body", it.body).put("attachmentUri", it.attachmentUri ?: ""))
@@ -451,10 +596,20 @@ private class BoopRepository(private val store: LocalStore) {
         sync("habits", arr.toString())
     }
 
-    private fun upsertTasks(tasks: List<BoopTask>, task: BoopTask) {
+    fun deleteHabit(id: String) {
+        val updated = readHabits().filterNot { it.id == id }
+        val arr = JSONArray()
+        updated.forEach { arr.put(JSONObject().put("id", it.id).put("title", it.title).put("goal", it.goal).put("progress", it.progress)) }
+        store.save("habits", arr.toString())
+        sync("habits", arr.toString())
+    }
+
+    private fun upsertTasks(tasks: List<BoopTask>, task: BoopTask?) {
         val updated = tasks.toMutableList().apply {
-            removeAll { it.id == task.id }
-            add(0, task)
+            task?.let {
+                removeAll { item -> item.id == it.id }
+                add(0, it)
+            }
         }
         val arr = JSONArray()
         updated.forEach {
@@ -475,6 +630,11 @@ private class BoopRepository(private val store: LocalStore) {
         for (i in 0 until array.length()) result.add(mapper(array.getJSONObject(i)))
         return result
     }
+}
+
+private fun formatDateTime(timeInMillis: Long): String {
+    val formatter = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
+    return formatter.format(timeInMillis)
 }
 
 object ReminderScheduler {
