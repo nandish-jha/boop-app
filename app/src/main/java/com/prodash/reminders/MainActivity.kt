@@ -51,6 +51,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -149,7 +150,7 @@ private fun BoopApp() {
             Scaffold(
                 containerColor = darkBg,
                 bottomBar = {
-                    NavigationBar(containerColor = Color.White) {
+                    NavigationBar(containerColor = darkSurface) {
                         listOf("Home", "Tasks", "Notes", "Habits").forEachIndexed { index, label ->
                             val icon = when (label) {
                                 "Home" -> Icons.Outlined.Dashboard
@@ -157,11 +158,30 @@ private fun BoopApp() {
                                 "Notes" -> Icons.Outlined.EditNote
                                 else -> Icons.Outlined.Flag
                             }
+                            val selected = selectedTab == index
                             NavigationBarItem(
-                                selected = selectedTab == index,
+                                selected = selected,
                                 onClick = { selectedTab = index },
-                                icon = { Icon(icon, contentDescription = label, tint = Color.Black) },
-                                label = { Text(label, color = Color.Black) },
+                                icon = {
+                                    Icon(
+                                        icon,
+                                        contentDescription = label,
+                                        tint = if (selected) Color.Black else Color(0xFFBFBFBF),
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        label,
+                                        color = if (selected) Color.Black else Color(0xFFBFBFBF),
+                                    )
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = Color.White,
+                                    selectedIconColor = Color.Black,
+                                    selectedTextColor = Color.Black,
+                                    unselectedIconColor = Color(0xFFBFBFBF),
+                                    unselectedTextColor = Color(0xFFBFBFBF),
+                                ),
                             )
                         }
                     }
