@@ -1,12 +1,15 @@
+@file:OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.material.ExperimentalMaterialApi::class,
+)
+
 package com.prodash.reminders
 
 import android.Manifest
 import android.app.AlarmManager
-import android.app.DatePickerDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.TimePickerDialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -19,11 +22,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,10 +39,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -57,14 +68,23 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerDefaults
+import androidx.compose.material3.TimePickerLayoutType
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -73,18 +93,26 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONArray
@@ -221,6 +249,31 @@ private fun BoopApp() {
             bodyMedium = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
         ),
     ) {
+        val scope = rememberCoroutineScope()
+        var pullRefreshing by remember { mutableStateOf(false) }
+        val pullRefreshState = rememberPullRefreshState(
+            refreshing = pullRefreshing,
+            onRefresh = {
+                scope.launch {
+                    pullRefreshing = true
+                    refresh()
+                    delay(280)
+                    pullRefreshing = false
+                }
+            },
+        )
+        val pagerState = rememberPagerState(initialPage = selectedTab, pageCount = { 4 })
+        LaunchedEffect(pagerState.isScrollInProgress, pagerState.currentPage) {
+            if (!pagerState.isScrollInProgress && pagerState.currentPage != selectedTab) {
+                selectedTab = pagerState.currentPage
+                speedDialExpanded = false
+            }
+        }
+        LaunchedEffect(selectedTab) {
+            if (pagerState.currentPage != selectedTab) {
+                pagerState.animateScrollToPage(selectedTab)
+            }
+        }
         Surface(Modifier.fillMaxSize()) {
             Scaffold(
                 containerColor = darkBg,
@@ -246,43 +299,50 @@ private fun BoopApp() {
                     )
                 },
             ) { padding ->
-                Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
-                    when (selectedTab) {
-                        0 -> DashboardScreen(
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .pullRefresh(pullRefreshState),
+                ) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                    ) { page ->
+                        BoopPagerPage(
+                            page = page,
                             tasks = tasks,
                             notes = notes,
                             habits = habits,
-                        )
-                        1 -> TaskListScreen(
-                            tasks = tasks,
-                            searchQuery = taskSearch,
-                            onSearchChange = { taskSearch = it },
-                            onEdit = { openTaskSheet(it) },
-                            onDelete = { id -> repository.deleteTask(id); refresh() },
-                            onToggle = { task ->
+                            taskSearch = taskSearch,
+                            onTaskSearchChange = { taskSearch = it },
+                            noteSearch = noteSearch,
+                            onNoteSearchChange = { noteSearch = it },
+                            habitSearch = habitSearch,
+                            onHabitSearchChange = { habitSearch = it },
+                            onEditTask = { openTaskSheet(it) },
+                            onDeleteTask = { id -> repository.deleteTask(id); refresh() },
+                            onToggleTask = { task ->
                                 repository.saveTask(task.copy(done = !task.done))
                                 refresh()
                             },
-                        )
-                        2 -> NotesListScreen(
-                            notes = notes,
-                            searchQuery = noteSearch,
-                            onSearchChange = { noteSearch = it },
-                            onEdit = { openNoteSheet(it) },
-                            onDelete = { id -> repository.deleteNote(id); refresh() },
-                        )
-                        else -> HabitsListScreen(
-                            habits = habits,
-                            searchQuery = habitSearch,
-                            onSearchChange = { habitSearch = it },
-                            onEdit = { openHabitSheet(it) },
-                            onDelete = { id -> repository.deleteHabit(id); refresh() },
-                            onProgress = { habit ->
+                            onEditNote = { openNoteSheet(it) },
+                            onDeleteNote = { id -> repository.deleteNote(id); refresh() },
+                            onEditHabit = { openHabitSheet(it) },
+                            onDeleteHabit = { id -> repository.deleteHabit(id); refresh() },
+                            onProgressHabit = { habit ->
                                 repository.saveHabit(habit.copy(progress = (habit.progress + 1).coerceAtMost(habit.goal)))
                                 refresh()
                             },
                         )
                     }
+                    PullRefreshIndicator(
+                        refreshing = pullRefreshing,
+                        state = pullRefreshState,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        contentColor = Color.White,
+                        backgroundColor = Color(0xFF2A2A2C),
+                    )
                 }
             }
 
@@ -340,6 +400,61 @@ private fun BoopApp() {
 }
 
 @Composable
+private fun BoopPagerPage(
+    page: Int,
+    tasks: List<BoopTask>,
+    notes: List<BoopNote>,
+    habits: List<BoopHabit>,
+    taskSearch: String,
+    onTaskSearchChange: (String) -> Unit,
+    noteSearch: String,
+    onNoteSearchChange: (String) -> Unit,
+    habitSearch: String,
+    onHabitSearchChange: (String) -> Unit,
+    onEditTask: (BoopTask) -> Unit,
+    onDeleteTask: (String) -> Unit,
+    onToggleTask: (BoopTask) -> Unit,
+    onEditNote: (BoopNote) -> Unit,
+    onDeleteNote: (String) -> Unit,
+    onEditHabit: (BoopHabit) -> Unit,
+    onDeleteHabit: (String) -> Unit,
+    onProgressHabit: (BoopHabit) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+    ) {
+        when (page) {
+            0 -> DashboardScreen(tasks = tasks, notes = notes, habits = habits)
+            1 -> TaskListScreen(
+                tasks = tasks,
+                searchQuery = taskSearch,
+                onSearchChange = onTaskSearchChange,
+                onEdit = onEditTask,
+                onDelete = onDeleteTask,
+                onToggle = onToggleTask,
+            )
+            2 -> NotesListScreen(
+                notes = notes,
+                searchQuery = noteSearch,
+                onSearchChange = onNoteSearchChange,
+                onEdit = onEditNote,
+                onDelete = onDeleteNote,
+            )
+            else -> HabitsListScreen(
+                habits = habits,
+                searchQuery = habitSearch,
+                onSearchChange = onHabitSearchChange,
+                onEdit = onEditHabit,
+                onDelete = onDeleteHabit,
+                onProgress = onProgressHabit,
+            )
+        }
+    }
+}
+
+@Composable
 private fun BoopBottomNavBar(
     darkSurface: Color,
     selectedTab: Int,
@@ -355,6 +470,7 @@ private fun BoopBottomNavBar(
         Modifier
             .fillMaxWidth()
             .background(darkSurface)
+            .navigationBarsPadding()
             .padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
@@ -363,7 +479,7 @@ private fun BoopBottomNavBar(
             val selected = selectedTab == index
             Surface(
                 onClick = { onSelectTab(index) },
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(8.dp),
                 color = if (selected) Color.White else Color.Transparent,
             ) {
                 Column(
@@ -402,24 +518,32 @@ private fun BoopSpeedDialFab(
     Column(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.padding(bottom = 8.dp),
+        modifier = Modifier
+            .navigationBarsPadding()
+            .padding(bottom = 8.dp),
     ) {
-        if (expanded) {
-            SmallFloatingActionButton(
-                onClick = { onOpenTask(); onExpandedChange(false) },
-                containerColor = Color.White,
-                contentColor = Color.Black,
-            ) { Icon(Icons.Outlined.Notifications, contentDescription = "Add task") }
-            SmallFloatingActionButton(
-                onClick = { onOpenNote(); onExpandedChange(false) },
-                containerColor = Color.White,
-                contentColor = Color.Black,
-            ) { Icon(Icons.Outlined.EditNote, contentDescription = "Add note") }
-            SmallFloatingActionButton(
-                onClick = { onOpenHabit(); onExpandedChange(false) },
-                containerColor = Color.White,
-                contentColor = Color.Black,
-            ) { Icon(Icons.Outlined.Flag, contentDescription = "Add habit") }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+            exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.End) {
+                SmallFloatingActionButton(
+                    onClick = { onOpenTask(); onExpandedChange(false) },
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                ) { Icon(Icons.Outlined.Notifications, contentDescription = "Add task") }
+                SmallFloatingActionButton(
+                    onClick = { onOpenNote(); onExpandedChange(false) },
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                ) { Icon(Icons.Outlined.EditNote, contentDescription = "Add note") }
+                SmallFloatingActionButton(
+                    onClick = { onOpenHabit(); onExpandedChange(false) },
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                ) { Icon(Icons.Outlined.Flag, contentDescription = "Add habit") }
+            }
         }
         FloatingActionButton(
             onClick = {
@@ -439,10 +563,12 @@ private fun BoopSpeedDialFab(
             contentColor = Color.Black,
             elevation = FloatingActionButtonDefaults.elevation(),
         ) {
-            Icon(
-                imageVector = if (expanded && selectedTab == 0) Icons.Outlined.Close else Icons.Outlined.Add,
-                contentDescription = if (expanded && selectedTab == 0) "Close" else "Add",
-            )
+            Crossfade(targetState = expanded && selectedTab == 0, label = "fab_icon") { showClose ->
+                Icon(
+                    imageVector = if (showClose) Icons.Outlined.Close else Icons.Outlined.Add,
+                    contentDescription = if (showClose) "Close" else "Add",
+                )
+            }
         }
     }
 }
@@ -488,24 +614,58 @@ private fun DashboardCard(title: String, subtitle: String, icon: androidx.compos
 }
 
 @Composable
-private fun BoopSearchField(value: String, onValueChange: (String) -> Unit, placeholder: String) {
-    OutlinedTextField(
+private fun BoopFilledTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    label: @Composable () -> Unit,
+    placeholder: @Composable (() -> Unit)? = null,
+    leadingIcon: @Composable (() -> Unit)? = null,
+    trailingIcon: @Composable (() -> Unit)? = null,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+) {
+    TextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text(placeholder, color = Color(0xFF8A8A8A)) },
-        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = Color(0xFFBFBFBF)) },
-        singleLine = true,
-        shape = RoundedCornerShape(999.dp),
-        colors = OutlinedTextFieldDefaults.colors(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 3.dp,
+                shape = RoundedCornerShape(14.dp),
+                ambientColor = Color.Black.copy(alpha = 0.35f),
+                spotColor = Color.Black.copy(alpha = 0.45f),
+            ),
+        shape = RoundedCornerShape(14.dp),
+        colors = TextFieldDefaults.colors(
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+            focusedContainerColor = Color(0xFF262628),
+            unfocusedContainerColor = Color(0xFF1F1F22),
+            cursorColor = Color.White,
             focusedTextColor = Color.White,
             unfocusedTextColor = Color.White,
-            focusedBorderColor = Color(0xFF3A3A3C),
-            unfocusedBorderColor = Color(0xFF3A3A3C),
-            focusedContainerColor = Color(0xFF151517),
-            unfocusedContainerColor = Color(0xFF151517),
-            cursorColor = Color.White,
+            focusedLabelColor = Color(0xFFBFBFBF),
+            unfocusedLabelColor = Color(0xFF9A9A9A),
         ),
+        label = label,
+        placeholder = placeholder,
+        leadingIcon = leadingIcon,
+        trailingIcon = trailingIcon,
+        singleLine = singleLine,
+        minLines = minLines,
+    )
+}
+
+@Composable
+private fun BoopSearchField(value: String, onValueChange: (String) -> Unit, placeholder: String) {
+    BoopFilledTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text("Search") },
+        placeholder = { Text(placeholder, color = Color(0xFF8A8A8A)) },
+        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = Color(0xFFBFBFBF)) },
     )
 }
 
@@ -531,53 +691,45 @@ private fun TaskListScreen(
     ) {
         Text("Tasks", style = MaterialTheme.typography.titleLarge)
         BoopSearchField(searchQuery, onSearchChange, "Search tasks")
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val itemHeight = maxHeight.coerceAtLeast(160.dp)
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(filtered, key = { it.id }) { task ->
-                    Box(
+        LazyColumn(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(filtered, key = { it.id }) { task ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
                         Modifier
-                            .height(itemHeight)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.Top,
                     ) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(vertical = 4.dp),
-                    ) {
-                        Row(
-                            Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(task.title, fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    if (task.done) "Completed" else "Reminder",
-                                    color = Color(0xFFBFBFBF),
-                                )
-                                Text(formatDateTime(task.reminderAt), color = Color(0xFFBFBFBF))
-                            }
-                            IconButton(onClick = { onEdit(task) }) {
-                                Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = Color.White)
-                            }
-                            IconButton(onClick = { onDelete(task.id) }) {
-                                Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
-                            }
-                            IconButton(onClick = { onToggle(task) }) {
-                                Icon(Icons.Outlined.CheckCircle, contentDescription = "Done", tint = Color.White)
-                            }
+                        Column(Modifier.weight(1f)) {
+                            Text(task.title, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (task.done) "Completed" else "Reminder",
+                                color = Color(0xFFBFBFBF),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text(formatDateTime(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                        }
+                        IconButton(onClick = { onEdit(task) }) {
+                            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = Color.White)
+                        }
+                        IconButton(onClick = { onDelete(task.id) }) {
+                            Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
+                        }
+                        IconButton(onClick = { onToggle(task) }) {
+                            Icon(Icons.Outlined.CheckCircle, contentDescription = "Done", tint = Color.White)
                         }
                     }
                 }
             }
-        }
         }
     }
 }
@@ -608,59 +760,46 @@ private fun NotesListScreen(
     ) {
         Text("Notes", style = MaterialTheme.typography.titleLarge)
         BoopSearchField(searchQuery, onSearchChange, "Search notes")
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val itemHeight = maxHeight.coerceAtLeast(160.dp)
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(filtered, key = { it.id }) { note ->
-                    Box(
-                        Modifier
-                            .height(itemHeight)
-                            .fillMaxWidth(),
-                    ) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(vertical = 4.dp),
-                    ) {
-                        val hasImage = !note.attachmentUri.isNullOrBlank()
-                        Column(
-                            Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                        ) {
-                            if (!hasImage) {
-                                Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold)
-                                if (note.body.isNotBlank()) {
-                                    Text(note.body, color = Color(0xFFCECECE))
-                                }
-                            } else {
-                                AsyncImage(
-                                    model = Uri.parse(note.attachmentUri),
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(220.dp)
-                                        .clip(RoundedCornerShape(16.dp)),
-                                )
+        LazyColumn(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(filtered, key = { it.id }) { note ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    val hasImage = !note.attachmentUri.isNullOrBlank()
+                    Column(Modifier.padding(14.dp)) {
+                        if (!hasImage) {
+                            Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold)
+                            if (note.body.isNotBlank()) {
+                                Text(note.body, color = Color(0xFFCECECE), style = MaterialTheme.typography.bodyMedium)
                             }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                IconButton(onClick = { onEdit(note) }) {
-                                    Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = Color.White)
-                                }
-                                IconButton(onClick = { onDelete(note.id) }) {
-                                    Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
-                                }
+                        } else {
+                            AsyncImage(
+                                model = Uri.parse(note.attachmentUri),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .clip(RoundedCornerShape(12.dp)),
+                            )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            IconButton(onClick = { onEdit(note) }) {
+                                Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = Color.White)
+                            }
+                            IconButton(onClick = { onDelete(note.id) }) {
+                                Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
                             }
                         }
                     }
                 }
             }
-        }
         }
     }
 }
@@ -687,49 +826,139 @@ private fun HabitsListScreen(
     ) {
         Text("Habits", style = MaterialTheme.typography.titleLarge)
         BoopSearchField(searchQuery, onSearchChange, "Search habits")
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val itemHeight = maxHeight.coerceAtLeast(160.dp)
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(filtered, key = { it.id }) { habit ->
-                    Box(
+        LazyColumn(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(filtered, key = { it.id }) { habit ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
                         Modifier
-                            .height(itemHeight)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.Top,
                     ) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(vertical = 4.dp),
-                    ) {
-                        Row(
-                            Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(habit.title, fontWeight = FontWeight.SemiBold)
-                                Text("${habit.progress}/${habit.goal} complete", color = Color(0xFFBFBFBF))
-                            }
-                            IconButton(onClick = { onEdit(habit) }) {
-                                Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = Color.White)
-                            }
-                            IconButton(onClick = { onDelete(habit.id) }) {
-                                Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
-                            }
-                            IconButton(onClick = { onProgress(habit) }) {
-                                Icon(Icons.Outlined.Add, contentDescription = "Progress", tint = Color.White)
-                            }
+                        Column(Modifier.weight(1f)) {
+                            Text(habit.title, fontWeight = FontWeight.SemiBold)
+                            Text("${habit.progress}/${habit.goal} complete", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                        }
+                        IconButton(onClick = { onEdit(habit) }) {
+                            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = Color.White)
+                        }
+                        IconButton(onClick = { onDelete(habit.id) }) {
+                            Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
+                        }
+                        IconButton(onClick = { onProgress(habit) }) {
+                            Icon(Icons.Outlined.Add, contentDescription = "Progress", tint = Color.White)
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReminderPickerDialog(
+    visible: Boolean,
+    initialMillis: Long,
+    onDismiss: () -> Unit,
+    onConfirm: (Long) -> Unit,
+) {
+    if (!visible) return
+    val zone = Calendar.getInstance().timeZone
+    val initialCal = Calendar.getInstance(zone).apply { timeInMillis = initialMillis }
+    val dateState = rememberDatePickerState(
+        initialSelectedDateMillis = initialMillis,
+        initialDisplayMode = DisplayMode.Picker,
+    )
+    val timeState = rememberTimePickerState(
+        initialHour = initialCal.get(Calendar.HOUR_OF_DAY),
+        initialMinute = initialCal.get(Calendar.MINUTE),
+        is24Hour = false,
+    )
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(12.dp, RoundedCornerShape(16.dp)),
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF1E1E22),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            ) {
+                Text("Pick a date & time", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Spacer(Modifier.height(8.dp))
+                DatePicker(
+                    state = dateState,
+                    showModeToggle = false,
+                    colors = DatePickerDefaults.colors(
+                        containerColor = Color(0xFF1E1E22),
+                        titleContentColor = Color.White,
+                        headlineContentColor = Color.White,
+                        weekdayContentColor = Color(0xFFBFBFBF),
+                        subheadContentColor = Color(0xFFBFBFBF),
+                        navigationContentColor = Color.White,
+                        yearContentColor = Color.White,
+                        disabledYearContentColor = Color(0xFF666666),
+                        currentYearContentColor = Color.White,
+                        selectedYearContentColor = Color.Black,
+                        selectedYearContainerColor = Color.White,
+                        dayContentColor = Color.White,
+                        selectedDayContentColor = Color.Black,
+                        selectedDayContainerColor = Color.White,
+                        todayContentColor = Color.White,
+                        todayDateBorderColor = Color.White,
+                    ),
+                )
+                Spacer(Modifier.height(8.dp))
+                TimePicker(
+                    state = timeState,
+                    layoutType = TimePickerLayoutType.Vertical,
+                    colors = TimePickerDefaults.colors(
+                        clockDialColor = Color(0xFF2A2A2E),
+                        selectorColor = Color.White,
+                        periodSelectorBorderColor = Color(0xFF5C5C5E),
+                        periodSelectorSelectedContainerColor = Color.White,
+                        periodSelectorSelectedContentColor = Color.Black,
+                        periodSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
+                        periodSelectorUnselectedContentColor = Color.White,
+                        timeSelectorSelectedContainerColor = Color.White,
+                        timeSelectorSelectedContentColor = Color.Black,
+                        timeSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
+                        timeSelectorUnselectedContentColor = Color.White,
+                    ),
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel", color = Color(0xFFBFBFBF)) }
+                    TextButton(
+                        onClick = {
+                            val dayMillis = dateState.selectedDateMillis ?: initialMillis
+                            val dayCal = Calendar.getInstance(zone).apply { timeInMillis = dayMillis }
+                            val out = Calendar.getInstance(zone)
+                            out.set(Calendar.YEAR, dayCal.get(Calendar.YEAR))
+                            out.set(Calendar.MONTH, dayCal.get(Calendar.MONTH))
+                            out.set(Calendar.DAY_OF_MONTH, dayCal.get(Calendar.DAY_OF_MONTH))
+                            out.set(Calendar.HOUR_OF_DAY, timeState.hour)
+                            out.set(Calendar.MINUTE, timeState.minute)
+                            out.set(Calendar.SECOND, 0)
+                            out.set(Calendar.MILLISECOND, 0)
+                            onConfirm(out.timeInMillis)
+                        },
+                    ) { Text("Save", color = Color.White) }
+                }
+            }
         }
     }
 }
@@ -740,10 +969,10 @@ private fun TaskEditorSheet(
     onDismiss: () -> Unit,
     onSave: (BoopTask) -> Unit,
 ) {
-    val context = AppContextHolder.context
     val sheetKey = initial.id.orEmpty()
     var title by rememberSaveable(sheetKey) { mutableStateOf(initial.title) }
     var reminderAt by remember(sheetKey, initial.reminderAt) { mutableLongStateOf(initial.reminderAt) }
+    var showReminderPicker by remember(sheetKey) { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(if (initial.id == null) "New task" else "Edit task", style = MaterialTheme.typography.titleLarge)
         IconButton(onClick = onDismiss) {
@@ -751,56 +980,43 @@ private fun TaskEditorSheet(
         }
     }
     Spacer(Modifier.height(12.dp))
-    OutlinedTextField(
+    BoopFilledTextField(
         value = title,
         onValueChange = { title = it },
         label = { Text("Task") },
-        shape = RoundedCornerShape(999.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            focusedBorderColor = Color(0xFF5C5C5E),
-            unfocusedBorderColor = Color(0xFF5C5C5E),
-            focusedContainerColor = Color(0xFF0C0C0D),
-            unfocusedContainerColor = Color(0xFF0C0C0D),
-            cursorColor = Color.White,
-        ),
     )
-    Spacer(Modifier.height(8.dp))
-    Text("Reminder: ${formatDateTime(reminderAt)}", color = Color(0xFFBFBFBF))
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-        BoopWhiteButton("Pick date") {
-            val calendar = Calendar.getInstance().apply { timeInMillis = reminderAt }
-            DatePickerDialog(
-                context,
-                { _, year, month, day ->
-                    val next = Calendar.getInstance().apply { timeInMillis = reminderAt }
-                    next.set(year, month, day)
-                    reminderAt = next.timeInMillis
-                },
-                calendar.get(Calendar.YEAR),
-                calendar.get(Calendar.MONTH),
-                calendar.get(Calendar.DAY_OF_MONTH),
-            ).show()
-        }
-        BoopWhiteButton("Pick time") {
-            val calendar = Calendar.getInstance().apply { timeInMillis = reminderAt }
-            TimePickerDialog(
-                context,
-                { _, hour, minute ->
-                    val next = Calendar.getInstance().apply { timeInMillis = reminderAt }
-                    next.set(Calendar.HOUR_OF_DAY, hour)
-                    next.set(Calendar.MINUTE, minute)
-                    next.set(Calendar.SECOND, 0)
-                    reminderAt = next.timeInMillis
-                },
-                calendar.get(Calendar.HOUR_OF_DAY),
-                calendar.get(Calendar.MINUTE),
-                false,
-            ).show()
+    Spacer(Modifier.height(12.dp))
+    Surface(
+        onClick = { showReminderPicker = true },
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFF242426),
+        tonalElevation = 2.dp,
+        shadowElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column {
+                Text("Set a reminder", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelMedium)
+                Text(formatDateTime(reminderAt), color = Color.White, style = MaterialTheme.typography.bodyLarge)
+            }
+            Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Color.White)
         }
     }
+    ReminderPickerDialog(
+        visible = showReminderPicker,
+        initialMillis = reminderAt,
+        onDismiss = { showReminderPicker = false },
+        onConfirm = {
+            reminderAt = it
+            showReminderPicker = false
+        },
+    )
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
         if (title.isNotBlank()) {
@@ -835,39 +1051,18 @@ private fun NoteEditorSheet(
         }
     }
     Spacer(Modifier.height(12.dp))
-    OutlinedTextField(
+    BoopFilledTextField(
         value = title,
         onValueChange = { title = it },
         label = { Text("Title") },
-        shape = RoundedCornerShape(999.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            focusedBorderColor = Color(0xFF5C5C5E),
-            unfocusedBorderColor = Color(0xFF5C5C5E),
-            focusedContainerColor = Color(0xFF0C0C0D),
-            unfocusedContainerColor = Color(0xFF0C0C0D),
-            cursorColor = Color.White,
-        ),
     )
     Spacer(Modifier.height(8.dp))
-    OutlinedTextField(
+    BoopFilledTextField(
         value = body,
         onValueChange = { body = it },
         label = { Text("Note") },
-        shape = RoundedCornerShape(999.dp),
-        modifier = Modifier.fillMaxWidth(),
+        singleLine = false,
         minLines = 3,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            focusedBorderColor = Color(0xFF5C5C5E),
-            unfocusedBorderColor = Color(0xFF5C5C5E),
-            focusedContainerColor = Color(0xFF0C0C0D),
-            unfocusedContainerColor = Color(0xFF0C0C0D),
-            cursorColor = Color.White,
-        ),
     )
     Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -914,38 +1109,16 @@ private fun HabitEditorSheet(
         }
     }
     Spacer(Modifier.height(12.dp))
-    OutlinedTextField(
+    BoopFilledTextField(
         value = label,
         onValueChange = { label = it },
         label = { Text("Habit / goal") },
-        shape = RoundedCornerShape(999.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            focusedBorderColor = Color(0xFF5C5C5E),
-            unfocusedBorderColor = Color(0xFF5C5C5E),
-            focusedContainerColor = Color(0xFF0C0C0D),
-            unfocusedContainerColor = Color(0xFF0C0C0D),
-            cursorColor = Color.White,
-        ),
     )
     Spacer(Modifier.height(8.dp))
-    OutlinedTextField(
+    BoopFilledTextField(
         value = goalText,
         onValueChange = { goalText = it },
         label = { Text("Target days") },
-        shape = RoundedCornerShape(999.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            focusedBorderColor = Color(0xFF5C5C5E),
-            unfocusedBorderColor = Color(0xFF5C5C5E),
-            focusedContainerColor = Color(0xFF0C0C0D),
-            unfocusedContainerColor = Color(0xFF0C0C0D),
-            cursorColor = Color.White,
-        ),
     )
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
