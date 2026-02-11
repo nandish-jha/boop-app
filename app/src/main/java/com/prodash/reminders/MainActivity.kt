@@ -23,13 +23,18 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,10 +43,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -53,7 +62,6 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Notifications
@@ -62,6 +70,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -74,6 +83,7 @@ import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -98,6 +108,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
@@ -321,19 +332,8 @@ private fun BoopApp() {
                             habitSearch = habitSearch,
                             onHabitSearchChange = { habitSearch = it },
                             onEditTask = { openTaskSheet(it) },
-                            onDeleteTask = { id -> repository.deleteTask(id); refresh() },
-                            onToggleTask = { task ->
-                                repository.saveTask(task.copy(done = !task.done))
-                                refresh()
-                            },
                             onEditNote = { openNoteSheet(it) },
-                            onDeleteNote = { id -> repository.deleteNote(id); refresh() },
                             onEditHabit = { openHabitSheet(it) },
-                            onDeleteHabit = { id -> repository.deleteHabit(id); refresh() },
-                            onProgressHabit = { habit ->
-                                repository.saveHabit(habit.copy(progress = (habit.progress + 1).coerceAtMost(habit.goal)))
-                                refresh()
-                            },
                         )
                     }
                     PullRefreshIndicator(
@@ -347,12 +347,12 @@ private fun BoopApp() {
             }
 
             itemSheet?.let { sheet ->
-                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
                 ModalBottomSheet(
                     onDismissRequest = { itemSheet = null },
                     sheetState = sheetState,
                     containerColor = darkSurface,
-                    dragHandle = null,
+                    dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                 ) {
                     Column(
@@ -360,12 +360,20 @@ private fun BoopApp() {
                             .fillMaxWidth()
                             .fillMaxHeight(0.92f)
                             .padding(horizontal = 20.dp)
-                            .padding(bottom = 28.dp),
+                            .padding(bottom = 28.dp)
+                            .verticalScroll(rememberScrollState()),
                     ) {
                         when (sheet) {
                             is ItemSheet.TaskSheet -> TaskEditorSheet(
                                 initial = sheet,
                                 onDismiss = { itemSheet = null },
+                                onDelete = sheet.id?.let { id ->
+                                    {
+                                        repository.deleteTask(id)
+                                        refresh()
+                                        itemSheet = null
+                                    }
+                                },
                                 onSave = { task ->
                                     repository.saveTask(task)
                                     ReminderScheduler.schedule(AppContextHolder.context, task)
@@ -376,6 +384,13 @@ private fun BoopApp() {
                             is ItemSheet.NoteSheet -> NoteEditorSheet(
                                 initial = sheet,
                                 onDismiss = { itemSheet = null },
+                                onDelete = sheet.id?.let { id ->
+                                    {
+                                        repository.deleteNote(id)
+                                        refresh()
+                                        itemSheet = null
+                                    }
+                                },
                                 onSave = { note ->
                                     repository.saveNote(note)
                                     refresh()
@@ -385,6 +400,13 @@ private fun BoopApp() {
                             is ItemSheet.HabitSheet -> HabitEditorSheet(
                                 initial = sheet,
                                 onDismiss = { itemSheet = null },
+                                onDelete = sheet.id?.let { id ->
+                                    {
+                                        repository.deleteHabit(id)
+                                        refresh()
+                                        itemSheet = null
+                                    }
+                                },
                                 onSave = { habit ->
                                     repository.saveHabit(habit)
                                     refresh()
@@ -412,13 +434,8 @@ private fun BoopPagerPage(
     habitSearch: String,
     onHabitSearchChange: (String) -> Unit,
     onEditTask: (BoopTask) -> Unit,
-    onDeleteTask: (String) -> Unit,
-    onToggleTask: (BoopTask) -> Unit,
     onEditNote: (BoopNote) -> Unit,
-    onDeleteNote: (String) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
-    onDeleteHabit: (String) -> Unit,
-    onProgressHabit: (BoopHabit) -> Unit,
 ) {
     Column(
         Modifier
@@ -431,24 +448,19 @@ private fun BoopPagerPage(
                 tasks = tasks,
                 searchQuery = taskSearch,
                 onSearchChange = onTaskSearchChange,
-                onEdit = onEditTask,
-                onDelete = onDeleteTask,
-                onToggle = onToggleTask,
+                onOpenTask = onEditTask,
             )
             2 -> NotesListScreen(
                 notes = notes,
                 searchQuery = noteSearch,
                 onSearchChange = onNoteSearchChange,
-                onEdit = onEditNote,
-                onDelete = onDeleteNote,
+                onOpenNote = onEditNote,
             )
             else -> HabitsListScreen(
                 habits = habits,
                 searchQuery = habitSearch,
                 onSearchChange = onHabitSearchChange,
-                onEdit = onEditHabit,
-                onDelete = onDeleteHabit,
-                onProgress = onProgressHabit,
+                onOpenHabit = onEditHabit,
             )
         }
     }
@@ -466,40 +478,67 @@ private fun BoopBottomNavBar(
         Triple(2, "Notes", Icons.Outlined.EditNote),
         Triple(3, "Habits", Icons.Outlined.Flag),
     )
-    Row(
+    BoxWithConstraints(
         Modifier
             .fillMaxWidth()
             .background(darkSurface)
             .navigationBarsPadding()
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 6.dp, vertical = 8.dp),
     ) {
-        tabs.forEach { (index, label, icon) ->
-            val selected = selectedTab == index
+        val tabCount = tabs.size
+        val tabWidth = maxWidth / tabCount
+        val pillInset = 5.dp
+        val pillWidth = tabWidth - pillInset * 2
+        val pillOffset by animateDpAsState(
+            tabWidth * selectedTab + pillInset,
+            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+            label = "nav_pill",
+        )
+        Box(Modifier.fillMaxWidth().height(52.dp)) {
             Surface(
-                onClick = { onSelectTab(index) },
+                modifier = Modifier
+                    .offset(x = pillOffset)
+                    .width(pillWidth)
+                    .fillMaxHeight(0.88f)
+                    .align(Alignment.CenterStart),
                 shape = RoundedCornerShape(8.dp),
-                color = if (selected) Color.White else Color.Transparent,
+                color = Color.White,
+                shadowElevation = 2.dp,
+            ) {}
+            Row(
+                Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(
-                    Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Icon(
-                        icon,
-                        contentDescription = label,
-                        tint = if (selected) Color.Black else Color(0xFFBFBFBF),
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (selected) Color.Black else Color(0xFFBFBFBF),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                tabs.forEach { (index, label, icon) ->
+                    val selected = selectedTab == index
+                    Surface(
+                        onClick = { onSelectTab(index) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        color = Color.Transparent,
+                    ) {
+                        Column(
+                            Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(
+                                icon,
+                                contentDescription = label,
+                                tint = if (selected) Color.Black else Color(0xFFBFBFBF),
+                                modifier = Modifier.size(22.dp),
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (selected) Color.Black else Color(0xFFBFBFBF),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -674,9 +713,7 @@ private fun TaskListScreen(
     tasks: List<BoopTask>,
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    onEdit: (BoopTask) -> Unit,
-    onDelete: (String) -> Unit,
-    onToggle: (BoopTask) -> Unit,
+    onOpenTask: (BoopTask) -> Unit,
 ) {
     val q = searchQuery.trim().lowercase(Locale.getDefault())
     val filtered = remember(tasks, q) {
@@ -701,32 +738,18 @@ private fun TaskListScreen(
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenTask(task) },
                 ) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(task.title, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                if (task.done) "Completed" else "Reminder",
-                                color = Color(0xFFBFBFBF),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text(formatDateTime(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
-                        }
-                        IconButton(onClick = { onEdit(task) }) {
-                            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = Color.White)
-                        }
-                        IconButton(onClick = { onDelete(task.id) }) {
-                            Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
-                        }
-                        IconButton(onClick = { onToggle(task) }) {
-                            Icon(Icons.Outlined.CheckCircle, contentDescription = "Done", tint = Color.White)
-                        }
+                    Column(Modifier.padding(14.dp)) {
+                        Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text(
+                            if (task.done) "Completed" else "Scheduled",
+                            color = Color(0xFFBFBFBF),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(formatDateTime(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
@@ -739,8 +762,7 @@ private fun NotesListScreen(
     notes: List<BoopNote>,
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    onEdit: (BoopNote) -> Unit,
-    onDelete: (String) -> Unit,
+    onOpenNote: (BoopNote) -> Unit,
 ) {
     val q = searchQuery.trim().lowercase(Locale.getDefault())
     val filtered = remember(notes, q) {
@@ -770,31 +792,30 @@ private fun NotesListScreen(
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenNote(note) },
                 ) {
                     val hasImage = !note.attachmentUri.isNullOrBlank()
-                    Column(Modifier.padding(14.dp)) {
-                        if (!hasImage) {
-                            Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold)
-                            if (note.body.isNotBlank()) {
-                                Text(note.body, color = Color(0xFFCECECE), style = MaterialTheme.typography.bodyMedium)
-                            }
-                        } else {
-                            AsyncImage(
-                                model = Uri.parse(note.attachmentUri),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp)
-                                    .clip(RoundedCornerShape(12.dp)),
-                            )
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        if (note.body.isNotBlank()) {
+                            Text(note.body, color = Color(0xFFCECECE), style = MaterialTheme.typography.bodyMedium)
                         }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            IconButton(onClick = { onEdit(note) }) {
-                                Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = Color.White)
-                            }
-                            IconButton(onClick = { onDelete(note.id) }) {
-                                Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
+                        if (hasImage) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(160.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF0A0A0B)),
+                            ) {
+                                AsyncImage(
+                                    model = Uri.parse(note.attachmentUri),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
                             }
                         }
                     }
@@ -809,9 +830,7 @@ private fun HabitsListScreen(
     habits: List<BoopHabit>,
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    onEdit: (BoopHabit) -> Unit,
-    onDelete: (String) -> Unit,
-    onProgress: (BoopHabit) -> Unit,
+    onOpenHabit: (BoopHabit) -> Unit,
 ) {
     val q = searchQuery.trim().lowercase(Locale.getDefault())
     val filtered = remember(habits, q) {
@@ -836,27 +855,17 @@ private fun HabitsListScreen(
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenHabit(habit) },
                 ) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(habit.title, fontWeight = FontWeight.SemiBold)
-                            Text("${habit.progress}/${habit.goal} complete", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
-                        }
-                        IconButton(onClick = { onEdit(habit) }) {
-                            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = Color.White)
-                        }
-                        IconButton(onClick = { onDelete(habit.id) }) {
-                            Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color.White)
-                        }
-                        IconButton(onClick = { onProgress(habit) }) {
-                            Icon(Icons.Outlined.Add, contentDescription = "Progress", tint = Color.White)
-                        }
+                    Column(Modifier.padding(14.dp)) {
+                        Text(habit.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text(
+                            "${habit.progress} of ${habit.goal} days",
+                            color = Color(0xFFBFBFBF),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                 }
             }
@@ -887,18 +896,21 @@ private fun ReminderPickerDialog(
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxWidth(0.94f)
+                .heightIn(max = 520.dp)
                 .shadow(12.dp, RoundedCornerShape(16.dp)),
             shape = RoundedCornerShape(16.dp),
             color = Color(0xFF1E1E22),
         ) {
+            val scroll = rememberScrollState()
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .verticalScroll(scroll)
+                    .padding(12.dp),
             ) {
                 Text("Pick a date & time", style = MaterialTheme.typography.titleMedium, color = Color.White)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 DatePicker(
                     state = dateState,
                     showModeToggle = false,
@@ -921,10 +933,10 @@ private fun ReminderPickerDialog(
                         todayDateBorderColor = Color.White,
                     ),
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 TimePicker(
                     state = timeState,
-                    layoutType = TimePickerLayoutType.Vertical,
+                    layoutType = TimePickerLayoutType.Horizontal,
                     colors = TimePickerDefaults.colors(
                         clockDialColor = Color(0xFF2A2A2E),
                         selectorColor = Color.White,
@@ -939,7 +951,7 @@ private fun ReminderPickerDialog(
                         timeSelectorUnselectedContentColor = Color.White,
                     ),
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("Cancel", color = Color(0xFFBFBFBF)) }
                     TextButton(
@@ -967,16 +979,25 @@ private fun ReminderPickerDialog(
 private fun TaskEditorSheet(
     initial: ItemSheet.TaskSheet,
     onDismiss: () -> Unit,
+    onDelete: (() -> Unit)?,
     onSave: (BoopTask) -> Unit,
 ) {
     val sheetKey = initial.id.orEmpty()
     var title by rememberSaveable(sheetKey) { mutableStateOf(initial.title) }
     var reminderAt by remember(sheetKey, initial.reminderAt) { mutableLongStateOf(initial.reminderAt) }
+    var done by remember(sheetKey) { mutableStateOf(initial.done) }
     var showReminderPicker by remember(sheetKey) { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(if (initial.id == null) "New task" else "Edit task", style = MaterialTheme.typography.titleLarge)
-        IconButton(onClick = onDismiss) {
-            Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (onDelete != null) {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFF8A8A))
+                }
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
+            }
         }
     }
     Spacer(Modifier.height(12.dp))
@@ -1017,6 +1038,14 @@ private fun TaskEditorSheet(
             showReminderPicker = false
         },
     )
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Mark complete", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = done, onCheckedChange = { done = it })
+    }
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
         if (title.isNotBlank()) {
@@ -1025,7 +1054,7 @@ private fun TaskEditorSheet(
                     id = initial.id ?: UUID.randomUUID().toString(),
                     title = title.trim(),
                     reminderAt = reminderAt,
-                    done = initial.done,
+                    done = done,
                 ),
             )
         }
@@ -1036,6 +1065,7 @@ private fun TaskEditorSheet(
 private fun NoteEditorSheet(
     initial: ItemSheet.NoteSheet,
     onDismiss: () -> Unit,
+    onDelete: (() -> Unit)?,
     onSave: (BoopNote) -> Unit,
 ) {
     var title by rememberSaveable(initial.id) { mutableStateOf(initial.title) }
@@ -1046,8 +1076,15 @@ private fun NoteEditorSheet(
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(if (initial.id == null) "New note" else "Edit note", style = MaterialTheme.typography.titleLarge)
-        IconButton(onClick = onDismiss) {
-            Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (onDelete != null) {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFF8A8A))
+                }
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
+            }
         }
     }
     Spacer(Modifier.height(12.dp))
@@ -1098,14 +1135,23 @@ private fun NoteEditorSheet(
 private fun HabitEditorSheet(
     initial: ItemSheet.HabitSheet,
     onDismiss: () -> Unit,
+    onDelete: (() -> Unit)?,
     onSave: (BoopHabit) -> Unit,
 ) {
     var label by rememberSaveable(initial.id) { mutableStateOf(initial.title) }
     var goalText by rememberSaveable(initial.id) { mutableStateOf(initial.goal.toString()) }
+    var progress by remember(initial.id) { mutableIntStateOf(initial.progress) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(if (initial.id == null) "New habit" else "Edit habit", style = MaterialTheme.typography.titleLarge)
-        IconButton(onClick = onDismiss) {
-            Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (onDelete != null) {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFF8A8A))
+                }
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
+            }
         }
     }
     Spacer(Modifier.height(12.dp))
@@ -1120,6 +1166,17 @@ private fun HabitEditorSheet(
         onValueChange = { goalText = it },
         label = { Text("Target days") },
     )
+    val goalVal = goalText.toIntOrNull() ?: 30
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Progress: $progress / $goalVal", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyLarge)
+        TextButton(onClick = { progress = (progress + 1).coerceAtMost(goalVal.coerceAtLeast(1)) }) {
+            Text("+1 day", color = Color.White)
+        }
+    }
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
         val g = goalText.toIntOrNull() ?: 30
@@ -1129,7 +1186,7 @@ private fun HabitEditorSheet(
                     id = initial.id ?: UUID.randomUUID().toString(),
                     title = label.trim(),
                     goal = g,
-                    progress = initial.progress,
+                    progress = progress.coerceIn(0, g),
                 ),
             )
         }
