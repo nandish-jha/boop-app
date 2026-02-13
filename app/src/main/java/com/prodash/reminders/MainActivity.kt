@@ -12,6 +12,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.text.TextUtils
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -32,6 +33,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -63,6 +65,8 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.FormatBold
+import androidx.compose.material.icons.outlined.FormatItalic
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
@@ -108,6 +112,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -115,13 +120,19 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import android.widget.TextView
+import androidx.core.text.HtmlCompat
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.google.firebase.auth.FirebaseAuth
@@ -129,6 +140,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
+import java.io.File
 import java.util.Calendar
 import java.util.Locale
 import java.util.UUID
@@ -152,6 +164,8 @@ private sealed class ItemSheet {
 
     data class NoteSheet(
         val id: String?,
+        /** Stable key for `rememberSaveable` when creating a new note (id is null). */
+        val sessionKey: String,
         val title: String,
         val body: String,
         val attachmentUri: String?,
@@ -226,6 +240,7 @@ private fun BoopApp() {
     fun openNoteSheet(note: BoopNote? = null) {
         itemSheet = ItemSheet.NoteSheet(
             id = note?.id,
+            sessionKey = note?.id ?: UUID.randomUUID().toString(),
             title = note?.title.orEmpty(),
             body = note?.body.orEmpty(),
             attachmentUri = note?.attachmentUri,
@@ -371,14 +386,20 @@ private fun BoopApp() {
                                     {
                                         repository.deleteTask(id)
                                         refresh()
-                                        itemSheet = null
+                                        scope.launch {
+                                            delay(48)
+                                            itemSheet = null
+                                        }
                                     }
                                 },
                                 onSave = { task ->
                                     repository.saveTask(task)
                                     ReminderScheduler.schedule(AppContextHolder.context, task)
                                     refresh()
-                                    itemSheet = null
+                                    scope.launch {
+                                        delay(48)
+                                        itemSheet = null
+                                    }
                                 },
                             )
                             is ItemSheet.NoteSheet -> NoteEditorSheet(
@@ -388,13 +409,19 @@ private fun BoopApp() {
                                     {
                                         repository.deleteNote(id)
                                         refresh()
-                                        itemSheet = null
+                                        scope.launch {
+                                            delay(48)
+                                            itemSheet = null
+                                        }
                                     }
                                 },
                                 onSave = { note ->
                                     repository.saveNote(note)
                                     refresh()
-                                    itemSheet = null
+                                    scope.launch {
+                                        delay(48)
+                                        itemSheet = null
+                                    }
                                 },
                             )
                             is ItemSheet.HabitSheet -> HabitEditorSheet(
@@ -404,13 +431,19 @@ private fun BoopApp() {
                                     {
                                         repository.deleteHabit(id)
                                         refresh()
-                                        itemSheet = null
+                                        scope.launch {
+                                            delay(48)
+                                            itemSheet = null
+                                        }
                                     }
                                 },
                                 onSave = { habit ->
                                     repository.saveHabit(habit)
                                     refresh()
-                                    itemSheet = null
+                                    scope.launch {
+                                        delay(48)
+                                        itemSheet = null
+                                    }
                                 },
                             )
                         }
@@ -511,15 +544,18 @@ private fun BoopBottomNavBar(
             ) {
                 tabs.forEach { (index, label, icon) ->
                     val selected = selectedTab == index
-                    Surface(
-                        onClick = { onSelectTab(index) },
-                        modifier = Modifier
+                    val interaction = remember(index) { MutableInteractionSource() }
+                    Box(
+                        Modifier
                             .weight(1f)
-                            .fillMaxHeight(),
-                        color = Color.Transparent,
+                            .fillMaxHeight()
+                            .clickable(
+                                interactionSource = interaction,
+                                indication = null,
+                            ) { onSelectTab(index) },
+                        contentAlignment = Alignment.Center,
                     ) {
                         Column(
-                            Modifier.fillMaxSize(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
@@ -559,7 +595,7 @@ private fun BoopSpeedDialFab(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .navigationBarsPadding()
-            .padding(bottom = 8.dp),
+            .padding(bottom = 16.dp),
     ) {
         AnimatedVisibility(
             visible = expanded,
@@ -621,13 +657,25 @@ private fun DashboardScreen(
     val completedTasks = tasks.count { it.done }
     val activeGoals = habits.count { it.progress < it.goal }
     val completion = if (habits.isEmpty()) 0 else habits.sumOf { (it.progress * 100) / it.goal } / habits.size
+    val greeting = run {
+        val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        when {
+            h < 12 -> "Good morning"
+            h < 17 -> "Good afternoon"
+            else -> "Good evening"
+        } + ", Nandish."
+    }
     Column(
         Modifier
             .fillMaxSize()
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Boop Dashboard", style = MaterialTheme.typography.titleLarge)
+        Text(
+            greeting,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+        )
         DashboardCard("Tasks done", "$completedTasks / ${tasks.size}", Icons.Outlined.CheckCircle)
         DashboardCard("Notes", "${notes.size} captured", Icons.Outlined.EditNote)
         DashboardCard("Active goals", "$activeGoals running", Icons.Outlined.Flag)
@@ -708,6 +756,122 @@ private fun BoopSearchField(value: String, onValueChange: (String) -> Unit, plac
     )
 }
 
+private fun wrapHtmlTag(value: TextFieldValue, open: String, close: String): TextFieldValue {
+    val selStart = value.selection.start
+    val selEnd = value.selection.end
+    val start = minOf(selStart, selEnd).coerceIn(0, value.text.length)
+    val end = maxOf(selStart, selEnd).coerceIn(0, value.text.length)
+    val selected = if (end > start) value.text.substring(start, end) else ""
+    val replacement = if (selected.isNotEmpty()) "$open$selected$close" else "$open$close"
+    val newText = value.text.replaceRange(start, end, replacement)
+    val newCursor = if (selected.isNotEmpty()) {
+        start + replacement.length
+    } else {
+        start + open.length
+    }
+    return TextFieldValue(newText, TextRange(newCursor.coerceIn(0, newText.length)))
+}
+
+@Composable
+private fun NoteFormattingToolbar(
+    onBold: () -> Unit,
+    onItalic: () -> Unit,
+    onH1: () -> Unit,
+    onH2: () -> Unit,
+    onH3: () -> Unit,
+    onColor: (String, String) -> Unit,
+) {
+    val swatches = listOf(
+        "#EA4335" to Color(0xFFEA4335),
+        "#4285F4" to Color(0xFF4285F4),
+        "#34A853" to Color(0xFF34A853),
+        "#FBBC04" to Color(0xFFFBBD04),
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBold) {
+                Icon(Icons.Outlined.FormatBold, contentDescription = "Bold", tint = Color.White)
+            }
+            IconButton(onClick = onItalic) {
+                Icon(Icons.Outlined.FormatItalic, contentDescription = "Italic", tint = Color.White)
+            }
+            TextButton(onClick = onH1) { Text("H1", color = Color.White) }
+            TextButton(onClick = onH2) { Text("H2", color = Color.White) }
+            TextButton(onClick = onH3) { Text("H3", color = Color.White) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            swatches.forEach { (hex, c) ->
+                val interaction = remember(hex) { MutableInteractionSource() }
+                Box(
+                    Modifier
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(c)
+                        .clickable(
+                            interactionSource = interaction,
+                            indication = null,
+                        ) { onColor("<font color='$hex'>", "</font>") },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoopNoteHtmlSnippet(html: String, maxLines: Int = 8) {
+    val payload = html.ifBlank { "&nbsp;" }
+    AndroidView(
+        modifier = Modifier.fillMaxWidth(),
+        factory = { ctx ->
+            TextView(ctx).apply {
+                setTextColor(android.graphics.Color.parseColor("#CECECE"))
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                textSize = 14f
+                this.maxLines = maxLines
+                ellipsize = TextUtils.TruncateAt.END
+            }
+        },
+        update = { tv ->
+            tv.maxLines = maxLines
+            tv.text = HtmlCompat.fromHtml(payload, HtmlCompat.FROM_HTML_MODE_COMPACT)
+        },
+    )
+}
+
+private fun copyAttachmentToInternalFile(context: Context, source: Uri, baseName: String): String? {
+    return try {
+        val cr = context.contentResolver
+        val mime = cr.getType(source).orEmpty()
+        val ext = when {
+            mime.contains("png", ignoreCase = true) -> "png"
+            mime.contains("jpeg", ignoreCase = true) || mime.contains("jpg", ignoreCase = true) -> "jpg"
+            mime.contains("webp", ignoreCase = true) -> "webp"
+            mime.contains("gif", ignoreCase = true) -> "gif"
+            else -> "dat"
+        }
+        val dir = File(context.filesDir, "note_attachments").apply { mkdirs() }
+        val dest = File(dir, "$baseName.$ext")
+        cr.openInputStream(source)?.use { input ->
+            dest.outputStream().use { out -> input.copyTo(out) }
+        } ?: return null
+        dest.absolutePath
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+private fun storedAttachmentForCoil(stored: String?): Any? {
+    if (stored.isNullOrBlank()) return null
+    return when {
+        stored.startsWith("content:") -> Uri.parse(stored)
+        stored.startsWith("file:") -> Uri.parse(stored)
+        else -> {
+            val f = File(stored)
+            if (f.isFile && f.exists()) f else null
+        }
+    }
+}
+
 @Composable
 private fun TaskListScreen(
     tasks: List<BoopTask>,
@@ -726,7 +890,7 @@ private fun TaskListScreen(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Tasks", style = MaterialTheme.typography.titleLarge)
+        Text("Tasks.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         BoopSearchField(searchQuery, onSearchChange, "Search tasks")
         LazyColumn(
             Modifier
@@ -749,7 +913,7 @@ private fun TaskListScreen(
                             color = Color(0xFFBFBFBF),
                             style = MaterialTheme.typography.bodyMedium,
                         )
-                        Text(formatDateTime(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+                        Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
@@ -780,7 +944,7 @@ private fun NotesListScreen(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Notes", style = MaterialTheme.typography.titleLarge)
+        Text("Notes.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         BoopSearchField(searchQuery, onSearchChange, "Search notes")
         LazyColumn(
             Modifier
@@ -800,9 +964,10 @@ private fun NotesListScreen(
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = Color.White)
                         if (note.body.isNotBlank()) {
-                            Text(note.body, color = Color(0xFFCECECE), style = MaterialTheme.typography.bodyMedium)
+                            BoopNoteHtmlSnippet(note.body)
                         }
                         if (hasImage) {
+                            val ctx = LocalContext.current
                             Box(
                                 Modifier
                                     .fillMaxWidth()
@@ -811,7 +976,10 @@ private fun NotesListScreen(
                                     .background(Color(0xFF0A0A0B)),
                             ) {
                                 AsyncImage(
-                                    model = Uri.parse(note.attachmentUri),
+                                    model = ImageRequest.Builder(ctx)
+                                        .data(storedAttachmentForCoil(note.attachmentUri))
+                                        .crossfade(false)
+                                        .build(),
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize(),
@@ -843,7 +1011,7 @@ private fun HabitsListScreen(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Habits", style = MaterialTheme.typography.titleLarge)
+        Text("Habits.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         BoopSearchField(searchQuery, onSearchChange, "Search habits")
         LazyColumn(
             Modifier
@@ -891,7 +1059,7 @@ private fun ReminderPickerDialog(
     val timeState = rememberTimePickerState(
         initialHour = initialCal.get(Calendar.HOUR_OF_DAY),
         initialMinute = initialCal.get(Calendar.MINUTE),
-        is24Hour = false,
+        is24Hour = true,
     )
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -1024,7 +1192,7 @@ private fun TaskEditorSheet(
         ) {
             Column {
                 Text("Set a reminder", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelMedium)
-                Text(formatDateTime(reminderAt), color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                Text(formatTaskReminderLine(reminderAt), color = Color.White, style = MaterialTheme.typography.bodyLarge)
             }
             Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Color.White)
         }
@@ -1068,11 +1236,15 @@ private fun NoteEditorSheet(
     onDelete: (() -> Unit)?,
     onSave: (BoopNote) -> Unit,
 ) {
-    var title by rememberSaveable(initial.id) { mutableStateOf(initial.title) }
-    var body by rememberSaveable(initial.id) { mutableStateOf(initial.body) }
-    var attachmentUri by remember(initial.id) { mutableStateOf(initial.attachmentUri) }
+    val context = LocalContext.current
+    val session = initial.sessionKey
+    var title by rememberSaveable(session) { mutableStateOf(initial.title) }
+    var bodyField by remember(session) { mutableStateOf(TextFieldValue(initial.body, TextRange(initial.body.length))) }
+    var attachmentStored by remember(session) { mutableStateOf(initial.attachmentUri) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        attachmentUri = uri?.toString()
+        if (uri == null) return@rememberLauncherForActivityResult
+        val copied = copyAttachmentToInternalFile(context, uri, UUID.randomUUID().toString())
+        attachmentStored = copied ?: uri.toString()
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(if (initial.id == null) "New note" else "Edit note", style = MaterialTheme.typography.titleLarge)
@@ -1094,22 +1266,59 @@ private fun NoteEditorSheet(
         label = { Text("Title") },
     )
     Spacer(Modifier.height(8.dp))
-    BoopFilledTextField(
-        value = body,
-        onValueChange = { body = it },
-        label = { Text("Note") },
-        singleLine = false,
+    Text("Note (HTML)", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
+    Spacer(Modifier.height(4.dp))
+    NoteFormattingToolbar(
+        onBold = { bodyField = wrapHtmlTag(bodyField, "<b>", "</b>") },
+        onItalic = { bodyField = wrapHtmlTag(bodyField, "<i>", "</i>") },
+        onH1 = { bodyField = wrapHtmlTag(bodyField, "<h1>", "</h1>") },
+        onH2 = { bodyField = wrapHtmlTag(bodyField, "<h2>", "</h2>") },
+        onH3 = { bodyField = wrapHtmlTag(bodyField, "<h3>", "</h3>") },
+        onColor = { open, close -> bodyField = wrapHtmlTag(bodyField, open, close) },
+    )
+    Spacer(Modifier.height(6.dp))
+    TextField(
+        value = bodyField,
+        onValueChange = { bodyField = it },
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 3.dp,
+                shape = RoundedCornerShape(14.dp),
+                ambientColor = Color.Black.copy(alpha = 0.35f),
+                spotColor = Color.Black.copy(alpha = 0.45f),
+            ),
+        shape = RoundedCornerShape(14.dp),
+        colors = TextFieldDefaults.colors(
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+            focusedContainerColor = Color(0xFF262628),
+            unfocusedContainerColor = Color(0xFF1F1F22),
+            cursorColor = Color.White,
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
+        ),
         minLines = 3,
     )
+    if (bodyField.text.isNotBlank()) {
+        Spacer(Modifier.height(8.dp))
+        Text("Preview", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
+        BoopNoteHtmlSnippet(bodyField.text, maxLines = 12)
+    }
     Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        BoopWhiteButton("Attach") { picker.launch("*/*") }
+        BoopWhiteButton("Attach") { picker.launch("image/*") }
     }
-    attachmentUri?.let { uri ->
+    attachmentStored?.let { stored ->
         Spacer(Modifier.height(8.dp))
         AsyncImage(
-            model = Uri.parse(uri),
+            model = ImageRequest.Builder(context)
+                .data(storedAttachmentForCoil(stored))
+                .crossfade(false)
+                .build(),
             contentDescription = null,
+            contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(160.dp)
@@ -1118,13 +1327,18 @@ private fun NoteEditorSheet(
     }
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
-        if (title.isNotBlank() || body.isNotBlank() || !attachmentUri.isNullOrBlank()) {
+        val noteId = initial.id ?: UUID.randomUUID().toString()
+        val resolvedAttachment = attachmentStored?.let { att ->
+            if (att.startsWith("content:")) copyAttachmentToInternalFile(context, Uri.parse(att), noteId) ?: att else att
+        }
+        val bodyText = bodyField.text.trim()
+        if (title.isNotBlank() || bodyText.isNotBlank() || !resolvedAttachment.isNullOrBlank()) {
             onSave(
                 BoopNote(
-                    id = initial.id ?: UUID.randomUUID().toString(),
+                    id = noteId,
                     title = title.trim(),
-                    body = body.trim(),
-                    attachmentUri = attachmentUri,
+                    body = bodyText,
+                    attachmentUri = resolvedAttachment,
                 ),
             )
         }
@@ -1344,9 +1558,10 @@ private class BoopRepository(private val store: LocalStore) {
     }
 }
 
-private fun formatDateTime(timeInMillis: Long): String {
-    val formatter = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
-    return formatter.format(timeInMillis)
+private fun formatTaskReminderLine(timeInMillis: Long): String {
+    val day = SimpleDateFormat("EEE, MMM d", Locale.US).format(timeInMillis)
+    val time = SimpleDateFormat("HH:mm", Locale.US).format(timeInMillis)
+    return "$day   $time"
 }
 
 object ReminderScheduler {

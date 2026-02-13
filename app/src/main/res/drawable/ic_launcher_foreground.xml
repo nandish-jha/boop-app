@@ -4,16 +4,20 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Minimal abstract tile: soft corner stack + accent arc -->
     <path
-        android:fillColor="#1B1B1D"
-        android:pathData="M14,14h80v80h-80z" />
+        android:fillColor="#1C1D22"
+        android:pathData="M22,30h64a10,10 0 0,1 10,10v38a10,10 0 0,1 -10,10H22a10,10 0 0,1 -10,-10V40a10,10 0 0,1 10,-10z" />
     <path
-        android:fillColor="#EDEDED"
-        android:pathData="M34,22h9c13.8,0 25,11.2 25,25c0,6.2 -2.3,11.9 -6,16.2c5.5,4.2 9,10.8 9,18.3v4.5h-10v-4.5c0,-8.6 -7,-15.5 -15.5,-15.5h-11.5z" />
+        android:fillColor="#E8EAED"
+        android:pathData="M32,42h44a4,4 0 0,1 4,4v4a4,4 0 0,1 -4,4H32a4,4 0 0,1 -4,-4v-4a4,4 0 0,1 4,-4z" />
     <path
-        android:fillColor="#BFBFBF"
-        android:pathData="M43,32h-9v21h9c5.8,0 10.5,-4.7 10.5,-10.5S48.8,32 43,32z" />
+        android:fillColor="#BDC1C6"
+        android:pathData="M32,56h32a4,4 0 0,1 4,4v4a4,4 0 0,1 -4,4H32a4,4 0 0,1 -4,-4v-4a4,4 0 0,1 4,-4z" />
+    <path
+        android:fillColor="#9AA0A6"
+        android:pathData="M32,70h20a4,4 0 0,1 4,4v4a4,4 0 0,1 -4,4H32a4,4 0 0,1 -4,-4v-4a4,4 0 0,1 4,-4z" />
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M45,62h-11v20h11c5.5,0 10,-4.5 10,-10S50.5,62 45,62z" />
+        android:pathData="M68,62c10,0 18,8 18,18a18,18 0 0,1 -18,18c-6,0 -11,-3 -14,-7l8,-5c2,2 4,3 6,3c5,0 9,-4 9,-9s-4,-9 -9,-9c-2,0 -4,1 -6,3l-8,-5c3,-4 8,-7 14,-7z" />
 </vector>
