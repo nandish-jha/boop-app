@@ -16,16 +16,25 @@ import android.text.TextUtils
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.text.Editable
+import android.text.Html
+import android.text.InputType
+import android.text.Spanned
+import android.text.style.AbsoluteSizeSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
+import android.util.TypedValue
+import android.view.Gravity
+import android.widget.EditText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -33,6 +42,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.rememberScrollState
@@ -57,6 +67,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -100,6 +111,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -120,8 +132,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
@@ -144,6 +154,7 @@ import java.io.File
 import java.util.Calendar
 import java.util.Locale
 import java.util.UUID
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -157,6 +168,8 @@ class MainActivity : ComponentActivity() {
 private sealed class ItemSheet {
     data class TaskSheet(
         val id: String?,
+        /** Stable key for `rememberSaveable` when creating a new task (id is null). */
+        val sessionKey: String,
         val title: String,
         val reminderAt: Long,
         val done: Boolean,
@@ -230,6 +243,7 @@ private fun BoopApp() {
     fun openTaskSheet(task: BoopTask? = null) {
         itemSheet = ItemSheet.TaskSheet(
             id = task?.id,
+            sessionKey = task?.id ?: UUID.randomUUID().toString(),
             title = task?.title.orEmpty(),
             reminderAt = task?.reminderAt ?: (System.currentTimeMillis() + 30 * 60_000),
             done = task?.done ?: false,
@@ -289,6 +303,7 @@ private fun BoopApp() {
             },
         )
         val pagerState = rememberPagerState(initialPage = selectedTab, pageCount = { 4 })
+        val pagerScrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
         LaunchedEffect(pagerState.isScrollInProgress, pagerState.currentPage) {
             if (!pagerState.isScrollInProgress && pagerState.currentPage != selectedTab) {
                 selectedTab = pagerState.currentPage
@@ -317,7 +332,7 @@ private fun BoopApp() {
                 bottomBar = {
                     BoopBottomNavBar(
                         darkSurface = darkSurface,
-                        selectedTab = selectedTab,
+                        pagerScrollPosition = pagerScrollPosition,
                         onSelectTab = {
                             selectedTab = it
                             speedDialExpanded = false
@@ -502,7 +517,7 @@ private fun BoopPagerPage(
 @Composable
 private fun BoopBottomNavBar(
     darkSurface: Color,
-    selectedTab: Int,
+    pagerScrollPosition: Float,
     onSelectTab: (Int) -> Unit,
 ) {
     val tabs = listOf(
@@ -522,11 +537,9 @@ private fun BoopBottomNavBar(
         val tabWidth = maxWidth / tabCount
         val pillInset = 5.dp
         val pillWidth = tabWidth - pillInset * 2
-        val pillOffset by animateDpAsState(
-            tabWidth * selectedTab + pillInset,
-            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-            label = "nav_pill",
-        )
+        val coercedPage = pagerScrollPosition.coerceIn(0f, (tabCount - 1).toFloat())
+        val pillOffset = tabWidth * coercedPage + pillInset
+        val activeTabIndex = pagerScrollPosition.roundToInt().coerceIn(0, tabCount - 1)
         Box(Modifier.fillMaxWidth().height(52.dp)) {
             Surface(
                 modifier = Modifier
@@ -543,7 +556,7 @@ private fun BoopBottomNavBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 tabs.forEach { (index, label, icon) ->
-                    val selected = selectedTab == index
+                    val selected = activeTabIndex == index
                     val interaction = remember(index) { MutableInteractionSource() }
                     Box(
                         Modifier
@@ -756,61 +769,83 @@ private fun BoopSearchField(value: String, onValueChange: (String) -> Unit, plac
     )
 }
 
-private fun wrapHtmlTag(value: TextFieldValue, open: String, close: String): TextFieldValue {
-    val selStart = value.selection.start
-    val selEnd = value.selection.end
-    val start = minOf(selStart, selEnd).coerceIn(0, value.text.length)
-    val end = maxOf(selStart, selEnd).coerceIn(0, value.text.length)
-    val selected = if (end > start) value.text.substring(start, end) else ""
-    val replacement = if (selected.isNotEmpty()) "$open$selected$close" else "$open$close"
-    val newText = value.text.replaceRange(start, end, replacement)
-    val newCursor = if (selected.isNotEmpty()) {
-        start + replacement.length
-    } else {
-        start + open.length
+private fun noteEditApplySpan(editText: EditText?, span: Any) {
+    val et = editText ?: return
+    val text = et.text as? Editable ?: return
+    val len = text.length
+    var s = minOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
+    var e = maxOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
+    if (e <= s) {
+        if (len == 0) {
+            text.append(" ")
+            s = 0
+            e = 1
+        } else {
+            e = (s + 1).coerceAtMost(len)
+        }
     }
-    return TextFieldValue(newText, TextRange(newCursor.coerceIn(0, newText.length)))
+    when (span) {
+        is StyleSpan -> text.getSpans(s, e, StyleSpan::class.java).forEach { text.removeSpan(it) }
+        is ForegroundColorSpan -> text.getSpans(s, e, ForegroundColorSpan::class.java).forEach { text.removeSpan(it) }
+        is AbsoluteSizeSpan -> text.getSpans(s, e, AbsoluteSizeSpan::class.java).forEach { text.removeSpan(it) }
+    }
+    text.setSpan(span, s, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 }
 
+private fun noteEditSpToPx(sp: Float, context: Context): Int =
+    TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp, context.resources.displayMetrics).toInt()
+
 @Composable
-private fun NoteFormattingToolbar(
-    onBold: () -> Unit,
-    onItalic: () -> Unit,
-    onH1: () -> Unit,
-    onH2: () -> Unit,
-    onH3: () -> Unit,
-    onColor: (String, String) -> Unit,
-) {
-    val swatches = listOf(
-        "#EA4335" to Color(0xFFEA4335),
-        "#4285F4" to Color(0xFF4285F4),
-        "#34A853" to Color(0xFF34A853),
-        "#FBBC04" to Color(0xFFFBBD04),
-    )
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBold) {
-                Icon(Icons.Outlined.FormatBold, contentDescription = "Bold", tint = Color.White)
-            }
-            IconButton(onClick = onItalic) {
-                Icon(Icons.Outlined.FormatItalic, contentDescription = "Italic", tint = Color.White)
-            }
-            TextButton(onClick = onH1) { Text("H1", color = Color.White) }
-            TextButton(onClick = onH2) { Text("H2", color = Color.White) }
-            TextButton(onClick = onH3) { Text("H3", color = Color.White) }
+private fun NoteRichTextToolbar(editText: EditText?, context: Context) {
+    val scroll = rememberScrollState()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(scroll)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        IconButton(onClick = { noteEditApplySpan(editText, StyleSpan(Typeface.BOLD)) }) {
+            Icon(Icons.Outlined.FormatBold, contentDescription = "Bold", tint = Color.White)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            swatches.forEach { (hex, c) ->
-                val interaction = remember(hex) { MutableInteractionSource() }
+        IconButton(onClick = { noteEditApplySpan(editText, StyleSpan(Typeface.ITALIC)) }) {
+            Icon(Icons.Outlined.FormatItalic, contentDescription = "Italic", tint = Color.White)
+        }
+        TextButton(onClick = { noteEditApplySpan(editText, AbsoluteSizeSpan(noteEditSpToPx(22f, context), true)) }) {
+            Text("H1", color = Color.White)
+        }
+        TextButton(onClick = { noteEditApplySpan(editText, AbsoluteSizeSpan(noteEditSpToPx(18f, context), true)) }) {
+            Text("H2", color = Color.White)
+        }
+        TextButton(onClick = { noteEditApplySpan(editText, AbsoluteSizeSpan(noteEditSpToPx(15f, context), true)) }) {
+            Text("H3", color = Color.White)
+        }
+        Row(
+            Modifier
+                .height(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF2A2A2E))
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            listOf(
+                0xFFEA4335.toInt(),
+                0xFF4285F4.toInt(),
+                0xFF34A853.toInt(),
+                0xFFFBBD04.toInt(),
+            ).forEach { argb ->
+                val interaction = remember(argb) { MutableInteractionSource() }
                 Box(
                     Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(c)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(Color(argb))
                         .clickable(
                             interactionSource = interaction,
                             indication = null,
-                        ) { onColor("<font color='$hex'>", "</font>") },
+                        ) { noteEditApplySpan(editText, ForegroundColorSpan(argb)) },
                 )
             }
         }
@@ -1061,82 +1096,104 @@ private fun ReminderPickerDialog(
         initialMinute = initialCal.get(Calendar.MINUTE),
         is24Hour = true,
     )
+    var step by remember { mutableIntStateOf(0) }
+    LaunchedEffect(visible) {
+        if (visible) step = 0
+    }
+    fun combinedMillis(): Long {
+        val dayMillis = dateState.selectedDateMillis ?: initialMillis
+        val dayCal = Calendar.getInstance(zone).apply { timeInMillis = dayMillis }
+        val out = Calendar.getInstance(zone)
+        out.set(Calendar.YEAR, dayCal.get(Calendar.YEAR))
+        out.set(Calendar.MONTH, dayCal.get(Calendar.MONTH))
+        out.set(Calendar.DAY_OF_MONTH, dayCal.get(Calendar.DAY_OF_MONTH))
+        out.set(Calendar.HOUR_OF_DAY, timeState.hour)
+        out.set(Calendar.MINUTE, timeState.minute)
+        out.set(Calendar.SECOND, 0)
+        out.set(Calendar.MILLISECOND, 0)
+        return out.timeInMillis
+    }
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
-                .heightIn(max = 520.dp)
+                .heightIn(max = 480.dp)
                 .shadow(12.dp, RoundedCornerShape(16.dp)),
             shape = RoundedCornerShape(16.dp),
             color = Color(0xFF1E1E22),
         ) {
-            val scroll = rememberScrollState()
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .verticalScroll(scroll)
                     .padding(12.dp),
             ) {
-                Text("Pick a date & time", style = MaterialTheme.typography.titleMedium, color = Color.White)
-                Spacer(Modifier.height(6.dp))
-                DatePicker(
-                    state = dateState,
-                    showModeToggle = false,
-                    colors = DatePickerDefaults.colors(
-                        containerColor = Color(0xFF1E1E22),
-                        titleContentColor = Color.White,
-                        headlineContentColor = Color.White,
-                        weekdayContentColor = Color(0xFFBFBFBF),
-                        subheadContentColor = Color(0xFFBFBFBF),
-                        navigationContentColor = Color.White,
-                        yearContentColor = Color.White,
-                        disabledYearContentColor = Color(0xFF666666),
-                        currentYearContentColor = Color.White,
-                        selectedYearContentColor = Color.Black,
-                        selectedYearContainerColor = Color.White,
-                        dayContentColor = Color.White,
-                        selectedDayContentColor = Color.Black,
-                        selectedDayContainerColor = Color.White,
-                        todayContentColor = Color.White,
-                        todayDateBorderColor = Color.White,
-                    ),
+                Text(
+                    if (step == 0) "Pick a date" else "Pick a time",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
                 )
-                Spacer(Modifier.height(6.dp))
-                TimePicker(
-                    state = timeState,
-                    layoutType = TimePickerLayoutType.Horizontal,
-                    colors = TimePickerDefaults.colors(
-                        clockDialColor = Color(0xFF2A2A2E),
-                        selectorColor = Color.White,
-                        periodSelectorBorderColor = Color(0xFF5C5C5E),
-                        periodSelectorSelectedContainerColor = Color.White,
-                        periodSelectorSelectedContentColor = Color.Black,
-                        periodSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
-                        periodSelectorUnselectedContentColor = Color.White,
-                        timeSelectorSelectedContainerColor = Color.White,
-                        timeSelectorSelectedContentColor = Color.Black,
-                        timeSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
-                        timeSelectorUnselectedContentColor = Color.White,
-                    ),
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Spacer(Modifier.height(8.dp))
+                if (step == 0) {
+                    DatePicker(
+                        state = dateState,
+                        showModeToggle = false,
+                        colors = DatePickerDefaults.colors(
+                            containerColor = Color(0xFF1E1E22),
+                            titleContentColor = Color.White,
+                            headlineContentColor = Color.White,
+                            weekdayContentColor = Color(0xFFBFBFBF),
+                            subheadContentColor = Color(0xFFBFBFBF),
+                            navigationContentColor = Color.White,
+                            yearContentColor = Color.White,
+                            disabledYearContentColor = Color(0xFF666666),
+                            currentYearContentColor = Color.White,
+                            selectedYearContentColor = Color.Black,
+                            selectedYearContainerColor = Color.White,
+                            dayContentColor = Color.White,
+                            selectedDayContentColor = Color.Black,
+                            selectedDayContainerColor = Color.White,
+                            todayContentColor = Color.White,
+                            todayDateBorderColor = Color.White,
+                        ),
+                    )
+                } else {
+                    TimePicker(
+                        state = timeState,
+                        layoutType = TimePickerLayoutType.Horizontal,
+                        colors = TimePickerDefaults.colors(
+                            clockDialColor = Color(0xFF2A2A2E),
+                            selectorColor = Color.White,
+                            periodSelectorBorderColor = Color(0xFF5C5C5E),
+                            periodSelectorSelectedContainerColor = Color.White,
+                            periodSelectorSelectedContentColor = Color.Black,
+                            periodSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
+                            periodSelectorUnselectedContentColor = Color.White,
+                            timeSelectorSelectedContainerColor = Color.White,
+                            timeSelectorSelectedContentColor = Color.Black,
+                            timeSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
+                            timeSelectorUnselectedContentColor = Color.White,
+                        ),
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = onDismiss) { Text("Cancel", color = Color(0xFFBFBFBF)) }
-                    TextButton(
-                        onClick = {
-                            val dayMillis = dateState.selectedDateMillis ?: initialMillis
-                            val dayCal = Calendar.getInstance(zone).apply { timeInMillis = dayMillis }
-                            val out = Calendar.getInstance(zone)
-                            out.set(Calendar.YEAR, dayCal.get(Calendar.YEAR))
-                            out.set(Calendar.MONTH, dayCal.get(Calendar.MONTH))
-                            out.set(Calendar.DAY_OF_MONTH, dayCal.get(Calendar.DAY_OF_MONTH))
-                            out.set(Calendar.HOUR_OF_DAY, timeState.hour)
-                            out.set(Calendar.MINUTE, timeState.minute)
-                            out.set(Calendar.SECOND, 0)
-                            out.set(Calendar.MILLISECOND, 0)
-                            onConfirm(out.timeInMillis)
-                        },
-                    ) { Text("Save", color = Color.White) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (step == 1) {
+                            TextButton(onClick = { step = 0 }) { Text("Back", color = Color(0xFFBFBFBF)) }
+                        }
+                        TextButton(
+                            onClick = {
+                                if (step == 0) {
+                                    step = 1
+                                } else {
+                                    onConfirm(combinedMillis())
+                                }
+                            },
+                        ) {
+                            Text(if (step == 0) "Next" else "Save", color = Color.White)
+                        }
+                    }
                 }
             }
         }
@@ -1150,7 +1207,7 @@ private fun TaskEditorSheet(
     onDelete: (() -> Unit)?,
     onSave: (BoopTask) -> Unit,
 ) {
-    val sheetKey = initial.id.orEmpty()
+    val sheetKey = initial.sessionKey
     var title by rememberSaveable(sheetKey) { mutableStateOf(initial.title) }
     var reminderAt by remember(sheetKey, initial.reminderAt) { mutableLongStateOf(initial.reminderAt) }
     var done by remember(sheetKey) { mutableStateOf(initial.done) }
@@ -1239,12 +1296,15 @@ private fun NoteEditorSheet(
     val context = LocalContext.current
     val session = initial.sessionKey
     var title by rememberSaveable(session) { mutableStateOf(initial.title) }
-    var bodyField by remember(session) { mutableStateOf(TextFieldValue(initial.body, TextRange(initial.body.length))) }
     var attachmentStored by remember(session) { mutableStateOf(initial.attachmentUri) }
+    var bodyEdit by remember(session) { mutableStateOf<EditText?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val copied = copyAttachmentToInternalFile(context, uri, UUID.randomUUID().toString())
         attachmentStored = copied ?: uri.toString()
+    }
+    DisposableEffect(session) {
+        onDispose { bodyEdit = null }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(if (initial.id == null) "New note" else "Edit note", style = MaterialTheme.typography.titleLarge)
@@ -1266,46 +1326,44 @@ private fun NoteEditorSheet(
         label = { Text("Title") },
     )
     Spacer(Modifier.height(8.dp))
-    Text("Note (HTML)", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
+    Text("Note", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
     Spacer(Modifier.height(4.dp))
-    NoteFormattingToolbar(
-        onBold = { bodyField = wrapHtmlTag(bodyField, "<b>", "</b>") },
-        onItalic = { bodyField = wrapHtmlTag(bodyField, "<i>", "</i>") },
-        onH1 = { bodyField = wrapHtmlTag(bodyField, "<h1>", "</h1>") },
-        onH2 = { bodyField = wrapHtmlTag(bodyField, "<h2>", "</h2>") },
-        onH3 = { bodyField = wrapHtmlTag(bodyField, "<h3>", "</h3>") },
-        onColor = { open, close -> bodyField = wrapHtmlTag(bodyField, open, close) },
-    )
-    Spacer(Modifier.height(6.dp))
-    TextField(
-        value = bodyField,
-        onValueChange = { bodyField = it },
+    AndroidView(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 140.dp)
             .shadow(
                 elevation = 3.dp,
                 shape = RoundedCornerShape(14.dp),
                 ambientColor = Color.Black.copy(alpha = 0.35f),
                 spotColor = Color.Black.copy(alpha = 0.45f),
-            ),
-        shape = RoundedCornerShape(14.dp),
-        colors = TextFieldDefaults.colors(
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent,
-            focusedContainerColor = Color(0xFF262628),
-            unfocusedContainerColor = Color(0xFF1F1F22),
-            cursorColor = Color.White,
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-        ),
-        minLines = 3,
+            )
+            .clip(RoundedCornerShape(14.dp)),
+        factory = { ctx ->
+            EditText(ctx).apply {
+                setBackgroundColor(android.graphics.Color.parseColor("#1F1F22"))
+                setTextColor(android.graphics.Color.WHITE)
+                setHintTextColor(android.graphics.Color.parseColor("#8A8A8A"))
+                hint = "Write your note…"
+                minLines = 4
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                gravity = Gravity.TOP or Gravity.START
+                setPadding(16, 16, 16, 16)
+                setText(
+                    HtmlCompat.fromHtml(
+                        initial.body.ifBlank { "" },
+                        HtmlCompat.FROM_HTML_MODE_COMPACT,
+                    ),
+                    android.widget.TextView.BufferType.EDITABLE,
+                )
+                bodyEdit = this
+            }
+        },
+        update = { et ->
+            bodyEdit = et
+        },
     )
-    if (bodyField.text.isNotBlank()) {
-        Spacer(Modifier.height(8.dp))
-        Text("Preview", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
-        BoopNoteHtmlSnippet(bodyField.text, maxLines = 12)
-    }
+    NoteRichTextToolbar(bodyEdit, context)
     Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         BoopWhiteButton("Attach") { picker.launch("image/*") }
@@ -1331,13 +1389,18 @@ private fun NoteEditorSheet(
         val resolvedAttachment = attachmentStored?.let { att ->
             if (att.startsWith("content:")) copyAttachmentToInternalFile(context, Uri.parse(att), noteId) ?: att else att
         }
-        val bodyText = bodyField.text.trim()
-        if (title.isNotBlank() || bodyText.isNotBlank() || !resolvedAttachment.isNullOrBlank()) {
+        val editable = bodyEdit?.text
+        val bodyHtml = if (editable is Spanned) {
+            Html.toHtml(editable, 0x1 /* Html.TO_HTML_PARCEL_OUTPUT_MODE */).trim()
+        } else {
+            editable?.toString()?.trim().orEmpty()
+        }
+        if (title.isNotBlank() || bodyHtml.isNotBlank() || !resolvedAttachment.isNullOrBlank()) {
             onSave(
                 BoopNote(
                     id = noteId,
                     title = title.trim(),
-                    body = bodyText,
+                    body = bodyHtml,
                     attachmentUri = resolvedAttachment,
                 ),
             )
@@ -1577,7 +1640,34 @@ object ReminderScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.reminderAt, pending)
+        try {
+            when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                    if (manager.canScheduleExactAlarms()) {
+                        manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.reminderAt, pending)
+                    } else {
+                        manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.reminderAt, pending)
+                    }
+                }
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+                    manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.reminderAt, pending)
+                }
+                else -> {
+                    @Suppress("DEPRECATION")
+                    manager.setExact(AlarmManager.RTC_WAKEUP, task.reminderAt, pending)
+                }
+            }
+        } catch (_: SecurityException) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.reminderAt, pending)
+                } else {
+                    @Suppress("DEPRECATION")
+                    manager.set(AlarmManager.RTC_WAKEUP, task.reminderAt, pending)
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 }
 
