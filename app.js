@@ -2,7 +2,7 @@ const STORAGE_KEY = 'nandish.productivity.v1';
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const todayISO = (d = new Date()) => d.toISOString().slice(0, 10);
 
-const defaultState = () => ({ tasks: [], settings: {} });
+const defaultState = () => ({ tasks: [], habits: SEED.habits.map(h=>({...h})), habitLogs: {}, settings: {} });
 let state = load();
 function load() {
   try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return defaultState(); return { ...defaultState(), ...JSON.parse(raw) }; }
@@ -31,6 +31,7 @@ function render() {
   v.innerHTML = '';
   if (currentTab === 'home') { setTitle('Home'); renderHome(v); }
   else if (currentTab === 'tasks') { setTitle('Tasks'); renderTasks(v); }
+  else if (currentTab === 'habits') { setTitle('Habits'); renderHabits(v); }
   else { setTitle('More'); v.innerHTML = '<div class="card">Coming soon.</div>'; }
 }
 
@@ -107,3 +108,46 @@ document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', (
   render();
 }));
 render();
+
+function renderHabits(root) {
+  const t = todayISO();
+  const log = state.habitLogs[t] || {};
+  root.innerHTML = `
+    <div class="card"><div class="card-h">Today</div>
+      ${state.habits.map(h => habitRow(h, log[h.id])).join('')}
+    </div>
+    <div class="card"><div class="card-h">Streaks</div>
+      ${state.habits.map(h => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border);"><span>${h.name}</span><span style="color:var(--text-2)">🔥 ${streakOf(h)}</span></div>`).join('')}
+    </div>
+  `;
+  root.querySelectorAll('[data-hc]').forEach(b => b.onclick = () => {
+    if (!state.habitLogs[t]) state.habitLogs[t] = {};
+    state.habitLogs[t][b.dataset.hc] = !state.habitLogs[t][b.dataset.hc];
+    save(); render();
+  });
+  root.querySelectorAll('[data-hq]').forEach(i => i.onchange = () => {
+    if (!state.habitLogs[t]) state.habitLogs[t] = {};
+    state.habitLogs[t][i.dataset.hq] = parseFloat(i.value) || 0;
+    save();
+  });
+}
+function habitRow(h, val) {
+  if (h.type === 'check') {
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+      <span>${h.name}</span><button class="check ${val?'done':''}" data-hc="${h.id}"></button></div>`;
+  }
+  return `<div class="field"><label>${h.name} (${h.unit}, target ${h.target})</label>
+    <input type="number" step="0.1" min="0" class="input" data-hq="${h.id}" value="${val??''}"></div>`;
+}
+function streakOf(h) {
+  let s = 0; const d = new Date();
+  for (let i=0;i<366;i++) {
+    const k = todayISO(d);
+    const log = state.habitLogs[k] || {};
+    const v = log[h.id];
+    const hit = h.type === 'check' ? !!v : (typeof v === 'number' && v >= h.target);
+    if (hit) s++; else break;
+    d.setDate(d.getDate()-1);
+  }
+  return s;
+}
