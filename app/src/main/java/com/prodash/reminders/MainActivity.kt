@@ -133,6 +133,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.border
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -189,6 +191,7 @@ private sealed class ItemSheet {
         val title: String,
         val goal: Int,
         val progress: Int,
+        val dayKeys: String,
     ) : ItemSheet()
 }
 
@@ -268,6 +271,7 @@ private fun BoopApp() {
             title = habit?.title.orEmpty(),
             goal = habit?.goal ?: 30,
             progress = habit?.progress ?: 0,
+            dayKeys = habit?.dayKeys.orEmpty(),
         )
         speedDialExpanded = false
     }
@@ -364,6 +368,10 @@ private fun BoopApp() {
                             onEditTask = { openTaskSheet(it) },
                             onEditNote = { openNoteSheet(it) },
                             onEditHabit = { openHabitSheet(it) },
+                            onDashboardSaveHabit = { habit ->
+                                repository.saveHabit(habit)
+                                refresh()
+                            },
                         )
                     }
                     PullRefreshIndicator(
@@ -484,6 +492,7 @@ private fun BoopPagerPage(
     onEditTask: (BoopTask) -> Unit,
     onEditNote: (BoopNote) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
+    onDashboardSaveHabit: (BoopHabit) -> Unit,
 ) {
     Column(
         Modifier
@@ -491,7 +500,15 @@ private fun BoopPagerPage(
             .padding(horizontal = 16.dp),
     ) {
         when (page) {
-            0 -> DashboardScreen(tasks = tasks, notes = notes, habits = habits)
+            0 -> DashboardScreen(
+                tasks = tasks,
+                notes = notes,
+                habits = habits,
+                onPersistHabit = onDashboardSaveHabit,
+                onOpenTask = onEditTask,
+                onOpenNote = onEditNote,
+                onOpenHabit = onEditHabit,
+            )
             1 -> TaskListScreen(
                 tasks = tasks,
                 searchQuery = taskSearch,
@@ -661,54 +678,272 @@ private fun BoopSpeedDialFab(
     }
 }
 
+private val habitDayKeyFormat = SimpleDateFormat("yyyyMMdd", Locale.US)
+
+private fun parseHabitDayKeys(raw: String): Set<String> =
+    raw.split(',').map { it.trim() }.filter { it.length == 8 }.toSet()
+
+private fun serializeHabitDayKeys(keys: Set<String>): String =
+    keys.sorted().joinToString(",")
+
+private fun plainNoteSnippet(html: String, maxLen: Int): String {
+    val plain = HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT).toString()
+        .replace('\n', ' ')
+        .trim()
+    if (plain.length <= maxLen) return plain
+    return plain.take(maxLen - 1).trimEnd() + "…"
+}
+
+@Composable
+private fun DashboardSectionLabel(title: String) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            Modifier
+                .width(4.dp)
+                .height(22.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(Color.White),
+        )
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+    }
+}
+
 @Composable
 private fun DashboardScreen(
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
     habits: List<BoopHabit>,
+    onPersistHabit: (BoopHabit) -> Unit,
+    onOpenTask: (BoopTask) -> Unit,
+    onOpenNote: (BoopNote) -> Unit,
+    onOpenHabit: (BoopHabit) -> Unit,
 ) {
-    val completedTasks = tasks.count { it.done }
-    val activeGoals = habits.count { it.progress < it.goal }
-    val completion = if (habits.isEmpty()) 0 else habits.sumOf { (it.progress * 100) / it.goal } / habits.size
-    val greeting = run {
+    val scroll = rememberScrollState()
+    val upcomingTasks = remember(tasks) {
+        val n = System.currentTimeMillis()
+        val h = n + 86_400_000L
+        tasks.filter { !it.done && it.reminderAt >= n && it.reminderAt <= h }
+            .sortedBy { it.reminderAt }
+    }
+    val recentNotes = remember(notes) { notes.take(4) }
+    val greetingSecond = run {
         val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         when {
-            h < 12 -> "Good morning"
-            h < 17 -> "Good afternoon"
-            else -> "Good evening"
-        } + ", Nandish."
+            h < 12 -> "Morning"
+            h < 17 -> "Afternoon"
+            else -> "Evening"
+        }
     }
     Column(
         Modifier
             .fillMaxSize()
-            .padding(top = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .verticalScroll(scroll)
+            .padding(top = 12.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Text(
-            greeting,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-        )
-        DashboardCard("Tasks done", "$completedTasks / ${tasks.size}", Icons.Outlined.CheckCircle)
-        DashboardCard("Notes", "${notes.size} captured", Icons.Outlined.EditNote)
-        DashboardCard("Active goals", "$activeGoals running", Icons.Outlined.Flag)
-        DashboardCard("Habit completion", "$completion%", Icons.Outlined.Dashboard)
+        Column(Modifier.fillMaxWidth()) {
+            Text(
+                "Good",
+                fontSize = 58.sp,
+                lineHeight = 60.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White,
+            )
+            Text(
+                greetingSecond,
+                fontSize = 58.sp,
+                lineHeight = 60.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White,
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        DashboardSectionLabel("Your habits")
+        if (habits.isEmpty()) {
+            Text("No habits yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+        } else {
+            habits.forEach { habit ->
+                DashboardHabitRow(
+                    habit = habit,
+                    onPersist = onPersistHabit,
+                    onOpenHabit = onOpenHabit,
+                )
+            }
+        }
+        DashboardSectionLabel("Next 24 hours")
+        if (upcomingTasks.isEmpty()) {
+            Text("Nothing scheduled in the next day.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                upcomingTasks.forEach { task ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenTask(task) },
+                    ) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                            }
+                            Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Color(0xFF8E8E90))
+                        }
+                    }
+                }
+            }
+        }
+        DashboardSectionLabel("Fresh notes")
+        if (recentNotes.isEmpty()) {
+            Text("No notes yet.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+        } else {
+            recentNotes.chunked(2).forEach { rowNotes ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    rowNotes.forEach { note ->
+                        DashboardNoteTile(
+                            note = note,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onOpenNote(note) },
+                        )
+                    }
+                    if (rowNotes.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun DashboardCard(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+private fun DashboardHabitRow(
+    habit: BoopHabit,
+    onPersist: (BoopHabit) -> Unit,
+    onOpenHabit: (BoopHabit) -> Unit,
+) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
         shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = title, tint = Color(0xFFE4E4E4))
-            Spacer(Modifier.padding(8.dp))
-            Column {
-                Text(title, fontWeight = FontWeight.SemiBold)
-                Text(subtitle, color = Color(0xFFBFBFBF))
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    habit.title,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onOpenHabit(habit) },
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "${habit.progress}/${habit.goal}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFF9A9A9A),
+                )
             }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                for (i in 0 until 7) {
+                    val offset = i - 6
+                    val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, offset) }
+                    val key = habitDayKeyFormat.format(cal.time)
+                    val done = key in parseHabitDayKeys(habit.dayKeys)
+                    val isToday = i == 6
+                    val label = SimpleDateFormat("EEE", Locale.US).format(cal.time)
+                    val dayNum = cal.get(Calendar.DAY_OF_MONTH).toString()
+                    val interaction = remember(habit.id, i) { MutableInteractionSource() }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (done) Color(0xFF1B5E20) else Color(0xFF222224))
+                            .then(
+                                if (isToday) {
+                                    Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp))
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .clickable(
+                                enabled = isToday,
+                                interactionSource = interaction,
+                                indication = null,
+                            ) {
+                                if (!isToday) return@clickable
+                                val next = parseHabitDayKeys(habit.dayKeys).toMutableSet()
+                                if (key in next) next.remove(key) else next.add(key)
+                                onPersist(habit.copy(dayKeys = serializeHabitDayKeys(next)))
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(label, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            Text(dayNum, color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+            Text(
+                "Tap today’s box to log ✓ — tap title for details.",
+                color = Color(0xFF6E6E70),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DashboardNoteTile(note: BoopNote, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val snippet = remember(note.body) { plainNoteSnippet(note.body, 72) }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+        shape = RoundedCornerShape(14.dp),
+        modifier = modifier
+            .heightIn(min = 88.dp, max = 120.dp)
+            .clickable(onClick = onClick),
+    ) {
+        Column(
+            Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                note.title.ifBlank { "Untitled" },
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                snippet.ifBlank { " " },
+                color = Color(0xFFBFBFBF),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -1201,6 +1436,19 @@ private fun ReminderPickerDialog(
 }
 
 @Composable
+private fun BoopSheetHeaderTitle(text: String) {
+    Text(
+        text,
+        fontSize = 42.sp,
+        lineHeight = 44.sp,
+        fontWeight = FontWeight.Bold,
+        color = Color.White,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
 private fun TaskEditorSheet(
     initial: ItemSheet.TaskSheet,
     onDismiss: () -> Unit,
@@ -1212,8 +1460,14 @@ private fun TaskEditorSheet(
     var reminderAt by remember(sheetKey, initial.reminderAt) { mutableLongStateOf(initial.reminderAt) }
     var done by remember(sheetKey) { mutableStateOf(initial.done) }
     var showReminderPicker by remember(sheetKey) { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(if (initial.id == null) "New task" else "Edit task", style = MaterialTheme.typography.titleLarge)
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(Modifier.weight(1f)) {
+            BoopSheetHeaderTitle(if (initial.id == null) "New task" else "Edit task")
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onDelete != null) {
                 IconButton(onClick = onDelete) {
@@ -1306,8 +1560,14 @@ private fun NoteEditorSheet(
     DisposableEffect(session) {
         onDispose { bodyEdit = null }
     }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(if (initial.id == null) "New note" else "Edit note", style = MaterialTheme.typography.titleLarge)
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(Modifier.weight(1f)) {
+            BoopSheetHeaderTitle(if (initial.id == null) "New note" else "Edit note")
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onDelete != null) {
                 IconButton(onClick = onDelete) {
@@ -1418,8 +1678,14 @@ private fun HabitEditorSheet(
     var label by rememberSaveable(initial.id) { mutableStateOf(initial.title) }
     var goalText by rememberSaveable(initial.id) { mutableStateOf(initial.goal.toString()) }
     var progress by remember(initial.id) { mutableIntStateOf(initial.progress) }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(if (initial.id == null) "New habit" else "Edit habit", style = MaterialTheme.typography.titleLarge)
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(Modifier.weight(1f)) {
+            BoopSheetHeaderTitle(if (initial.id == null) "New habit" else "Edit habit")
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onDelete != null) {
                 IconButton(onClick = onDelete) {
@@ -1464,6 +1730,7 @@ private fun HabitEditorSheet(
                     title = label.trim(),
                     goal = g,
                     progress = progress.coerceIn(0, g),
+                    dayKeys = initial.dayKeys,
                 ),
             )
         }
@@ -1485,7 +1752,8 @@ private fun BoopWhiteButton(label: String, onClick: () -> Unit) {
 
 data class BoopTask(val id: String, val title: String, val reminderAt: Long, val done: Boolean)
 data class BoopNote(val id: String, val title: String, val body: String, val attachmentUri: String?)
-data class BoopHabit(val id: String, val title: String, val goal: Int, val progress: Int)
+/** [dayKeys] comma-separated yyyyMMdd calendar days marked done (dashboard strip). */
+data class BoopHabit(val id: String, val title: String, val goal: Int, val progress: Int, val dayKeys: String = "")
 
 private object AppContextHolder {
     lateinit var context: Context
@@ -1538,7 +1806,13 @@ private class BoopRepository(private val store: LocalStore) {
 
     fun readHabits(): List<BoopHabit> {
         return parseArray(store.read("habits")) { item ->
-            BoopHabit(item.getString("id"), item.getString("title"), item.getInt("goal"), item.getInt("progress"))
+            BoopHabit(
+                item.getString("id"),
+                item.getString("title"),
+                item.getInt("goal"),
+                item.getInt("progress"),
+                item.optString("dayKeys"),
+            )
         }
     }
 
@@ -1580,7 +1854,16 @@ private class BoopRepository(private val store: LocalStore) {
             add(0, habit)
         }
         val arr = JSONArray()
-        updated.forEach { arr.put(JSONObject().put("id", it.id).put("title", it.title).put("goal", it.goal).put("progress", it.progress)) }
+        updated.forEach {
+            arr.put(
+                JSONObject()
+                    .put("id", it.id)
+                    .put("title", it.title)
+                    .put("goal", it.goal)
+                    .put("progress", it.progress)
+                    .put("dayKeys", it.dayKeys),
+            )
+        }
         store.save("habits", arr.toString())
         sync("habits", arr.toString())
     }
@@ -1588,7 +1871,16 @@ private class BoopRepository(private val store: LocalStore) {
     fun deleteHabit(id: String) {
         val updated = readHabits().filterNot { it.id == id }
         val arr = JSONArray()
-        updated.forEach { arr.put(JSONObject().put("id", it.id).put("title", it.title).put("goal", it.goal).put("progress", it.progress)) }
+        updated.forEach {
+            arr.put(
+                JSONObject()
+                    .put("id", it.id)
+                    .put("title", it.title)
+                    .put("goal", it.goal)
+                    .put("progress", it.progress)
+                    .put("dayKeys", it.dayKeys),
+            )
+        }
         store.save("habits", arr.toString())
         sync("habits", arr.toString())
     }
