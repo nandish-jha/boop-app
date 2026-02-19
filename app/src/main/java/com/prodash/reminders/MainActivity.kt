@@ -78,6 +78,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
@@ -99,6 +100,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -205,6 +207,7 @@ private fun BoopApp() {
     val habits = remember { mutableStateListOf<BoopHabit>() }
 
     var itemSheet by remember { mutableStateOf<ItemSheet?>(null) }
+    var habitCheckInOpen by remember { mutableStateOf(false) }
     var speedDialExpanded by remember { mutableStateOf(false) }
 
     var taskSearch by rememberSaveable { mutableStateOf("") }
@@ -372,6 +375,10 @@ private fun BoopApp() {
                                 repository.saveHabit(habit)
                                 refresh()
                             },
+                            onOpenHabitCheckIn = {
+                                itemSheet = null
+                                habitCheckInOpen = true
+                            },
                         )
                     }
                     PullRefreshIndicator(
@@ -473,6 +480,25 @@ private fun BoopApp() {
                     }
                 }
             }
+            if (habitCheckInOpen) {
+                val habitSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+                ModalBottomSheet(
+                    onDismissRequest = { habitCheckInOpen = false },
+                    sheetState = habitSheetState,
+                    containerColor = darkSurface,
+                    dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                ) {
+                    HabitTodayCheckInSheet(
+                        habits = habits,
+                        onPersist = { habit ->
+                            repository.saveHabit(habit)
+                            refresh()
+                        },
+                        onDismiss = { habitCheckInOpen = false },
+                    )
+                }
+            }
         }
     }
 }
@@ -493,6 +519,7 @@ private fun BoopPagerPage(
     onEditNote: (BoopNote) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
     onDashboardSaveHabit: (BoopHabit) -> Unit,
+    onOpenHabitCheckIn: () -> Unit,
 ) {
     Column(
         Modifier
@@ -508,6 +535,7 @@ private fun BoopPagerPage(
                 onOpenTask = onEditTask,
                 onOpenNote = onEditNote,
                 onOpenHabit = onEditHabit,
+                onOpenHabitCheckIn = onOpenHabitCheckIn,
             )
             1 -> TaskListScreen(
                 tasks = tasks,
@@ -680,6 +708,8 @@ private fun BoopSpeedDialFab(
 
 private val habitDayKeyFormat = SimpleDateFormat("yyyyMMdd", Locale.US)
 
+private fun todayHabitDayKey(): String = habitDayKeyFormat.format(Calendar.getInstance().time)
+
 private fun parseHabitDayKeys(raw: String): Set<String> =
     raw.split(',').map { it.trim() }.filter { it.length == 8 }.toSet()
 
@@ -692,6 +722,43 @@ private fun plainNoteSnippet(html: String, maxLen: Int): String {
         .trim()
     if (plain.length <= maxLen) return plain
     return plain.take(maxLen - 1).trimEnd() + "…"
+}
+
+@Composable
+private fun DashboardHabitsSectionHeader(onOpenCheckIn: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(interactionSource = interaction, indication = null, onClick = onOpenCheckIn)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            Box(
+                Modifier
+                    .width(4.dp)
+                    .height(22.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White),
+            )
+            Column {
+                Text("Your habits", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(
+                    "Slide up to log today for every habit",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF9A9A9A),
+                )
+            }
+        }
+        Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, tint = Color(0xFFBFBFBF))
+    }
 }
 
 @Composable
@@ -721,6 +788,7 @@ private fun DashboardScreen(
     onOpenTask: (BoopTask) -> Unit,
     onOpenNote: (BoopNote) -> Unit,
     onOpenHabit: (BoopHabit) -> Unit,
+    onOpenHabitCheckIn: () -> Unit,
 ) {
     val scroll = rememberScrollState()
     val upcomingTasks = remember(tasks) {
@@ -762,7 +830,7 @@ private fun DashboardScreen(
             )
         }
         Spacer(Modifier.height(4.dp))
-        DashboardSectionLabel("Your habits")
+        DashboardHabitsSectionHeader(onOpenCheckIn = onOpenHabitCheckIn)
         if (habits.isEmpty()) {
             Text("No habits yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
         } else {
@@ -833,6 +901,7 @@ private fun DashboardHabitRow(
     onPersist: (BoopHabit) -> Unit,
     onOpenHabit: (BoopHabit) -> Unit,
 ) {
+    val todayKey = todayHabitDayKey()
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
         shape = RoundedCornerShape(16.dp),
@@ -870,14 +939,15 @@ private fun DashboardHabitRow(
                     val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, offset) }
                     val key = habitDayKeyFormat.format(cal.time)
                     val done = key in parseHabitDayKeys(habit.dayKeys)
-                    val isToday = i == 6
+                    val isToday = key == todayKey
                     val label = SimpleDateFormat("EEE", Locale.US).format(cal.time)
                     val dayNum = cal.get(Calendar.DAY_OF_MONTH).toString()
                     val interaction = remember(habit.id, i) { MutableInteractionSource() }
+                    val cellHeight = if (isToday) 52.dp else 48.dp
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(48.dp)
+                            .height(cellHeight)
                             .clip(RoundedCornerShape(10.dp))
                             .background(if (done) Color(0xFF1B5E20) else Color(0xFF222224))
                             .then(
@@ -892,9 +962,8 @@ private fun DashboardHabitRow(
                                 interactionSource = interaction,
                                 indication = null,
                             ) {
-                                if (!isToday) return@clickable
                                 val next = parseHabitDayKeys(habit.dayKeys).toMutableSet()
-                                if (key in next) next.remove(key) else next.add(key)
+                                if (todayKey in next) next.remove(todayKey) else next.add(todayKey)
                                 onPersist(habit.copy(dayKeys = serializeHabitDayKeys(next)))
                             },
                         contentAlignment = Alignment.Center,
@@ -1430,6 +1499,94 @@ private fun ReminderPickerDialog(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HabitTodayCheckInSheet(
+    habits: List<BoopHabit>,
+    onPersist: (BoopHabit) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val todayKey = remember { todayHabitDayKey() }
+    val scroll = rememberScrollState()
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.92f)
+            .verticalScroll(scroll)
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 28.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(Modifier.weight(1f)) {
+                BoopSheetHeaderTitle("Today's habits")
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Mark each habit done for today, or leave the switch off.",
+                    color = Color(0xFF9A9A9A),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        if (habits.isEmpty()) {
+            Text("No habits yet — add one from the + menu.", color = Color(0xFF9A9A9A))
+        } else {
+            habits.forEach { habit ->
+                val doneToday = todayKey in parseHabitDayKeys(habit.dayKeys)
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                habit.title,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                "${habit.progress} / ${habit.goal} days",
+                                color = Color(0xFF8E8E90),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                        Switch(
+                            checked = doneToday,
+                            onCheckedChange = { checked ->
+                                val next = parseHabitDayKeys(habit.dayKeys).toMutableSet()
+                                if (checked) next.add(todayKey) else next.remove(todayKey)
+                                onPersist(habit.copy(dayKeys = serializeHabitDayKeys(next)))
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF2E7D32),
+                                uncheckedThumbColor = Color(0xFFBFBFBF),
+                                uncheckedTrackColor = Color(0xFF3A3A3E),
+                            ),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
             }
         }
     }
