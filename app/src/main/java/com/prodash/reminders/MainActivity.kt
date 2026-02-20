@@ -129,6 +129,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
@@ -208,11 +209,8 @@ private fun BoopApp() {
 
     var itemSheet by remember { mutableStateOf<ItemSheet?>(null) }
     var habitCheckInOpen by remember { mutableStateOf(false) }
+    var globalSearchOpen by remember { mutableStateOf(false) }
     var speedDialExpanded by remember { mutableStateOf(false) }
-
-    var taskSearch by rememberSaveable { mutableStateOf("") }
-    var noteSearch by rememberSaveable { mutableStateOf("") }
-    var habitSearch by rememberSaveable { mutableStateOf("") }
 
     fun refresh() {
         tasks.clear()
@@ -362,12 +360,6 @@ private fun BoopApp() {
                             tasks = tasks,
                             notes = notes,
                             habits = habits,
-                            taskSearch = taskSearch,
-                            onTaskSearchChange = { taskSearch = it },
-                            noteSearch = noteSearch,
-                            onNoteSearchChange = { noteSearch = it },
-                            habitSearch = habitSearch,
-                            onHabitSearchChange = { habitSearch = it },
                             onEditTask = { openTaskSheet(it) },
                             onEditNote = { openNoteSheet(it) },
                             onEditHabit = { openHabitSheet(it) },
@@ -378,6 +370,11 @@ private fun BoopApp() {
                             onOpenHabitCheckIn = {
                                 itemSheet = null
                                 habitCheckInOpen = true
+                            },
+                            onOpenGlobalSearch = {
+                                itemSheet = null
+                                habitCheckInOpen = false
+                                globalSearchOpen = true
                             },
                         )
                     }
@@ -491,11 +488,48 @@ private fun BoopApp() {
                 ) {
                     HabitTodayCheckInSheet(
                         habits = habits,
+                        notes = notes,
                         onPersist = { habit ->
                             repository.saveHabit(habit)
                             refresh()
                         },
+                        onOpenNote = { note ->
+                            habitCheckInOpen = false
+                            openNoteSheet(note)
+                        },
                         onDismiss = { habitCheckInOpen = false },
+                    )
+                }
+            }
+            if (globalSearchOpen) {
+                val searchSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+                ModalBottomSheet(
+                    onDismissRequest = { globalSearchOpen = false },
+                    sheetState = searchSheetState,
+                    containerColor = darkSurface,
+                    dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                ) {
+                    GlobalSearchSheet(
+                        tasks = tasks,
+                        notes = notes,
+                        habits = habits,
+                        onDismiss = { globalSearchOpen = false },
+                        onOpenTask = { task ->
+                            globalSearchOpen = false
+                            selectedTab = 1
+                            openTaskSheet(task)
+                        },
+                        onOpenNote = { note ->
+                            globalSearchOpen = false
+                            selectedTab = 2
+                            openNoteSheet(note)
+                        },
+                        onOpenHabit = { habit ->
+                            globalSearchOpen = false
+                            selectedTab = 3
+                            openHabitSheet(habit)
+                        },
                     )
                 }
             }
@@ -509,17 +543,12 @@ private fun BoopPagerPage(
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
     habits: List<BoopHabit>,
-    taskSearch: String,
-    onTaskSearchChange: (String) -> Unit,
-    noteSearch: String,
-    onNoteSearchChange: (String) -> Unit,
-    habitSearch: String,
-    onHabitSearchChange: (String) -> Unit,
     onEditTask: (BoopTask) -> Unit,
     onEditNote: (BoopNote) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
     onDashboardSaveHabit: (BoopHabit) -> Unit,
     onOpenHabitCheckIn: () -> Unit,
+    onOpenGlobalSearch: () -> Unit,
 ) {
     Column(
         Modifier
@@ -536,23 +565,18 @@ private fun BoopPagerPage(
                 onOpenNote = onEditNote,
                 onOpenHabit = onEditHabit,
                 onOpenHabitCheckIn = onOpenHabitCheckIn,
+                onOpenGlobalSearch = onOpenGlobalSearch,
             )
             1 -> TaskListScreen(
                 tasks = tasks,
-                searchQuery = taskSearch,
-                onSearchChange = onTaskSearchChange,
                 onOpenTask = onEditTask,
             )
             2 -> NotesListScreen(
                 notes = notes,
-                searchQuery = noteSearch,
-                onSearchChange = onNoteSearchChange,
                 onOpenNote = onEditNote,
             )
             else -> HabitsListScreen(
                 habits = habits,
-                searchQuery = habitSearch,
-                onSearchChange = onHabitSearchChange,
                 onOpenHabit = onEditHabit,
             )
         }
@@ -653,7 +677,7 @@ private fun BoopSpeedDialFab(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .navigationBarsPadding()
-            .padding(bottom = 16.dp),
+            .padding(bottom = 40.dp),
     ) {
         AnimatedVisibility(
             visible = expanded,
@@ -789,6 +813,7 @@ private fun DashboardScreen(
     onOpenNote: (BoopNote) -> Unit,
     onOpenHabit: (BoopHabit) -> Unit,
     onOpenHabitCheckIn: () -> Unit,
+    onOpenGlobalSearch: () -> Unit,
 ) {
     val scroll = rememberScrollState()
     val upcomingTasks = remember(tasks) {
@@ -813,21 +838,31 @@ private fun DashboardScreen(
             .padding(top = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Column(Modifier.fillMaxWidth()) {
-            Text(
-                "Good",
-                fontSize = 58.sp,
-                lineHeight = 60.sp,
-                fontWeight = FontWeight.Black,
-                color = Color.White,
-            )
-            Text(
-                greetingSecond,
-                fontSize = 58.sp,
-                lineHeight = 60.sp,
-                fontWeight = FontWeight.Black,
-                color = Color.White,
-            )
+        Box(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(end = 52.dp)) {
+                Text(
+                    "Good",
+                    fontSize = 58.sp,
+                    lineHeight = 60.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                )
+                Text(
+                    greetingSecond,
+                    fontSize = 58.sp,
+                    lineHeight = 60.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                )
+            }
+            val searchInteraction = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = onOpenGlobalSearch,
+                modifier = Modifier.align(Alignment.TopEnd),
+                interactionSource = searchInteraction,
+            ) {
+                Icon(Icons.Outlined.Search, contentDescription = "Search everything", tint = Color.White)
+            }
         }
         Spacer(Modifier.height(4.dp))
         DashboardHabitsSectionHeader(onOpenCheckIn = onOpenHabitCheckIn)
@@ -1062,17 +1097,6 @@ private fun BoopFilledTextField(
     )
 }
 
-@Composable
-private fun BoopSearchField(value: String, onValueChange: (String) -> Unit, placeholder: String) {
-    BoopFilledTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text("Search") },
-        placeholder = { Text(placeholder, color = Color(0xFF8A8A8A)) },
-        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = Color(0xFFBFBFBF)) },
-    )
-}
-
 private fun noteEditApplySpan(editText: EditText?, span: Any) {
     val et = editText ?: return
     val text = et.text as? Editable ?: return
@@ -1214,30 +1238,22 @@ private fun storedAttachmentForCoil(stored: String?): Any? {
 @Composable
 private fun TaskListScreen(
     tasks: List<BoopTask>,
-    searchQuery: String,
-    onSearchChange: (String) -> Unit,
     onOpenTask: (BoopTask) -> Unit,
 ) {
-    val q = searchQuery.trim().lowercase(Locale.getDefault())
-    val filtered = remember(tasks, q) {
-        if (q.isEmpty()) tasks
-        else tasks.filter { it.title.lowercase(Locale.getDefault()).contains(q) }
-    }
     Column(
         Modifier
             .fillMaxSize()
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Tasks.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        BoopSearchField(searchQuery, onSearchChange, "Search tasks")
+        Text("Tasks", fontSize = 34.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold, color = Color.White)
         LazyColumn(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(filtered, key = { it.id }) { task ->
+            items(tasks, key = { it.id }) { task ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
@@ -1263,35 +1279,22 @@ private fun TaskListScreen(
 @Composable
 private fun NotesListScreen(
     notes: List<BoopNote>,
-    searchQuery: String,
-    onSearchChange: (String) -> Unit,
     onOpenNote: (BoopNote) -> Unit,
 ) {
-    val q = searchQuery.trim().lowercase(Locale.getDefault())
-    val filtered = remember(notes, q) {
-        if (q.isEmpty()) notes
-        else {
-            notes.filter {
-                it.title.lowercase(Locale.getDefault()).contains(q) ||
-                    it.body.lowercase(Locale.getDefault()).contains(q)
-            }
-        }
-    }
     Column(
         Modifier
             .fillMaxSize()
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Notes.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        BoopSearchField(searchQuery, onSearchChange, "Search notes")
+        Text("Notes", fontSize = 34.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold, color = Color.White)
         LazyColumn(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(filtered, key = { it.id }) { note ->
+            items(notes, key = { it.id }) { note ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
@@ -1335,30 +1338,22 @@ private fun NotesListScreen(
 @Composable
 private fun HabitsListScreen(
     habits: List<BoopHabit>,
-    searchQuery: String,
-    onSearchChange: (String) -> Unit,
     onOpenHabit: (BoopHabit) -> Unit,
 ) {
-    val q = searchQuery.trim().lowercase(Locale.getDefault())
-    val filtered = remember(habits, q) {
-        if (q.isEmpty()) habits
-        else habits.filter { it.title.lowercase(Locale.getDefault()).contains(q) }
-    }
     Column(
         Modifier
             .fillMaxSize()
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Habits.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        BoopSearchField(searchQuery, onSearchChange, "Search habits")
+        Text("Habits", fontSize = 34.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold, color = Color.White)
         LazyColumn(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(filtered, key = { it.id }) { habit ->
+            items(habits, key = { it.id }) { habit ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
@@ -1398,12 +1393,8 @@ private fun ReminderPickerDialog(
     val timeState = rememberTimePickerState(
         initialHour = initialCal.get(Calendar.HOUR_OF_DAY),
         initialMinute = initialCal.get(Calendar.MINUTE),
-        is24Hour = true,
+        is24Hour = false,
     )
-    var step by remember { mutableIntStateOf(0) }
-    LaunchedEffect(visible) {
-        if (visible) step = 0
-    }
     fun combinedMillis(): Long {
         val dayMillis = dateState.selectedDateMillis ?: initialMillis
         val dayCal = Calendar.getInstance(zone).apply { timeInMillis = dayMillis }
@@ -1417,11 +1408,12 @@ private fun ReminderPickerDialog(
         out.set(Calendar.MILLISECOND, 0)
         return out.timeInMillis
     }
+    val scroll = rememberScrollState()
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
-                .heightIn(max = 480.dp)
+                .heightIn(max = 620.dp)
                 .shadow(12.dp, RoundedCornerShape(16.dp)),
             shape = RoundedCornerShape(16.dp),
             color = Color(0xFF1E1E22),
@@ -1429,73 +1421,231 @@ private fun ReminderPickerDialog(
             Column(
                 Modifier
                     .fillMaxWidth()
+                    .verticalScroll(scroll)
                     .padding(12.dp),
             ) {
                 Text(
-                    if (step == 0) "Pick a date" else "Pick a time",
+                    "Date & time",
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
                 )
                 Spacer(Modifier.height(8.dp))
-                if (step == 0) {
-                    DatePicker(
-                        state = dateState,
-                        showModeToggle = false,
-                        colors = DatePickerDefaults.colors(
-                            containerColor = Color(0xFF1E1E22),
-                            titleContentColor = Color.White,
-                            headlineContentColor = Color.White,
-                            weekdayContentColor = Color(0xFFBFBFBF),
-                            subheadContentColor = Color(0xFFBFBFBF),
-                            navigationContentColor = Color.White,
-                            yearContentColor = Color.White,
-                            disabledYearContentColor = Color(0xFF666666),
-                            currentYearContentColor = Color.White,
-                            selectedYearContentColor = Color.Black,
-                            selectedYearContainerColor = Color.White,
-                            dayContentColor = Color.White,
-                            selectedDayContentColor = Color.Black,
-                            selectedDayContainerColor = Color.White,
-                            todayContentColor = Color.White,
-                            todayDateBorderColor = Color.White,
-                        ),
-                    )
-                } else {
-                    TimePicker(
-                        state = timeState,
-                        layoutType = TimePickerLayoutType.Horizontal,
-                        colors = TimePickerDefaults.colors(
-                            clockDialColor = Color(0xFF2A2A2E),
-                            selectorColor = Color.White,
-                            periodSelectorBorderColor = Color(0xFF5C5C5E),
-                            periodSelectorSelectedContainerColor = Color.White,
-                            periodSelectorSelectedContentColor = Color.Black,
-                            periodSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
-                            periodSelectorUnselectedContentColor = Color.White,
-                            timeSelectorSelectedContainerColor = Color.White,
-                            timeSelectorSelectedContentColor = Color.Black,
-                            timeSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
-                            timeSelectorUnselectedContentColor = Color.White,
-                        ),
-                    )
-                }
+                DatePicker(
+                    state = dateState,
+                    showModeToggle = false,
+                    colors = DatePickerDefaults.colors(
+                        containerColor = Color(0xFF1E1E22),
+                        titleContentColor = Color.White,
+                        headlineContentColor = Color.White,
+                        weekdayContentColor = Color(0xFFBFBFBF),
+                        subheadContentColor = Color(0xFFBFBFBF),
+                        navigationContentColor = Color.White,
+                        yearContentColor = Color.White,
+                        disabledYearContentColor = Color(0xFF666666),
+                        currentYearContentColor = Color.White,
+                        selectedYearContentColor = Color.Black,
+                        selectedYearContainerColor = Color.White,
+                        dayContentColor = Color.White,
+                        selectedDayContentColor = Color.Black,
+                        selectedDayContainerColor = Color.White,
+                        todayContentColor = Color.White,
+                        todayDateBorderColor = Color.White,
+                    ),
+                )
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Color(0xFF3A3A3E)),
+                )
+                Spacer(Modifier.height(8.dp))
+                TimePicker(
+                    state = timeState,
+                    layoutType = TimePickerLayoutType.Vertical,
+                    colors = TimePickerDefaults.colors(
+                        clockDialColor = Color(0xFF2A2A2E),
+                        selectorColor = Color.White,
+                        periodSelectorBorderColor = Color(0xFF5C5C5E),
+                        periodSelectorSelectedContainerColor = Color.White,
+                        periodSelectorSelectedContentColor = Color.Black,
+                        periodSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
+                        periodSelectorUnselectedContentColor = Color.White,
+                        timeSelectorSelectedContainerColor = Color.White,
+                        timeSelectorSelectedContentColor = Color.Black,
+                        timeSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
+                        timeSelectorUnselectedContentColor = Color.White,
+                    ),
+                )
                 Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("Cancel", color = Color(0xFFBFBFBF)) }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (step == 1) {
-                            TextButton(onClick = { step = 0 }) { Text("Back", color = Color(0xFFBFBFBF)) }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { onConfirm(combinedMillis()) }) {
+                        Text("OK", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun taskSearchHaystack(task: BoopTask): String {
+    val base = buildString {
+        append(task.title)
+        append(' ')
+        append(formatTaskReminderLine(task.reminderAt))
+        append(if (task.done) " done completed" else " scheduled")
+    }
+    return base.lowercase(Locale.getDefault())
+}
+
+private fun noteSearchHaystack(note: BoopNote): String {
+    val plain = HtmlCompat.fromHtml(note.body, HtmlCompat.FROM_HTML_MODE_COMPACT).toString()
+    return listOf(note.title, plain, note.attachmentUri.orEmpty())
+        .joinToString(" ")
+        .lowercase(Locale.getDefault())
+}
+
+private fun habitSearchHaystack(habit: BoopHabit): String {
+    return "${habit.title} ${habit.progress} ${habit.goal} ${habit.dayKeys}".lowercase(Locale.getDefault())
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GlobalSearchSheet(
+    tasks: List<BoopTask>,
+    notes: List<BoopNote>,
+    habits: List<BoopHabit>,
+    onDismiss: () -> Unit,
+    onOpenTask: (BoopTask) -> Unit,
+    onOpenNote: (BoopNote) -> Unit,
+    onOpenHabit: (BoopHabit) -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val q = query.trim().lowercase(Locale.getDefault())
+    val matchTasks = remember(tasks, q) {
+        if (q.isEmpty()) emptyList() else tasks.filter { taskSearchHaystack(it).contains(q) }
+    }
+    val matchNotes = remember(notes, q) {
+        if (q.isEmpty()) emptyList() else notes.filter { noteSearchHaystack(it).contains(q) }
+    }
+    val matchHabits = remember(habits, q) {
+        if (q.isEmpty()) emptyList() else habits.filter { habitSearchHaystack(it).contains(q) }
+    }
+    val anyMatch = matchTasks.isNotEmpty() || matchNotes.isNotEmpty() || matchHabits.isNotEmpty()
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.92f)
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Search", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
+            }
+        }
+        TextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Tasks, notes, habits…", color = Color(0xFF6E6E70)) },
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = Color(0xFFBFBFBF)) },
+            singleLine = true,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color(0xFF1A1A1D),
+                unfocusedContainerColor = Color(0xFF1A1A1D),
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                cursorColor = Color.White,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+            ),
+        )
+        Text(
+            "Text inside note images is not searched (titles, body, and filenames are).",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFF6E6E70),
+            modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
+        )
+        LazyColumn(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            when {
+                q.isEmpty() -> item {
+                    Text("Start typing to search across the app.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                }
+                !anyMatch -> item {
+                    Text("No matches.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                }
+                else -> {
+                    if (matchTasks.isNotEmpty()) {
+                        item {
+                            Text("Tasks", fontWeight = FontWeight.SemiBold, color = Color.White, modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
                         }
-                        TextButton(
-                            onClick = {
-                                if (step == 0) {
-                                    step = 1
-                                } else {
-                                    onConfirm(combinedMillis())
+                        items(matchTasks, key = { it.id }) { task ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenTask(task) },
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                 }
-                            },
-                        ) {
-                            Text(if (step == 0) "Next" else "Save", color = Color.White)
+                            }
+                        }
+                    }
+                    if (matchNotes.isNotEmpty()) {
+                        item {
+                            Text("Notes", fontWeight = FontWeight.SemiBold, color = Color.White, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                        }
+                        items(matchNotes, key = { it.id }) { note ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenNote(note) },
+                            ) {
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    val snip = plainNoteSnippet(note.body, 96)
+                                    if (snip.isNotBlank()) {
+                                        Text(snip, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (matchHabits.isNotEmpty()) {
+                        item {
+                            Text("Habits", fontWeight = FontWeight.SemiBold, color = Color.White, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                        }
+                        items(matchHabits, key = { it.id }) { habit ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenHabit(habit) },
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(habit.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text("${habit.progress} / ${habit.goal} days", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
                         }
                     }
                 }
@@ -1505,9 +1655,106 @@ private fun ReminderPickerDialog(
 }
 
 @Composable
+private fun NotesWeekStrip(
+    notes: List<BoopNote>,
+    onOpenNote: (BoopNote) -> Unit,
+) {
+    val zone = Calendar.getInstance().timeZone
+    val dayRange = remember(zone) {
+        val cal = Calendar.getInstance(zone)
+        (6 downTo 0).map { offset ->
+            val c = cal.clone() as Calendar
+            c.add(Calendar.DAY_OF_MONTH, -offset)
+            habitDayKeyFormat.format(c.time) to (c.clone() as Calendar)
+        }
+    }
+    val todayKey = remember { todayHabitDayKey() }
+    val notesByDay = remember(notes, dayRange, zone) {
+        val map = dayRange.associate { it.first to mutableListOf<BoopNote>() }.toMutableMap()
+        for (n in notes) {
+            val ts = n.updatedAtMillis.takeIf { it > 0L } ?: System.currentTimeMillis()
+            val c = Calendar.getInstance(zone).apply { timeInMillis = ts }
+            val key = habitDayKeyFormat.format(c.time)
+            map[key]?.add(n)
+        }
+        map.mapValues { (_, v) -> v.distinctBy { it.id }.sortedByDescending { it.updatedAtMillis } }
+    }
+    var selectedKey by remember(dayRange) { mutableStateOf(dayRange.last().first) }
+    Text(
+        "Notes this week",
+        fontWeight = FontWeight.SemiBold,
+        color = Color.White,
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+    )
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        dayRange.forEach { (key, cal) ->
+            val count = notesByDay[key].orEmpty().size
+            val selected = key == selectedKey
+            val isToday = key == todayKey
+            val label = SimpleDateFormat("EEE", Locale.getDefault()).format(cal.time)
+            val dayNum = cal.get(Calendar.DAY_OF_MONTH).toString()
+            val interaction = remember(key) { MutableInteractionSource() }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (selected) Color(0xFF2A2A2E) else Color(0xFF1A1A1D))
+                    .then(if (isToday) Modifier.border(1.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier)
+                    .clickable(interactionSource = interaction, indication = null) { selectedKey = key }
+                    .padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(label, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                Text(dayNum, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    if (count == 0) "–" else count.toString(),
+                    color = if (count > 0) Color(0xFF8BC34A) else Color(0xFF5C5C5E),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    val forDay = notesByDay[selectedKey].orEmpty()
+    if (forDay.isEmpty()) {
+        Text("No notes updated on this day.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
+    } else {
+        forDay.forEach { note ->
+            val interaction = remember(note.id) { MutableInteractionSource() }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF151517))
+                    .clickable(interactionSource = interaction, indication = null) { onOpenNote(note) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(note.title.ifBlank { "Untitled" }, color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val snip = plainNoteSnippet(note.body, 64)
+                    if (snip.isNotBlank()) {
+                        Text(snip, color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, tint = Color(0xFF6E6E70), modifier = Modifier.size(16.dp))
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+    }
+}
+
+@Composable
 private fun HabitTodayCheckInSheet(
     habits: List<BoopHabit>,
+    notes: List<BoopNote>,
     onPersist: (BoopHabit) -> Unit,
+    onOpenNote: (BoopNote) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val todayKey = remember { todayHabitDayKey() }
@@ -1526,33 +1773,29 @@ private fun HabitTodayCheckInSheet(
             verticalAlignment = Alignment.Top,
         ) {
             Column(Modifier.weight(1f)) {
-                BoopSheetHeaderTitle("Today's habits")
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Mark each habit done for today, or leave the switch off.",
-                    color = Color(0xFF9A9A9A),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                BoopSheetHeaderTitle("Today")
+                Spacer(Modifier.height(4.dp))
+                Text("Habits and notes for the last seven days.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = onDismiss) {
                 Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         if (habits.isEmpty()) {
-            Text("No habits yet — add one from the + menu.", color = Color(0xFF9A9A9A))
+            Text("No habits yet.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodySmall)
         } else {
             habits.forEach { habit ->
                 val doneToday = todayKey in parseHabitDayKeys(habit.dayKeys)
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
@@ -1561,11 +1804,12 @@ private fun HabitTodayCheckInSheet(
                                 habit.title,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White,
-                                maxLines = 2,
+                                maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                             Text(
-                                "${habit.progress} / ${habit.goal} days",
+                                "${habit.progress}/${habit.goal} days",
                                 color = Color(0xFF8E8E90),
                                 style = MaterialTheme.typography.labelSmall,
                             )
@@ -1577,6 +1821,7 @@ private fun HabitTodayCheckInSheet(
                                 if (checked) next.add(todayKey) else next.remove(todayKey)
                                 onPersist(habit.copy(dayKeys = serializeHabitDayKeys(next)))
                             },
+                            modifier = Modifier.scale(0.92f),
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = Color(0xFF2E7D32),
@@ -1586,9 +1831,18 @@ private fun HabitTodayCheckInSheet(
                         )
                     }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
             }
         }
+        Spacer(Modifier.height(16.dp))
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Color(0xFF3A3A3E)),
+        )
+        Spacer(Modifier.height(14.dp))
+        NotesWeekStrip(notes = notes, onOpenNote = onOpenNote)
     }
 }
 
@@ -1819,6 +2073,7 @@ private fun NoteEditorSheet(
                     title = title.trim(),
                     body = bodyHtml,
                     attachmentUri = resolvedAttachment,
+                    updatedAtMillis = System.currentTimeMillis(),
                 ),
             )
         }
@@ -1908,7 +2163,14 @@ private fun BoopWhiteButton(label: String, onClick: () -> Unit) {
 }
 
 data class BoopTask(val id: String, val title: String, val reminderAt: Long, val done: Boolean)
-data class BoopNote(val id: String, val title: String, val body: String, val attachmentUri: String?)
+data class BoopNote(
+    val id: String,
+    val title: String,
+    val body: String,
+    val attachmentUri: String?,
+    /** Last save time (local), used for week strip & search ordering. */
+    val updatedAtMillis: Long = 0L,
+)
 /** [dayKeys] comma-separated yyyyMMdd calendar days marked done (dashboard strip). */
 data class BoopHabit(val id: String, val title: String, val goal: Int, val progress: Int, val dayKeys: String = "")
 
@@ -1956,9 +2218,28 @@ private class BoopRepository(private val store: LocalStore) {
     }
 
     fun readNotes(): List<BoopNote> {
-        return parseArray(store.read("notes")) { item ->
-            BoopNote(item.getString("id"), item.optString("title"), item.optString("body"), item.optString("attachmentUri").ifBlank { null })
+        val json = store.read("notes")
+        val arr = JSONArray(json)
+        val out = mutableListOf<BoopNote>()
+        for (i in 0 until arr.length()) {
+            val item = arr.getJSONObject(i)
+            val rawU = item.optLong("updatedAt", 0L)
+            val u = if (rawU == 0L) {
+                System.currentTimeMillis() - i * 3_600_000L
+            } else {
+                rawU
+            }
+            out.add(
+                BoopNote(
+                    item.getString("id"),
+                    item.optString("title"),
+                    item.optString("body"),
+                    item.optString("attachmentUri").ifBlank { null },
+                    u,
+                ),
+            )
         }
+        return out
     }
 
     fun readHabits(): List<BoopHabit> {
@@ -1983,13 +2264,21 @@ private class BoopRepository(private val store: LocalStore) {
     }
 
     fun saveNote(note: BoopNote) {
+        val stamped = note.copy(updatedAtMillis = System.currentTimeMillis())
         val updated = readNotes().toMutableList().apply {
-            removeAll { it.id == note.id }
-            add(0, note)
+            removeAll { it.id == stamped.id }
+            add(0, stamped)
         }
         val arr = JSONArray()
         updated.forEach {
-            arr.put(JSONObject().put("id", it.id).put("title", it.title).put("body", it.body).put("attachmentUri", it.attachmentUri ?: ""))
+            arr.put(
+                JSONObject()
+                    .put("id", it.id)
+                    .put("title", it.title)
+                    .put("body", it.body)
+                    .put("attachmentUri", it.attachmentUri ?: "")
+                    .put("updatedAt", it.updatedAtMillis),
+            )
         }
         store.save("notes", arr.toString())
         sync("notes", arr.toString())
@@ -1999,7 +2288,14 @@ private class BoopRepository(private val store: LocalStore) {
         val updated = readNotes().filterNot { it.id == id }
         val arr = JSONArray()
         updated.forEach {
-            arr.put(JSONObject().put("id", it.id).put("title", it.title).put("body", it.body).put("attachmentUri", it.attachmentUri ?: ""))
+            arr.put(
+                JSONObject()
+                    .put("id", it.id)
+                    .put("title", it.title)
+                    .put("body", it.body)
+                    .put("attachmentUri", it.attachmentUri ?: "")
+                    .put("updatedAt", it.updatedAtMillis),
+            )
         }
         store.save("notes", arr.toString())
         sync("notes", arr.toString())
