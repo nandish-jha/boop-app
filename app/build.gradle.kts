@@ -24,6 +24,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Installable GitHub/APK sideload builds until a release keystore is wired (e.g. keystore.properties).
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
