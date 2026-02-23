@@ -116,6 +116,7 @@ function renderHabits(root) {
     <div class="card"><div class="card-h">Today</div>
       ${state.habits.map(h => habitRow(h, log[h.id])).join('')}
     </div>
+    <div class="card"><div class="card-h">Monthly heatmap</div>${heatmapHTML()}</div>
     <div class="card"><div class="card-h">Streaks</div>
       ${state.habits.map(h => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border);"><span>${h.name}</span><span style="color:var(--text-2)">🔥 ${streakOf(h)}</span></div>`).join('')}
     </div>
@@ -150,4 +151,23 @@ function streakOf(h) {
     d.setDate(d.getDate()-1);
   }
   return s;
+}
+
+function heatmapHTML() {
+  const cells = [];
+  const today = new Date();
+  const start = new Date(today); start.setDate(start.getDate() - 89);
+  for (let i = 0; i < 90; i++) {
+    const d = new Date(start); d.setDate(start.getDate()+i);
+    const k = todayISO(d);
+    const log = state.habitLogs[k] || {};
+    const hits = state.habits.filter(h => {
+      const v = log[h.id];
+      return h.type === 'check' ? !!v : (typeof v === 'number' && v >= h.target);
+    }).length;
+    const r = state.habits.length ? hits/state.habits.length : 0;
+    const lvl = r === 0 ? '' : r < .34 ? 'l1' : r < .67 ? 'l2' : r < 1 ? 'l3' : 'l4';
+    cells.push(`<div class="cell ${lvl}" title="${k}: ${hits}/${state.habits.length}"></div>`);
+  }
+  return `<div class="heatmap">${cells.join('')}</div>`;
 }
