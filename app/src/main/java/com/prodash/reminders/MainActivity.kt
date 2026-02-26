@@ -7,9 +7,11 @@ package com.prodash.reminders
 
 import android.Manifest
 import android.app.AlarmManager
+import android.app.DatePickerDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.TimePickerDialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.text.TextUtils
@@ -107,12 +109,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TimePickerDefaults
-import androidx.compose.material3.TimePickerLayoutType
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -123,6 +120,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -190,6 +188,7 @@ private sealed class ItemSheet {
         val title: String,
         val body: String,
         val attachmentUri: String?,
+        val tagsCsv: String,
     ) : ItemSheet()
 
     data class HabitSheet(
@@ -264,6 +263,7 @@ private fun BoopApp() {
             title = note?.title.orEmpty(),
             body = note?.body.orEmpty(),
             attachmentUri = note?.attachmentUri,
+            tagsCsv = note?.tagsCsv.orEmpty(),
         )
         speedDialExpanded = false
     }
@@ -638,7 +638,7 @@ private fun BoopSpeedDialFab(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .navigationBarsPadding()
-            .padding(bottom = 40.dp),
+            .padding(bottom = 14.dp),
     ) {
         AnimatedVisibility(
             visible = expanded,
@@ -709,6 +709,14 @@ private fun plainNoteSnippet(html: String, maxLen: Int): String {
     return plain.take(maxLen - 1).trimEnd() + "…"
 }
 
+private fun parseNoteTags(raw: String): List<String> =
+    raw.split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinctBy { it.lowercase(Locale.getDefault()) }
+
+private fun normalizeNoteTags(raw: String): String = parseNoteTags(raw).joinToString(", ")
+
 @Composable
 private fun DashboardHabitsSectionHeader(onOpenWeekView: () -> Unit) {
     Row(
@@ -777,6 +785,7 @@ private fun DashboardScreen(
     onSearchPickHabit: (BoopHabit) -> Unit,
 ) {
     val scroll = rememberScrollState()
+    val searchScroll = rememberScrollState()
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val searchFocus = remember { FocusRequester() }
@@ -801,176 +810,157 @@ private fun DashboardScreen(
             else -> "Evening"
         }
     }
-    Column(
+    Box(
         Modifier
             .fillMaxSize()
-            .verticalScroll(scroll)
             .padding(top = 12.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Column(Modifier.fillMaxWidth()) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.SpaceBetween,
+        AnimatedVisibility(
+            visible = !searchExpanded,
+            enter = fadeIn(),
+            exit = fadeOut(),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scroll),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "Good",
-                        fontSize = 58.sp,
-                        lineHeight = 60.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                    )
-                    Text(
-                        greetingSecond,
-                        fontSize = 58.sp,
-                        lineHeight = 60.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                    )
-                }
-                if (!searchExpanded) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Good", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+                        Text(greetingSecond, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+                    }
                     IconButton(onClick = { searchExpanded = true }) {
                         Icon(Icons.Outlined.Search, contentDescription = "Search", tint = Color.White)
                     }
                 }
-            }
-            AnimatedVisibility(
-                visible = searchExpanded,
-                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
-                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
-            ) {
-                Column(Modifier.fillMaxWidth()) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .focusRequester(searchFocus),
-                            placeholder = { Text("Search tasks, notes, habits…", color = Color(0xFF6E6E70)) },
-                            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = Color(0xFFBFBFBF)) },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color(0xFF1A1A1D),
-                                unfocusedContainerColor = Color(0xFF1A1A1D),
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                cursorColor = Color.White,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                            ),
-                        )
-                        IconButton(
-                            onClick = {
-                                searchExpanded = false
-                                searchQuery = ""
-                            },
-                        ) {
-                            Icon(Icons.Outlined.Close, contentDescription = "Close search", tint = Color.White)
-                        }
+                Spacer(Modifier.height(4.dp))
+                DashboardHabitsSectionHeader(onOpenWeekView = onOpenHabitCheckIn)
+                if (habits.isEmpty()) {
+                    Text("No habits yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    habits.forEach { habit ->
+                        DashboardHabitCompactCard(habit = habit, onOpenHabit = onOpenHabit)
                     }
-                    Text(
-                        "Text inside note images is not searched.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF6E6E70),
-                        modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
-                    )
-                    GlobalSearchResultsInline(
-                        query = searchQuery,
-                        tasks = tasks,
-                        notes = notes,
-                        habits = habits,
-                        onPickTask = {
-                            searchExpanded = false
-                            searchQuery = ""
-                            onSearchPickTask(it)
-                        },
-                        onPickNote = {
-                            searchExpanded = false
-                            searchQuery = ""
-                            onSearchPickNote(it)
-                        },
-                        onPickHabit = {
-                            searchExpanded = false
-                            searchQuery = ""
-                            onSearchPickHabit(it)
-                        },
-                    )
                 }
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        DashboardHabitsSectionHeader(
-            onOpenWeekView = {
-                searchExpanded = false
-                searchQuery = ""
-                onOpenHabitCheckIn()
-            },
-        )
-        if (habits.isEmpty()) {
-            Text("No habits yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
-        } else {
-            habits.forEach { habit ->
-                DashboardHabitCompactCard(
-                    habit = habit,
-                    onOpenHabit = onOpenHabit,
-                )
-            }
-        }
-        DashboardSectionLabel("Next 24 hours")
-        if (upcomingTasks.isEmpty()) {
-            Text("Nothing scheduled in the next day.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                upcomingTasks.forEach { task ->
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenTask(task) },
-                    ) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                DashboardSectionLabel("Next 24 hours")
+                if (upcomingTasks.isEmpty()) {
+                    Text("Nothing scheduled in the next day.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        upcomingTasks.forEach { task ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth().clickable { onOpenTask(task) },
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Color(0xFF8E8E90))
+                                }
                             }
-                            Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Color(0xFF8E8E90))
+                        }
+                    }
+                }
+                DashboardSectionLabel("Fresh notes")
+                if (recentNotes.isEmpty()) {
+                    Text("No notes yet.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    recentNotes.chunked(2).forEach { rowNotes ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            rowNotes.forEach { note ->
+                                DashboardNoteTile(note = note, modifier = Modifier.weight(1f), onClick = { onOpenNote(note) })
+                            }
+                            if (rowNotes.size == 1) Spacer(Modifier.weight(1f))
                         }
                     }
                 }
             }
         }
-        DashboardSectionLabel("Fresh notes")
-        if (recentNotes.isEmpty()) {
-            Text("No notes yet.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
-        } else {
-            recentNotes.chunked(2).forEach { rowNotes ->
+        AnimatedVisibility(
+            visible = searchExpanded,
+            enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+            exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(searchScroll),
+            ) {
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    rowNotes.forEach { note ->
-                        DashboardNoteTile(
-                            note = note,
-                            modifier = Modifier.weight(1f),
-                            onClick = { onOpenNote(note) },
-                        )
+                    TextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(searchFocus)
+                            .shadow(3.dp, RoundedCornerShape(14.dp)),
+                        shape = RoundedCornerShape(14.dp),
+                        placeholder = { Text("Search tasks, notes, habits…", color = Color(0xFF6E6E70)) },
+                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = Color(0xFFBFBFBF)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFF1A1A1D),
+                            unfocusedContainerColor = Color(0xFF1A1A1D),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = Color.White,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
+                    )
+                    IconButton(
+                        onClick = {
+                            searchExpanded = false
+                            searchQuery = ""
+                        },
+                    ) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Close search", tint = Color.White)
                     }
-                    if (rowNotes.size == 1) Spacer(Modifier.weight(1f))
                 }
+                Text(
+                    "Text inside note images is not searched.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF6E6E70),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+                )
+                GlobalSearchResultsInline(
+                    query = searchQuery,
+                    tasks = tasks,
+                    notes = notes,
+                    habits = habits,
+                    onPickTask = {
+                        searchExpanded = false
+                        searchQuery = ""
+                        onSearchPickTask(it)
+                    },
+                    onPickNote = {
+                        searchExpanded = false
+                        searchQuery = ""
+                        onSearchPickNote(it)
+                    },
+                    onPickHabit = {
+                        searchExpanded = false
+                        searchQuery = ""
+                        onSearchPickHabit(it)
+                    },
+                )
             }
         }
     }
@@ -1278,6 +1268,13 @@ private fun NotesListScreen(
     notes: List<BoopNote>,
     onOpenNote: (BoopNote) -> Unit,
 ) {
+    var selectedTag by rememberSaveable { mutableStateOf("All") }
+    val availableTags = remember(notes) { notes.flatMap { parseNoteTags(it.tagsCsv) }.distinctBy { it.lowercase(Locale.getDefault()) } }
+    val visibleNotes = remember(notes, selectedTag) {
+        if (selectedTag == "All") notes else notes.filter { n ->
+            parseNoteTags(n.tagsCsv).any { it.equals(selectedTag, ignoreCase = true) }
+        }
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -1285,13 +1282,38 @@ private fun NotesListScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Notes", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+        if (availableTags.isNotEmpty()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                (listOf("All") + availableTags).forEach { tag ->
+                    val active = selectedTag.equals(tag, ignoreCase = true)
+                    val interaction = remember(tag) { MutableInteractionSource() }
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (active) Color.White else Color(0xFF1F1F22),
+                        modifier = Modifier.clickable(interactionSource = interaction, indication = null) { selectedTag = tag },
+                    ) {
+                        Text(
+                            text = if (tag == "All") "All" else "#$tag",
+                            color = if (active) Color.Black else Color(0xFFD3D3D3),
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        )
+                    }
+                }
+            }
+        }
         LazyColumn(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(notes, key = { it.id }) { note ->
+            items(visibleNotes, key = { it.id }) { note ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
@@ -1302,6 +1324,16 @@ private fun NotesListScreen(
                     val hasImage = !note.attachmentUri.isNullOrBlank()
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        val tags = parseNoteTags(note.tagsCsv)
+                        if (tags.isNotEmpty()) {
+                            Text(
+                                tags.joinToString("  ") { "#$it" },
+                                color = Color(0xFF8E8E90),
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                         if (note.body.isNotBlank()) {
                             BoopNoteHtmlSnippet(note.body)
                         }
@@ -1372,7 +1404,6 @@ private fun HabitsListScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReminderPickerDialog(
     visible: Boolean,
@@ -1381,109 +1412,46 @@ private fun ReminderPickerDialog(
     onConfirm: (Long) -> Unit,
 ) {
     if (!visible) return
-    val zone = Calendar.getInstance().timeZone
-    val initialCal = Calendar.getInstance(zone).apply { timeInMillis = initialMillis }
-    val dateState = rememberDatePickerState(
-        initialSelectedDateMillis = initialMillis,
-        initialDisplayMode = DisplayMode.Picker,
-    )
-    val timeState = rememberTimePickerState(
-        initialHour = initialCal.get(Calendar.HOUR_OF_DAY),
-        initialMinute = initialCal.get(Calendar.MINUTE),
-        is24Hour = false,
-    )
-    fun combinedMillis(): Long {
-        val dayMillis = dateState.selectedDateMillis ?: initialMillis
-        val dayCal = Calendar.getInstance(zone).apply { timeInMillis = dayMillis }
-        val out = Calendar.getInstance(zone)
-        out.set(Calendar.YEAR, dayCal.get(Calendar.YEAR))
-        out.set(Calendar.MONTH, dayCal.get(Calendar.MONTH))
-        out.set(Calendar.DAY_OF_MONTH, dayCal.get(Calendar.DAY_OF_MONTH))
-        out.set(Calendar.HOUR_OF_DAY, timeState.hour)
-        out.set(Calendar.MINUTE, timeState.minute)
-        out.set(Calendar.SECOND, 0)
-        out.set(Calendar.MILLISECOND, 0)
-        return out.timeInMillis
-    }
-    val scroll = rememberScrollState()
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .heightIn(max = 620.dp)
-                .shadow(12.dp, RoundedCornerShape(16.dp)),
-            shape = RoundedCornerShape(16.dp),
-            color = Color(0xFF1E1E22),
-        ) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(scroll)
-                    .padding(12.dp),
-            ) {
-                Text(
-                    "Date & time",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                )
-                Spacer(Modifier.height(8.dp))
-                DatePicker(
-                    state = dateState,
-                    showModeToggle = false,
-                    colors = DatePickerDefaults.colors(
-                        containerColor = Color(0xFF1E1E22),
-                        titleContentColor = Color.White,
-                        headlineContentColor = Color.White,
-                        weekdayContentColor = Color(0xFFBFBFBF),
-                        subheadContentColor = Color(0xFFBFBFBF),
-                        navigationContentColor = Color.White,
-                        yearContentColor = Color.White,
-                        disabledYearContentColor = Color(0xFF666666),
-                        currentYearContentColor = Color.White,
-                        selectedYearContentColor = Color.Black,
-                        selectedYearContainerColor = Color.White,
-                        dayContentColor = Color.White,
-                        selectedDayContentColor = Color.Black,
-                        selectedDayContainerColor = Color.White,
-                        todayContentColor = Color.White,
-                        todayDateBorderColor = Color.White,
-                    ),
-                )
-                Spacer(Modifier.height(8.dp))
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(Color(0xFF3A3A3E)),
-                )
-                Spacer(Modifier.height(8.dp))
-                TimePicker(
-                    state = timeState,
-                    layoutType = TimePickerLayoutType.Vertical,
-                    colors = TimePickerDefaults.colors(
-                        clockDialColor = Color(0xFF2A2A2E),
-                        selectorColor = Color.White,
-                        periodSelectorBorderColor = Color(0xFF5C5C5E),
-                        periodSelectorSelectedContainerColor = Color.White,
-                        periodSelectorSelectedContentColor = Color.Black,
-                        periodSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
-                        periodSelectorUnselectedContentColor = Color.White,
-                        timeSelectorSelectedContainerColor = Color.White,
-                        timeSelectorSelectedContentColor = Color.Black,
-                        timeSelectorUnselectedContainerColor = Color(0xFF2A2A2E),
-                        timeSelectorUnselectedContentColor = Color.White,
-                    ),
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel", color = Color(0xFFBFBFBF)) }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { onConfirm(combinedMillis()) }) {
-                        Text("OK", color = Color.White)
-                    }
+    val context = LocalContext.current
+    val onDismissLatest by rememberUpdatedState(onDismiss)
+    val onConfirmLatest by rememberUpdatedState(onConfirm)
+    LaunchedEffect(visible, initialMillis) {
+        if (!visible) return@LaunchedEffect
+        val base = Calendar.getInstance().apply { timeInMillis = initialMillis }
+        val dateDialog = DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                val chosen = Calendar.getInstance().apply {
+                    set(Calendar.YEAR, year)
+                    set(Calendar.MONTH, month)
+                    set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                    set(Calendar.HOUR_OF_DAY, base.get(Calendar.HOUR_OF_DAY))
+                    set(Calendar.MINUTE, base.get(Calendar.MINUTE))
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
                 }
-            }
-        }
+                val timeDialog = TimePickerDialog(
+                    context,
+                    { _, hourOfDay, minute ->
+                        chosen.set(Calendar.HOUR_OF_DAY, hourOfDay)
+                        chosen.set(Calendar.MINUTE, minute)
+                        chosen.set(Calendar.SECOND, 0)
+                        chosen.set(Calendar.MILLISECOND, 0)
+                        onConfirmLatest(chosen.timeInMillis)
+                    },
+                    base.get(Calendar.HOUR_OF_DAY),
+                    base.get(Calendar.MINUTE),
+                    true,
+                )
+                timeDialog.setOnCancelListener { onDismissLatest() }
+                timeDialog.show()
+            },
+            base.get(Calendar.YEAR),
+            base.get(Calendar.MONTH),
+            base.get(Calendar.DAY_OF_MONTH),
+        )
+        dateDialog.setOnCancelListener { onDismissLatest() }
+        dateDialog.show()
     }
 }
 
@@ -1499,7 +1467,7 @@ private fun taskSearchHaystack(task: BoopTask): String {
 
 private fun noteSearchHaystack(note: BoopNote): String {
     val plain = HtmlCompat.fromHtml(note.body, HtmlCompat.FROM_HTML_MODE_COMPACT).toString()
-    return listOf(note.title, plain, note.attachmentUri.orEmpty())
+    return listOf(note.title, plain, note.attachmentUri.orEmpty(), note.tagsCsv)
         .joinToString(" ")
         .lowercase(Locale.getDefault())
 }
@@ -1850,6 +1818,7 @@ private fun NoteEditorSheet(
     val context = LocalContext.current
     val session = initial.sessionKey
     var title by rememberSaveable(session) { mutableStateOf(initial.title) }
+    var tagsCsv by rememberSaveable(session) { mutableStateOf(initial.tagsCsv) }
     var attachmentStored by remember(session) { mutableStateOf(initial.attachmentUri) }
     var bodyEdit by remember(session) { mutableStateOf<EditText?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -1884,6 +1853,13 @@ private fun NoteEditorSheet(
         value = title,
         onValueChange = { title = it },
         label = { Text("Title") },
+    )
+    Spacer(Modifier.height(8.dp))
+    BoopFilledTextField(
+        value = tagsCsv,
+        onValueChange = { tagsCsv = it },
+        label = { Text("Tags") },
+        placeholder = { Text("work, urgent, ideas", color = Color(0xFF8A8A8A)) },
     )
     Spacer(Modifier.height(8.dp))
     Text("Note", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
@@ -1962,6 +1938,7 @@ private fun NoteEditorSheet(
                     title = title.trim(),
                     body = bodyHtml,
                     attachmentUri = resolvedAttachment,
+                    tagsCsv = normalizeNoteTags(tagsCsv),
                     updatedAtMillis = System.currentTimeMillis(),
                 ),
             )
@@ -2057,6 +2034,7 @@ data class BoopNote(
     val title: String,
     val body: String,
     val attachmentUri: String?,
+    val tagsCsv: String = "",
     /** Last save time (local), used for week strip & search ordering. */
     val updatedAtMillis: Long = 0L,
 )
@@ -2124,6 +2102,7 @@ private class BoopRepository(private val store: LocalStore) {
                     item.optString("title"),
                     item.optString("body"),
                     item.optString("attachmentUri").ifBlank { null },
+                    item.optString("tags"),
                     u,
                 ),
             )
@@ -2166,6 +2145,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("title", it.title)
                     .put("body", it.body)
                     .put("attachmentUri", it.attachmentUri ?: "")
+                    .put("tags", it.tagsCsv)
                     .put("updatedAt", it.updatedAtMillis),
             )
         }
@@ -2183,6 +2163,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("title", it.title)
                     .put("body", it.body)
                     .put("attachmentUri", it.attachmentUri ?: "")
+                    .put("tags", it.tagsCsv)
                     .put("updatedAt", it.updatedAtMillis),
             )
         }
