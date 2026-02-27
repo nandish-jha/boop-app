@@ -295,6 +295,21 @@ input, select, textarea { font-family: inherit; font-size: 15px; }
 /* Section header */
 .section-h { font-size: 13px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.08em; margin: 18px 4px 8px; }
 
+/* Greeting on home */
+.greeting {
+  padding: 6px 4px 14px;
+  margin-bottom: 4px;
+}
+.greeting .hi {
+  font-size: 26px; font-weight: 700; letter-spacing: -0.02em;
+  color: var(--text); line-height: 1.2;
+}
+.greeting .quote {
+  font-size: 13px; color: var(--text-2); margin-top: 8px;
+  line-height: 1.5; font-style: italic;
+}
+.greeting .quote .who { font-style: normal; color: var(--text-3); }
+
 /* Utility */
 .mb-8 { margin-bottom: 8px; }
 .mb-12 { margin-bottom: 12px; }

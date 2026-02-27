@@ -171,7 +171,15 @@ views.home = root => {
   const suppsDone = Object.values(supps).filter(Boolean).length;
   const suppsTotal = state.supplements.length;
 
+  const quote = (typeof getDailyQuote === 'function') ? getDailyQuote() : null;
+  const greet = (typeof getGreeting === 'function') ? getGreeting() : 'Hello';
+
   root.innerHTML = `
+    <div class="greeting">
+      <div class="hi">${greet}, how are you doing?</div>
+      ${quote ? `<div class="quote">“${quote.q}” <span class="who">— ${quote.a}</span></div>` : ''}
+    </div>
+
     <div class="grid-2 mb-12">
       <div class="kpi"><div class="k">Tasks today</div><div class="v">${todayTasks.length}</div><div class="d">due or overdue</div></div>
       <div class="kpi"><div class="k">Habits</div><div class="v">${habitsDone}/${state.habits.length}</div><div class="d">hit target</div></div>
