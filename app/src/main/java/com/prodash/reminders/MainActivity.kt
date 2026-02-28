@@ -19,6 +19,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.text.Editable
@@ -109,6 +110,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -577,7 +579,7 @@ private fun BoopBottomNavBar(
                     .width(pillWidth)
                     .fillMaxHeight(0.88f)
                     .align(Alignment.CenterStart),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(999.dp),
                 color = Color.White,
                 shadowElevation = 2.dp,
             ) {}
@@ -638,7 +640,7 @@ private fun BoopSpeedDialFab(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .navigationBarsPadding()
-            .padding(bottom = 14.dp),
+            .padding(bottom = 8.dp),
     ) {
         AnimatedVisibility(
             visible = expanded,
@@ -716,6 +718,19 @@ private fun parseNoteTags(raw: String): List<String> =
         .distinctBy { it.lowercase(Locale.getDefault()) }
 
 private fun normalizeNoteTags(raw: String): String = parseNoteTags(raw).joinToString(", ")
+
+private fun applyTopRoundedDialog(dialog: android.app.Dialog, backgroundColor: Int = android.graphics.Color.parseColor("#1F1F22")) {
+    val shape = GradientDrawable().apply {
+        setColor(backgroundColor)
+        cornerRadii = floatArrayOf(
+            36f, 36f,
+            36f, 36f,
+            0f, 0f,
+            0f, 0f,
+        )
+    }
+    dialog.window?.setBackgroundDrawable(shape)
+}
 
 @Composable
 private fun DashboardHabitsSectionHeader(onOpenWeekView: () -> Unit) {
@@ -795,13 +810,14 @@ private fun DashboardScreen(
             searchFocus.requestFocus()
         }
     }
-    val upcomingTasks = remember(tasks) {
-        val n = System.currentTimeMillis()
-        val h = n + 86_400_000L
-        tasks.filter { !it.done && it.reminderAt >= n && it.reminderAt <= h }
-            .sortedBy { it.reminderAt }
-    }
-    val recentNotes = remember(notes) { notes.take(4) }
+    val now = System.currentTimeMillis()
+    val horizon = now + 86_400_000L
+    val upcomingTasks = tasks
+        .filter { !it.done && it.reminderAt in now..horizon }
+        .sortedBy { it.reminderAt }
+    val recentNotes = notes
+        .sortedByDescending { it.updatedAtMillis }
+        .take(4)
     val greetingSecond = run {
         val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         when {
@@ -1238,6 +1254,7 @@ private fun TaskListScreen(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(tasks, key = { it.id }) { task ->
@@ -1369,6 +1386,7 @@ private fun HabitsListScreen(
     habits: List<BoopHabit>,
     onOpenHabit: (BoopHabit) -> Unit,
 ) {
+    val todayKey = todayHabitDayKey()
     Column(
         Modifier
             .fillMaxSize()
@@ -1383,6 +1401,8 @@ private fun HabitsListScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(habits, key = { it.id }) { habit ->
+                val doneCount = parseHabitDayKeys(habit.dayKeys).size
+                val progressFraction = (habit.progress.toFloat() / habit.goal.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
@@ -1390,13 +1410,52 @@ private fun HabitsListScreen(
                         .fillMaxWidth()
                         .clickable { onOpenHabit(habit) },
                 ) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(habit.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(habit.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(
-                            "${habit.progress} of ${habit.goal} days",
+                            "${habit.progress} of ${habit.goal} days  ·  $doneCount total checks",
                             color = Color(0xFFBFBFBF),
                             style = MaterialTheme.typography.bodyMedium,
                         )
+                        LinearProgressIndicator(
+                            progress = { progressFraction },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(999.dp)),
+                            color = Color.White,
+                            trackColor = Color(0xFF2A2A2E),
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            for (i in 0 until 7) {
+                                val offset = i - 6
+                                val cal = Calendar.getInstance().also { it.add(Calendar.DAY_OF_MONTH, offset) }
+                                val key = habitDayKeyFormat.format(cal.time)
+                                val done = key in parseHabitDayKeys(habit.dayKeys)
+                                val isToday = key == todayKey
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(34.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (done) Color(0xFF1B5E20) else Color(0xFF222224))
+                                        .then(
+                                            if (isToday) Modifier.border(1.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier,
+                                        ),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        SimpleDateFormat("E", Locale.US).format(cal.time).take(1),
+                                        color = Color(0xFFD0D0D0),
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1444,6 +1503,7 @@ private fun ReminderPickerDialog(
                     true,
                 )
                 timeDialog.setOnCancelListener { onDismissLatest() }
+                applyTopRoundedDialog(timeDialog)
                 timeDialog.show()
             },
             base.get(Calendar.YEAR),
@@ -1451,6 +1511,7 @@ private fun ReminderPickerDialog(
             base.get(Calendar.DAY_OF_MONTH),
         )
         dateDialog.setOnCancelListener { onDismissLatest() }
+        applyTopRoundedDialog(dateDialog)
         dateDialog.show()
     }
 }
@@ -2247,6 +2308,7 @@ object ReminderScheduler {
         val intent = Intent(context, TaskReminderReceiver::class.java).apply {
             putExtra("title", task.title)
             putExtra("id", task.id.hashCode())
+            putExtra("taskId", task.id)
         }
         val pending = PendingIntent.getBroadcast(
             context,
@@ -2288,14 +2350,25 @@ object ReminderScheduler {
 
 class TaskReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == ReminderNotifier.ACTION_COMPLETE_TASK) {
+            val taskId = intent.getStringExtra("taskId").orEmpty()
+            val id = intent.getIntExtra("id", 1)
+            if (taskId.isNotBlank()) {
+                TaskNotificationActions.markTaskCompleted(context, taskId)
+            }
+            androidx.core.app.NotificationManagerCompat.from(context).cancel(id)
+            return
+        }
         val title = intent.getStringExtra("title") ?: "Task due"
         val id = intent.getIntExtra("id", 1)
-        ReminderNotifier.show(context, id, title)
+        val taskId = intent.getStringExtra("taskId").orEmpty()
+        ReminderNotifier.show(context, id, title, taskId)
     }
 }
 
 object ReminderNotifier {
     private const val CHANNEL = "boop_reminders"
+    const val ACTION_COMPLETE_TASK = "com.prodash.reminders.ACTION_COMPLETE_TASK"
 
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -2307,13 +2380,48 @@ object ReminderNotifier {
         LocalStore.init(context)
     }
 
-    fun show(context: Context, id: Int, title: String) {
+    fun show(context: Context, id: Int, title: String, taskId: String) {
+        val completeIntent = Intent(context, TaskReminderReceiver::class.java).apply {
+            action = ACTION_COMPLETE_TASK
+            putExtra("id", id)
+            putExtra("taskId", taskId)
+        }
+        val completePending = PendingIntent.getBroadcast(
+            context,
+            id + 10_000,
+            completeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val notification = androidx.core.app.NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle("Boop reminder")
             .setContentText(title)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
+            .addAction(0, "Mark as completed", completePending)
+            .setAutoCancel(true)
             .build()
         androidx.core.app.NotificationManagerCompat.from(context).notify(id, notification)
+    }
+}
+
+private object TaskNotificationActions {
+    fun markTaskCompleted(context: Context, taskId: String) {
+        val pref = context.getSharedPreferences("boop_store", Context.MODE_PRIVATE)
+        val raw = pref.getString("tasks", "[]").orEmpty()
+        val arr = JSONArray(raw)
+        var changed = false
+        for (i in 0 until arr.length()) {
+            val item = arr.getJSONObject(i)
+            if (item.optString("id") == taskId) {
+                if (!item.optBoolean("done", false)) {
+                    item.put("done", true)
+                    changed = true
+                }
+                break
+            }
+        }
+        if (changed) {
+            pref.edit().putString("tasks", arr.toString()).apply()
+        }
     }
 }
