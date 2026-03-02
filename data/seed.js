@@ -35,7 +35,28 @@ window.SEED = {
     { id: 'sk5', name: 'Moisturizer', time: 'night' },
     { id: 'sk6', name: 'Under-eye serum / gel strips (optional)', time: 'night' }
   ],
-  budgetCategories: [],
-  accounts: [],
+  budgetCategories: [
+    'Hanging out with friends', 'Shopping', 'Phone bill',
+    'Gym subscription', 'Perplexity AI subscription',
+    'Groceries', 'Food', 'Transport', 'Rent', 'Utilities',
+    'Transfer', 'Investment', 'Other'
+  ],
+  accounts: [
+    { id: 'a1', name: 'Scotiabank Chequing', type: 'chequing', bank: 'Scotiabank' },
+    { id: 'a2', name: 'Scotiabank Savings', type: 'savings', bank: 'Scotiabank' },
+    { id: 'a3', name: 'Scotiabank TFSA', type: 'tfsa', bank: 'Scotiabank' },
+    { id: 'a4', name: 'Scotiabank Credit Card', type: 'credit', bank: 'Scotiabank' },
+    { id: 'a5', name: 'TD Chequing', type: 'chequing', bank: 'TD' },
+    { id: 'a6', name: 'TD Savings', type: 'savings', bank: 'TD' },
+    { id: 'a7', name: 'TD TFSA', type: 'tfsa', bank: 'TD' },
+    { id: 'a8', name: 'TD Credit Card', type: 'credit', bank: 'TD' },
+    { id: 'a9', name: 'Affinity Chequing', type: 'chequing', bank: 'Affinity' },
+    { id: 'a10', name: 'Affinity Savings', type: 'savings', bank: 'Affinity' },
+    { id: 'a11', name: 'Affinity TFSA', type: 'tfsa', bank: 'Affinity' },
+    { id: 'a12', name: 'Wealthsimple Chequing', type: 'chequing', bank: 'Wealthsimple' },
+    { id: 'a13', name: 'Wealthsimple TFSA', type: 'tfsa', bank: 'Wealthsimple' },
+    { id: 'a14', name: 'Loblaw EOSP', type: 'equity', bank: 'Loblaw' },
+    { id: 'a15', name: 'University Loan', type: 'loan', bank: 'Gov' }
+  ],
   workouts: []
 };

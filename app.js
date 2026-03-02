@@ -2,7 +2,7 @@ const STORAGE_KEY = 'nandish.productivity.v1';
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const todayISO = (d = new Date()) => d.toISOString().slice(0, 10);
 
-const defaultState = () => ({ tasks: [], habits: SEED.habits.map(h=>({...h})), habitLogs: {}, settings: {} });
+const defaultState = () => ({ tasks: [], habits: SEED.habits.map(h=>({...h})), habitLogs: {}, accounts: SEED.accounts.map(a=>({...a,balance:0})), categories: [...SEED.budgetCategories], transactions: [], budget: { monthlySavingsGoal: 500, monthlyBudget: 0 }, settings: {} });
 let state = load();
 function load() {
   try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return defaultState(); return { ...defaultState(), ...JSON.parse(raw) }; }
@@ -32,6 +32,7 @@ function render() {
   if (currentTab === 'home') { setTitle('Home'); renderHome(v); }
   else if (currentTab === 'tasks') { setTitle('Tasks'); renderTasks(v); }
   else if (currentTab === 'habits') { setTitle('Habits'); renderHabits(v); }
+  else if (currentTab === 'budget') { setTitle('Budget'); renderBudget(v); }
   else { setTitle('More'); v.innerHTML = '<div class="card">Coming soon.</div>'; }
 }
 
@@ -170,4 +171,59 @@ function heatmapHTML() {
     cells.push(`<div class="cell ${lvl}" title="${k}: ${hits}/${state.habits.length}"></div>`);
   }
   return `<div class="heatmap">${cells.join('')}</div>`;
+}
+
+const fmtMoney = n => (n < 0 ? '-' : '') + '$' + Math.abs(n).toFixed(2);
+function accountName(id){ return (state.accounts.find(a=>a.id===id)||{}).name || ''; }
+
+function renderBudget(root) {
+  const monthStart = todayISO().slice(0,7) + '-01';
+  const txns = state.transactions.filter(x => x.date >= monthStart);
+  const income = txns.filter(x=>x.type==='income').reduce((a,b)=>a+b.amount,0);
+  const expense = txns.filter(x=>x.type==='expense').reduce((a,b)=>a+b.amount,0);
+  const saved = income - expense;
+  root.innerHTML = `
+    <div class="card"><div class="card-h">This month</div>
+      <div>Income: <b>${fmtMoney(income)}</b></div>
+      <div>Expense: <b>${fmtMoney(expense)}</b></div>
+      <div>Saved: <b>${fmtMoney(saved)}</b> (goal ${fmtMoney(state.budget.monthlySavingsGoal)})</div>
+    </div>
+    <div class="card"><div class="card-h">Transactions</div>
+      ${txns.length === 0 ? '<div>No transactions yet.</div>' : txns.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(t => `
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border);">
+          <div>${escapeHTML(t.category)} <span style="color:var(--text-3);font-size:12px">${escapeHTML(accountName(t.accountId))}</span></div>
+          <div>${t.type==='income'?'+':'-'}${fmtMoney(t.amount)}</div>
+        </div>`).join('')}
+    </div>
+    <button class="btn primary btn-block" id="addTxn">Add transaction</button>
+  `;
+  document.getElementById('addTxn').onclick = () => editTxn();
+}
+function editTxn(id) {
+  const tx = id ? state.transactions.find(x=>x.id===id) : { id: uid(), type:'expense', amount:0, category: state.categories[0], accountId: state.accounts[0].id, date: todayISO(), note:'' };
+  openSheet(`
+    <h2 style="margin:0 0 12px;">${id ? 'Edit' : 'New'} transaction</h2>
+    <div class="field"><label>Type</label><select class="select" id="xt">
+      <option value="expense" ${tx.type==='expense'?'selected':''}>Expense</option>
+      <option value="income" ${tx.type==='income'?'selected':''}>Income</option></select></div>
+    <div class="field"><label>Amount</label><input type="number" step="0.01" class="input" id="xa" value="${tx.amount||''}"></div>
+    <div class="field"><label>Category</label><select class="select" id="xc">
+      ${state.categories.map(c=>`<option ${c===tx.category?'selected':''}>${c}</option>`).join('')}
+    </select></div>
+    <div class="field"><label>Account</label><select class="select" id="xac">
+      ${state.accounts.map(a=>`<option value="${a.id}" ${a.id===tx.accountId?'selected':''}>${a.name}</option>`).join('')}
+    </select></div>
+    <div class="field"><label>Date</label><input type="date" class="input" id="xd" value="${tx.date}"></div>
+    <button class="btn primary btn-block" id="sv">Save</button>
+  `, root => {
+    root.querySelector('#sv').onclick = () => {
+      tx.type = root.querySelector('#xt').value;
+      tx.amount = parseFloat(root.querySelector('#xa').value) || 0;
+      tx.category = root.querySelector('#xc').value;
+      tx.accountId = root.querySelector('#xac').value;
+      tx.date = root.querySelector('#xd').value;
+      if (!id) state.transactions.push(tx);
+      save(); closeSheet(); render();
+    };
+  });
 }
