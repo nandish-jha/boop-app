@@ -76,6 +76,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Delete
@@ -111,6 +112,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -149,6 +151,10 @@ import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import android.widget.TextView
 import androidx.core.text.HtmlCompat
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
@@ -199,6 +205,10 @@ private sealed class ItemSheet {
         val goal: Int,
         val progress: Int,
         val dayKeys: String,
+        val quantityMode: Boolean,
+        val quantityUnit: String,
+        val quantityDailyTarget: Int,
+        val quantityDayValues: String,
     ) : ItemSheet()
 }
 
@@ -277,6 +287,10 @@ private fun BoopApp() {
             goal = habit?.goal ?: 30,
             progress = habit?.progress ?: 0,
             dayKeys = habit?.dayKeys.orEmpty(),
+            quantityMode = habit?.quantityMode ?: false,
+            quantityUnit = habit?.quantityUnit.orEmpty(),
+            quantityDailyTarget = habit?.quantityDailyTarget ?: 30,
+            quantityDayValues = habit?.quantityDayValues.orEmpty(),
         )
         speedDialExpanded = false
     }
@@ -311,7 +325,7 @@ private fun BoopApp() {
                 }
             },
         )
-        val pagerState = rememberPagerState(initialPage = selectedTab, pageCount = { 4 })
+        val pagerState = rememberPagerState(initialPage = selectedTab, pageCount = { 5 })
         val pagerScrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
         LaunchedEffect(pagerState.isScrollInProgress, pagerState.currentPage) {
             if (!pagerState.isScrollInProgress && pagerState.currentPage != selectedTab) {
@@ -364,6 +378,10 @@ private fun BoopApp() {
                             tasks = tasks,
                             notes = notes,
                             habits = habits,
+                            onPersistHabit = { habit ->
+                                repository.saveHabit(habit)
+                                refresh()
+                            },
                             onSelectTab = { selectedTab = it },
                             onEditTask = { openTaskSheet(it) },
                             onEditNote = { openNoteSheet(it) },
@@ -506,6 +524,7 @@ private fun BoopPagerPage(
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
     habits: List<BoopHabit>,
+    onPersistHabit: (BoopHabit) -> Unit,
     onSelectTab: (Int) -> Unit,
     onEditTask: (BoopTask) -> Unit,
     onEditNote: (BoopNote) -> Unit,
@@ -527,19 +546,24 @@ private fun BoopPagerPage(
                 onOpenHabit = onEditHabit,
                 onOpenHabitCheckIn = onOpenHabitCheckIn,
                 onSearchPickTask = { onSelectTab(1); onEditTask(it) },
-                onSearchPickNote = { onSelectTab(2); onEditNote(it) },
-                onSearchPickHabit = { onSelectTab(3); onEditHabit(it) },
+                onSearchPickNote = { onSelectTab(3); onEditNote(it) },
+                onSearchPickHabit = { onSelectTab(4); onEditHabit(it) },
             )
             1 -> TaskListScreen(
                 tasks = tasks,
                 onOpenTask = onEditTask,
             )
-            2 -> NotesListScreen(
+            2 -> CalendarScreen(
+                tasks = tasks,
+                onOpenTask = onEditTask,
+            )
+            3 -> NotesListScreen(
                 notes = notes,
                 onOpenNote = onEditNote,
             )
             else -> HabitsListScreen(
                 habits = habits,
+                onPersistHabit = onPersistHabit,
                 onOpenHabit = onEditHabit,
             )
         }
@@ -555,8 +579,9 @@ private fun BoopBottomNavBar(
     val tabs = listOf(
         Triple(0, "Home", Icons.Outlined.Dashboard),
         Triple(1, "Tasks", Icons.Outlined.Notifications),
-        Triple(2, "Notes", Icons.Outlined.EditNote),
-        Triple(3, "Habits", Icons.Outlined.Flag),
+        Triple(2, "Calendar", Icons.Outlined.CalendarMonth),
+        Triple(3, "Notes", Icons.Outlined.EditNote),
+        Triple(4, "Habits", Icons.Outlined.Flag),
     )
     BoxWithConstraints(
         Modifier
@@ -640,7 +665,7 @@ private fun BoopSpeedDialFab(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .navigationBarsPadding()
-            .padding(bottom = 8.dp),
+            .padding(bottom = 4.dp),
     ) {
         AnimatedVisibility(
             visible = expanded,
@@ -670,7 +695,8 @@ private fun BoopSpeedDialFab(
                 when (selectedTab) {
                     0 -> onExpandedChange(!expanded)
                     1 -> onOpenTask()
-                    2 -> onOpenNote()
+                    2 -> onOpenTask()
+                    3 -> onOpenNote()
                     else -> onOpenHabit()
                 }
             },
@@ -703,6 +729,25 @@ private fun parseHabitDayKeys(raw: String): Set<String> =
 private fun serializeHabitDayKeys(keys: Set<String>): String =
     keys.sorted().joinToString(",")
 
+private fun parseHabitDayValues(raw: String): Map<String, Int> {
+    if (raw.isBlank()) return emptyMap()
+    return raw.split(',')
+        .mapNotNull { part ->
+            val p = part.split(':')
+            if (p.size != 2) return@mapNotNull null
+            val key = p[0].trim()
+            val value = p[1].trim().toIntOrNull() ?: return@mapNotNull null
+            if (key.length != 8) return@mapNotNull null
+            key to value.coerceAtLeast(0)
+        }.toMap()
+}
+
+private fun serializeHabitDayValues(values: Map<String, Int>): String =
+    values.entries
+        .filter { it.key.length == 8 && it.value >= 0 }
+        .sortedBy { it.key }
+        .joinToString(",") { "${it.key}:${it.value}" }
+
 private fun plainNoteSnippet(html: String, maxLen: Int): String {
     val plain = HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT).toString()
         .replace('\n', ' ')
@@ -719,14 +764,14 @@ private fun parseNoteTags(raw: String): List<String> =
 
 private fun normalizeNoteTags(raw: String): String = parseNoteTags(raw).joinToString(", ")
 
-private fun applyTopRoundedDialog(dialog: android.app.Dialog, backgroundColor: Int = android.graphics.Color.parseColor("#1F1F22")) {
+private fun applyRoundedDialog(dialog: android.app.Dialog, backgroundColor: Int = android.graphics.Color.parseColor("#1F1F22")) {
     val shape = GradientDrawable().apply {
         setColor(backgroundColor)
         cornerRadii = floatArrayOf(
             36f, 36f,
             36f, 36f,
-            0f, 0f,
-            0f, 0f,
+            36f, 36f,
+            36f, 36f,
         )
     }
     dialog.window?.setBackgroundDrawable(shape)
@@ -1238,6 +1283,27 @@ private fun storedAttachmentForCoil(stored: String?): Any? {
     }
 }
 
+private fun extractTextFromAttachment(context: Context, stored: String?): String {
+    if (stored.isNullOrBlank()) return ""
+    return try {
+        val image = when {
+            stored.startsWith("content:") -> InputImage.fromFilePath(context, Uri.parse(stored))
+            stored.startsWith("file:") -> InputImage.fromFilePath(context, Uri.parse(stored))
+            else -> {
+                val file = File(stored)
+                if (!file.exists()) return ""
+                InputImage.fromFilePath(context, Uri.fromFile(file))
+            }
+        }
+        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        val result = Tasks.await(recognizer.process(image))
+        recognizer.close()
+        result.text.trim()
+    } catch (_: Throwable) {
+        ""
+    }
+}
+
 @Composable
 private fun TaskListScreen(
     tasks: List<BoopTask>,
@@ -1267,12 +1333,103 @@ private fun TaskListScreen(
                 ) {
                     Column(Modifier.padding(14.dp)) {
                         Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
-                        Text(
-                            if (task.done) "Completed" else "Scheduled",
-                            color = Color(0xFFBFBFBF),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+                        if (task.done) {
+                            Text(
+                                "Completed",
+                                color = Color(0xFFBFBFBF),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                         Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CalendarScreen(
+    tasks: List<BoopTask>,
+    onOpenTask: (BoopTask) -> Unit,
+) {
+    val now = remember { Calendar.getInstance() }
+    val dateState = rememberDatePickerState(initialSelectedDateMillis = now.timeInMillis)
+    val selectedMillis = dateState.selectedDateMillis ?: now.timeInMillis
+    val selectedDay = remember(selectedMillis) {
+        Calendar.getInstance().apply {
+            timeInMillis = selectedMillis
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+    }
+    val nextDay = remember(selectedMillis) {
+        (selectedDay.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 1) }
+    }
+    val dayTasks = tasks.filter { it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }
+        .sortedBy { it.reminderAt }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(top = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Calendar", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+        DatePicker(
+            state = dateState,
+            showModeToggle = false,
+            colors = DatePickerDefaults.colors(
+                containerColor = Color(0xFF151517),
+                titleContentColor = Color.White,
+                headlineContentColor = Color.White,
+                weekdayContentColor = Color(0xFFBFBFBF),
+                subheadContentColor = Color(0xFFBFBFBF),
+                navigationContentColor = Color.White,
+                yearContentColor = Color.White,
+                disabledYearContentColor = Color(0xFF666666),
+                currentYearContentColor = Color.White,
+                selectedYearContentColor = Color.Black,
+                selectedYearContainerColor = Color.White,
+                dayContentColor = Color.White,
+                selectedDayContentColor = Color.Black,
+                selectedDayContainerColor = Color.White,
+                todayContentColor = Color.White,
+                todayDateBorderColor = Color.White,
+            ),
+        )
+        val dayLabel = SimpleDateFormat("EEE, MMM d", Locale.US).format(selectedDay.timeInMillis)
+        Text("Tasks for $dayLabel", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
+        LazyColumn(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (dayTasks.isEmpty()) {
+                item {
+                    Text("No tasks for this day.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                items(dayTasks, key = { it.id }) { task ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenTask(task) },
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            if (task.done) {
+                                Text("Completed", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
@@ -1328,6 +1485,7 @@ private fun NotesListScreen(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(visibleNotes, key = { it.id }) { note ->
@@ -1384,6 +1542,7 @@ private fun NotesListScreen(
 @Composable
 private fun HabitsListScreen(
     habits: List<BoopHabit>,
+    onPersistHabit: (BoopHabit) -> Unit,
     onOpenHabit: (BoopHabit) -> Unit,
 ) {
     val todayKey = todayHabitDayKey()
@@ -1398,11 +1557,17 @@ private fun HabitsListScreen(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(habits, key = { it.id }) { habit ->
                 val doneCount = parseHabitDayKeys(habit.dayKeys).size
-                val progressFraction = (habit.progress.toFloat() / habit.goal.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+                val todayAmount = parseHabitDayValues(habit.quantityDayValues)[todayKey] ?: 0
+                val progressFraction = if (habit.quantityMode) {
+                    (todayAmount.toFloat() / habit.quantityDailyTarget.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+                } else {
+                    (habit.progress.toFloat() / habit.goal.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+                }
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
@@ -1413,7 +1578,12 @@ private fun HabitsListScreen(
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(habit.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(
-                            "${habit.progress} of ${habit.goal} days  ·  $doneCount total checks",
+                            if (habit.quantityMode) {
+                                val unit = habit.quantityUnit.ifBlank { "units" }
+                                "$todayAmount / ${habit.quantityDailyTarget} $unit today"
+                            } else {
+                                "${habit.progress} of ${habit.goal} days  ·  $doneCount total checks"
+                            },
                             color = Color(0xFFBFBFBF),
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -1426,33 +1596,67 @@ private fun HabitsListScreen(
                             color = Color.White,
                             trackColor = Color(0xFF2A2A2E),
                         )
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            for (i in 0 until 7) {
-                                val offset = i - 6
-                                val cal = Calendar.getInstance().also { it.add(Calendar.DAY_OF_MONTH, offset) }
-                                val key = habitDayKeyFormat.format(cal.time)
-                                val done = key in parseHabitDayKeys(habit.dayKeys)
-                                val isToday = key == todayKey
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(34.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (done) Color(0xFF1B5E20) else Color(0xFF222224))
-                                        .then(
-                                            if (isToday) Modifier.border(1.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier,
-                                        ),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        SimpleDateFormat("E", Locale.US).format(cal.time).take(1),
-                                        color = Color(0xFFD0D0D0),
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
+                        if (habit.quantityMode) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                TextButton(
+                                    onClick = {
+                                        val map = parseHabitDayValues(habit.quantityDayValues).toMutableMap()
+                                        val next = (todayAmount - 1).coerceAtLeast(0)
+                                        map[todayKey] = next
+                                        onPersistHabit(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
+                                    },
+                                ) { Text("-1", color = Color.White) }
+                                TextButton(
+                                    onClick = {
+                                        val map = parseHabitDayValues(habit.quantityDayValues).toMutableMap()
+                                        map[todayKey] = todayAmount + 1
+                                        onPersistHabit(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
+                                    },
+                                ) { Text("+1", color = Color.White) }
+                            }
+                        } else {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                for (i in 0 until 14) {
+                                    val offset = i - 13
+                                    val cal = Calendar.getInstance().also { it.add(Calendar.DAY_OF_MONTH, offset) }
+                                    val key = habitDayKeyFormat.format(cal.time)
+                                    val done = key in parseHabitDayKeys(habit.dayKeys)
+                                    val isToday = key == todayKey
+                                    val interaction = remember(habit.id, i) { MutableInteractionSource() }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(34.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (done) Color(0xFF1B5E20) else Color(0xFF222224))
+                                            .then(
+                                                if (isToday) Modifier.border(1.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier,
+                                            )
+                                            .clickable(
+                                                enabled = isToday,
+                                                interactionSource = interaction,
+                                                indication = null,
+                                            ) {
+                                                val next = parseHabitDayKeys(habit.dayKeys).toMutableSet()
+                                                if (todayKey in next) next.remove(todayKey) else next.add(todayKey)
+                                                onPersistHabit(habit.copy(dayKeys = serializeHabitDayKeys(next)))
+                                            },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            SimpleDateFormat("E", Locale.US).format(cal.time).take(1),
+                                            color = Color(0xFFD0D0D0),
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1503,7 +1707,7 @@ private fun ReminderPickerDialog(
                     true,
                 )
                 timeDialog.setOnCancelListener { onDismissLatest() }
-                applyTopRoundedDialog(timeDialog)
+                applyRoundedDialog(timeDialog)
                 timeDialog.show()
             },
             base.get(Calendar.YEAR),
@@ -1511,7 +1715,7 @@ private fun ReminderPickerDialog(
             base.get(Calendar.DAY_OF_MONTH),
         )
         dateDialog.setOnCancelListener { onDismissLatest() }
-        applyTopRoundedDialog(dateDialog)
+        applyRoundedDialog(dateDialog)
         dateDialog.show()
     }
 }
@@ -1528,13 +1732,13 @@ private fun taskSearchHaystack(task: BoopTask): String {
 
 private fun noteSearchHaystack(note: BoopNote): String {
     val plain = HtmlCompat.fromHtml(note.body, HtmlCompat.FROM_HTML_MODE_COMPACT).toString()
-    return listOf(note.title, plain, note.attachmentUri.orEmpty(), note.tagsCsv)
+    return listOf(note.title, plain, note.attachmentUri.orEmpty(), note.tagsCsv, note.ocrText)
         .joinToString(" ")
         .lowercase(Locale.getDefault())
 }
 
 private fun habitSearchHaystack(habit: BoopHabit): String {
-    return "${habit.title} ${habit.progress} ${habit.goal} ${habit.dayKeys}".lowercase(Locale.getDefault())
+    return "${habit.title} ${habit.progress} ${habit.goal} ${habit.dayKeys} ${habit.quantityUnit} ${habit.quantityDailyTarget} ${habit.quantityDayValues}".lowercase(Locale.getDefault())
 }
 
 @Composable
@@ -1636,6 +1840,8 @@ private fun HabitWeekStripCard(
     onOpenHabit: (BoopHabit) -> Unit,
 ) {
     val todayKey = todayHabitDayKey()
+    val dayValues = parseHabitDayValues(habit.quantityDayValues)
+    val todayAmount = dayValues[todayKey] ?: 0
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
         shape = RoundedCornerShape(14.dp),
@@ -1672,10 +1878,15 @@ private fun HabitWeekStripCard(
                     val offset = i - 6
                     val cal = Calendar.getInstance().also { it.add(Calendar.DAY_OF_MONTH, offset) }
                     val key = habitDayKeyFormat.format(cal.time)
-                    val done = key in parseHabitDayKeys(habit.dayKeys)
+                    val done = if (habit.quantityMode) {
+                        (dayValues[key] ?: 0) >= habit.quantityDailyTarget.coerceAtLeast(1)
+                    } else {
+                        key in parseHabitDayKeys(habit.dayKeys)
+                    }
                     val isToday = key == todayKey
                     val label = SimpleDateFormat("EEE", Locale.US).format(cal.time)
                     val dayNum = cal.get(Calendar.DAY_OF_MONTH).toString()
+                    val dayAmount = dayValues[key] ?: 0
                     val interaction = remember(habit.id, i) { MutableInteractionSource() }
                     val cellHeight = if (isToday) 52.dp else 48.dp
                     Box(
@@ -1692,7 +1903,7 @@ private fun HabitWeekStripCard(
                                 },
                             )
                             .clickable(
-                                enabled = isToday,
+                                enabled = isToday && !habit.quantityMode,
                                 interactionSource = interaction,
                                 indication = null,
                             ) {
@@ -1704,13 +1915,47 @@ private fun HabitWeekStripCard(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(label, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                            Text(dayNum, color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            if (habit.quantityMode) {
+                                Text(
+                                    if (dayAmount == 0) dayNum else dayAmount.toString(),
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            } else {
+                                Text(dayNum, color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
             }
+            if (habit.quantityMode) {
+                val unit = habit.quantityUnit.ifBlank { "units" }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("${todayAmount} / ${habit.quantityDailyTarget} $unit today", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.width(10.dp))
+                    TextButton(
+                        onClick = {
+                            val map = dayValues.toMutableMap()
+                            map[todayKey] = (todayAmount - 1).coerceAtLeast(0)
+                            onPersist(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
+                        },
+                    ) { Text("-1", color = Color.White) }
+                    TextButton(
+                        onClick = {
+                            val map = dayValues.toMutableMap()
+                            map[todayKey] = todayAmount + 1
+                            onPersist(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
+                        },
+                    ) { Text("+1", color = Color.White) }
+                }
+            }
             Text(
-                "Tap today’s column to log · tap the title for details.",
+                if (habit.quantityMode) "Adjust today's amount with +/- · tap title for details." else "Tap today’s column to log · tap the title for details.",
                 color = Color(0xFF6E6E70),
                 style = MaterialTheme.typography.labelSmall,
             )
@@ -1742,7 +1987,7 @@ private fun HabitTodayCheckInSheet(
             Column(Modifier.weight(1f)) {
                 BoopSheetHeaderTitle("Habits week")
                 Spacer(Modifier.height(4.dp))
-                Text("Seven-day strip per habit — today toggles when you tap the highlighted column.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodySmall)
+                Text("Check-off habits toggle today; quantity habits let you add minutes/mL with +/-.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = onDismiss) {
                 Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
@@ -1993,6 +2238,7 @@ private fun NoteEditorSheet(
             editable?.toString()?.trim().orEmpty()
         }
         if (title.isNotBlank() || bodyHtml.isNotBlank() || !resolvedAttachment.isNullOrBlank()) {
+            val ocrText = extractTextFromAttachment(context, resolvedAttachment)
             onSave(
                 BoopNote(
                     id = noteId,
@@ -2000,6 +2246,7 @@ private fun NoteEditorSheet(
                     body = bodyHtml,
                     attachmentUri = resolvedAttachment,
                     tagsCsv = normalizeNoteTags(tagsCsv),
+                    ocrText = ocrText,
                     updatedAtMillis = System.currentTimeMillis(),
                 ),
             )
@@ -2017,6 +2264,9 @@ private fun HabitEditorSheet(
     var label by rememberSaveable(initial.id) { mutableStateOf(initial.title) }
     var goalText by rememberSaveable(initial.id) { mutableStateOf(initial.goal.toString()) }
     var progress by remember(initial.id) { mutableIntStateOf(initial.progress) }
+    var quantityMode by rememberSaveable(initial.id) { mutableStateOf(initial.quantityMode) }
+    var quantityUnit by rememberSaveable(initial.id) { mutableStateOf(initial.quantityUnit) }
+    var quantityTarget by rememberSaveable(initial.id) { mutableStateOf(initial.quantityDailyTarget.toString()) }
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -2046,18 +2296,44 @@ private fun HabitEditorSheet(
     BoopFilledTextField(
         value = goalText,
         onValueChange = { goalText = it },
-        label = { Text("Target days") },
+        label = { Text(if (quantityMode) "Daily target amount" else "Target days") },
     )
-    val goalVal = goalText.toIntOrNull() ?: 30
+    Spacer(Modifier.height(8.dp))
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Progress: $progress / $goalVal", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyLarge)
-        TextButton(onClick = { progress = (progress + 1).coerceAtMost(goalVal.coerceAtLeast(1)) }) {
-            Text("+1 day", color = Color.White)
-        }
+        Text("Track quantity (minutes / mL / etc.)", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = quantityMode, onCheckedChange = { quantityMode = it })
+    }
+    if (quantityMode) {
+        Spacer(Modifier.height(8.dp))
+        BoopFilledTextField(
+            value = quantityUnit,
+            onValueChange = { quantityUnit = it },
+            label = { Text("Unit") },
+            placeholder = { Text("minutes, mL, pages...", color = Color(0xFF8A8A8A)) },
+        )
+        Spacer(Modifier.height(8.dp))
+        BoopFilledTextField(
+            value = quantityTarget,
+            onValueChange = { quantityTarget = it },
+            label = { Text("Daily target") },
+        )
+    }
+    val goalVal = goalText.toIntOrNull() ?: 30
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (quantityMode) "Today is logged in week view / habits page"
+            else "Progress: $progress / $goalVal",
+            color = Color(0xFFBFBFBF),
+            style = MaterialTheme.typography.bodyLarge,
+        )
     }
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
@@ -2070,6 +2346,10 @@ private fun HabitEditorSheet(
                     goal = g,
                     progress = progress.coerceIn(0, g),
                     dayKeys = initial.dayKeys,
+                    quantityMode = quantityMode,
+                    quantityUnit = quantityUnit.trim(),
+                    quantityDailyTarget = (quantityTarget.toIntOrNull() ?: initial.quantityDailyTarget).coerceAtLeast(1),
+                    quantityDayValues = initial.quantityDayValues,
                 ),
             )
         }
@@ -2096,11 +2376,22 @@ data class BoopNote(
     val body: String,
     val attachmentUri: String?,
     val tagsCsv: String = "",
+    val ocrText: String = "",
     /** Last save time (local), used for week strip & search ordering. */
     val updatedAtMillis: Long = 0L,
 )
 /** [dayKeys] comma-separated yyyyMMdd calendar days marked done (dashboard strip). */
-data class BoopHabit(val id: String, val title: String, val goal: Int, val progress: Int, val dayKeys: String = "")
+data class BoopHabit(
+    val id: String,
+    val title: String,
+    val goal: Int,
+    val progress: Int,
+    val dayKeys: String = "",
+    val quantityMode: Boolean = false,
+    val quantityUnit: String = "",
+    val quantityDailyTarget: Int = 30,
+    val quantityDayValues: String = "",
+)
 
 private object AppContextHolder {
     lateinit var context: Context
@@ -2164,6 +2455,7 @@ private class BoopRepository(private val store: LocalStore) {
                     item.optString("body"),
                     item.optString("attachmentUri").ifBlank { null },
                     item.optString("tags"),
+                    item.optString("ocrText"),
                     u,
                 ),
             )
@@ -2179,6 +2471,10 @@ private class BoopRepository(private val store: LocalStore) {
                 item.getInt("goal"),
                 item.getInt("progress"),
                 item.optString("dayKeys"),
+                item.optBoolean("quantityMode", false),
+                item.optString("quantityUnit"),
+                item.optInt("quantityDailyTarget", 30),
+                item.optString("quantityDayValues"),
             )
         }
     }
@@ -2207,6 +2503,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("body", it.body)
                     .put("attachmentUri", it.attachmentUri ?: "")
                     .put("tags", it.tagsCsv)
+                    .put("ocrText", it.ocrText)
                     .put("updatedAt", it.updatedAtMillis),
             )
         }
@@ -2225,6 +2522,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("body", it.body)
                     .put("attachmentUri", it.attachmentUri ?: "")
                     .put("tags", it.tagsCsv)
+                    .put("ocrText", it.ocrText)
                     .put("updatedAt", it.updatedAtMillis),
             )
         }
@@ -2245,7 +2543,11 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("title", it.title)
                     .put("goal", it.goal)
                     .put("progress", it.progress)
-                    .put("dayKeys", it.dayKeys),
+                    .put("dayKeys", it.dayKeys)
+                    .put("quantityMode", it.quantityMode)
+                    .put("quantityUnit", it.quantityUnit)
+                    .put("quantityDailyTarget", it.quantityDailyTarget)
+                    .put("quantityDayValues", it.quantityDayValues),
             )
         }
         store.save("habits", arr.toString())
@@ -2262,7 +2564,11 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("title", it.title)
                     .put("goal", it.goal)
                     .put("progress", it.progress)
-                    .put("dayKeys", it.dayKeys),
+                    .put("dayKeys", it.dayKeys)
+                    .put("quantityMode", it.quantityMode)
+                    .put("quantityUnit", it.quantityUnit)
+                    .put("quantityDailyTarget", it.quantityDailyTarget)
+                    .put("quantityDayValues", it.quantityDayValues),
             )
         }
         store.save("habits", arr.toString())
@@ -2393,7 +2699,7 @@ object ReminderNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = androidx.core.app.NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
+            .setSmallIcon(R.drawable.ic_notification_minimal)
             .setContentTitle("Boop reminder")
             .setContentText(title)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)

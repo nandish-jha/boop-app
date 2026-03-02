@@ -13,8 +13,8 @@ android {
         applicationId = "com.prodash.reminders"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "4.9.1"
+        versionCode = 6
+        versionName = "4.9.2"
     }
 
     buildTypes {
@@ -77,4 +77,5 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore-ktx")
 
     implementation("com.google.android.gms:play-services-auth:21.2.0")
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 }
