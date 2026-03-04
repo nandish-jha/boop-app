@@ -98,8 +98,6 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -112,7 +110,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -604,7 +601,7 @@ private fun BoopBottomNavBar(
                     .width(pillWidth)
                     .fillMaxHeight(0.88f)
                     .align(Alignment.CenterStart),
-                shape = RoundedCornerShape(999.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = Color.White,
                 shadowElevation = 2.dp,
             ) {}
@@ -665,7 +662,7 @@ private fun BoopSpeedDialFab(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .navigationBarsPadding()
-            .padding(bottom = 4.dp),
+            .padding(bottom = 0.dp),
     ) {
         AnimatedVisibility(
             visible = expanded,
@@ -1348,15 +1345,34 @@ private fun TaskListScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CalendarScreen(
     tasks: List<BoopTask>,
     onOpenTask: (BoopTask) -> Unit,
 ) {
-    val now = remember { Calendar.getInstance() }
-    val dateState = rememberDatePickerState(initialSelectedDateMillis = now.timeInMillis)
-    val selectedMillis = dateState.selectedDateMillis ?: now.timeInMillis
+    val basePage = 1200
+    val monthPager = rememberPagerState(initialPage = basePage, pageCount = { 2400 })
+    val now = Calendar.getInstance()
+    var selectedMillis by rememberSaveable { mutableLongStateOf(now.timeInMillis) }
+    val monthCal = remember(monthPager.currentPage) {
+        Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            add(Calendar.MONTH, monthPager.currentPage - basePage)
+        }
+    }
+    LaunchedEffect(monthPager.currentPage) {
+        val selected = Calendar.getInstance().apply { timeInMillis = selectedMillis }
+        if (selected.get(Calendar.YEAR) != monthCal.get(Calendar.YEAR) || selected.get(Calendar.MONTH) != monthCal.get(Calendar.MONTH)) {
+            val aligned = (monthCal.clone() as Calendar).apply {
+                set(Calendar.DAY_OF_MONTH, 1)
+                set(Calendar.HOUR_OF_DAY, 12)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            selectedMillis = aligned.timeInMillis
+        }
+    }
     val selectedDay = remember(selectedMillis) {
         Calendar.getInstance().apply {
             timeInMillis = selectedMillis
@@ -1366,11 +1382,10 @@ private fun CalendarScreen(
             set(Calendar.MILLISECOND, 0)
         }
     }
-    val nextDay = remember(selectedMillis) {
-        (selectedDay.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 1) }
-    }
-    val dayTasks = tasks.filter { it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }
-        .sortedBy { it.reminderAt }
+    val nextDay = remember(selectedMillis) { (selectedDay.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 1) } }
+    val dayTasks = tasks.filter { it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }.sortedBy { it.reminderAt }
+    val monthTitle = remember(monthCal.timeInMillis) { SimpleDateFormat("MMM yyyy", Locale.US).format(monthCal.timeInMillis) }
+    val headerLabel = remember(selectedMillis) { SimpleDateFormat("EEE, MMM dd", Locale.US).format(selectedMillis) }
 
     Column(
         Modifier
@@ -1378,31 +1393,87 @@ private fun CalendarScreen(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Calendar", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
-        DatePicker(
-            state = dateState,
-            showModeToggle = false,
-            colors = DatePickerDefaults.colors(
-                containerColor = Color(0xFF151517),
-                titleContentColor = Color.White,
-                headlineContentColor = Color.White,
-                weekdayContentColor = Color(0xFFBFBFBF),
-                subheadContentColor = Color(0xFFBFBFBF),
-                navigationContentColor = Color.White,
-                yearContentColor = Color.White,
-                disabledYearContentColor = Color(0xFF666666),
-                currentYearContentColor = Color.White,
-                selectedYearContentColor = Color.Black,
-                selectedYearContainerColor = Color.White,
-                dayContentColor = Color.White,
-                selectedDayContentColor = Color.Black,
-                selectedDayContainerColor = Color.White,
-                todayContentColor = Color.White,
-                todayDateBorderColor = Color.White,
-            ),
-        )
-        val dayLabel = SimpleDateFormat("EEE, MMM d", Locale.US).format(selectedDay.timeInMillis)
-        Text("Tasks for $dayLabel", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
+        Text(headerLabel, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+        Text(monthTitle, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
+        HorizontalPager(
+            state = monthPager,
+            modifier = Modifier.fillMaxWidth(),
+        ) { page ->
+            val cal = Calendar.getInstance().apply {
+                set(Calendar.DAY_OF_MONTH, 1)
+                add(Calendar.MONTH, page - basePage)
+            }
+            val firstDayOffset = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
+            val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+            val cells = mutableListOf<Int>().apply {
+                repeat(firstDayOffset) { add(0) }
+                addAll(1..daysInMonth)
+            }
+            while (cells.size % 7 != 0) cells.add(0)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF151517))
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("M", "T", "W", "T", "F", "S", "S").forEach { label ->
+                        Text(
+                            label,
+                            modifier = Modifier.weight(1f),
+                            color = Color(0xFF8E8E90),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
+                cells.chunked(7).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        row.forEach { day ->
+                            if (day == 0) {
+                                Spacer(Modifier.weight(1f).height(44.dp))
+                            } else {
+                                val dayCal = (cal.clone() as Calendar).apply {
+                                    set(Calendar.DAY_OF_MONTH, day)
+                                    set(Calendar.HOUR_OF_DAY, 12)
+                                    set(Calendar.MINUTE, 0)
+                                    set(Calendar.SECOND, 0)
+                                    set(Calendar.MILLISECOND, 0)
+                                }
+                                val isSelected = SimpleDateFormat("yyyyMMdd", Locale.US).format(dayCal.timeInMillis) ==
+                                    SimpleDateFormat("yyyyMMdd", Locale.US).format(selectedMillis)
+                                val interaction = remember(page, day) { MutableInteractionSource() }
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isSelected) Color.White else Color(0xFF1E1E22))
+                                        .clickable(interactionSource = interaction, indication = null) { selectedMillis = dayCal.timeInMillis }
+                                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                ) {
+                                    Text(
+                                        SimpleDateFormat("E", Locale.US).format(dayCal.time).take(1),
+                                        color = if (isSelected) Color.Black else Color(0xFFBFBFBF),
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                    Text(
+                                        SimpleDateFormat("MMM", Locale.US).format(dayCal.time).uppercase(Locale.US).take(1) + day.toString().padStart(2, '0'),
+                                        color = if (isSelected) Color.Black else Color.White,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Text("Tasks", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
         LazyColumn(
             Modifier
                 .weight(1f)
@@ -1619,43 +1690,48 @@ private fun HabitsListScreen(
                                 ) { Text("+1", color = Color.White) }
                             }
                         } else {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                for (i in 0 until 14) {
-                                    val offset = i - 13
-                                    val cal = Calendar.getInstance().also { it.add(Calendar.DAY_OF_MONTH, offset) }
-                                    val key = habitDayKeyFormat.format(cal.time)
-                                    val done = key in parseHabitDayKeys(habit.dayKeys)
-                                    val isToday = key == todayKey
-                                    val interaction = remember(habit.id, i) { MutableInteractionSource() }
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(34.dp)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(if (done) Color(0xFF1B5E20) else Color(0xFF222224))
-                                            .then(
-                                                if (isToday) Modifier.border(1.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier,
-                                            )
-                                            .clickable(
-                                                enabled = isToday,
-                                                interactionSource = interaction,
-                                                indication = null,
-                                            ) {
-                                                val next = parseHabitDayKeys(habit.dayKeys).toMutableSet()
-                                                if (todayKey in next) next.remove(todayKey) else next.add(todayKey)
-                                                onPersistHabit(habit.copy(dayKeys = serializeHabitDayKeys(next)))
-                                            },
-                                        contentAlignment = Alignment.Center,
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                for (row in 0 until 2) {
+                                    Row(
+                                        Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        Text(
-                                            SimpleDateFormat("E", Locale.US).format(cal.time).take(1),
-                                            color = Color(0xFFD0D0D0),
-                                            style = MaterialTheme.typography.labelSmall,
-                                        )
+                                        for (col in 0 until 7) {
+                                            val i = row * 7 + col
+                                            val offset = i - 13
+                                            val cal = Calendar.getInstance().also { it.add(Calendar.DAY_OF_MONTH, offset) }
+                                            val key = habitDayKeyFormat.format(cal.time)
+                                            val done = key in parseHabitDayKeys(habit.dayKeys)
+                                            val isToday = key == todayKey
+                                            val interaction = remember(habit.id, row, col) { MutableInteractionSource() }
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(34.dp)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(if (done) Color(0xFF1B5E20) else Color(0xFF222224))
+                                                    .then(
+                                                        if (isToday) Modifier.border(1.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier,
+                                                    )
+                                                    .clickable(
+                                                        enabled = isToday,
+                                                        interactionSource = interaction,
+                                                        indication = null,
+                                                    ) {
+                                                        val next = parseHabitDayKeys(habit.dayKeys).toMutableSet()
+                                                        if (todayKey in next) next.remove(todayKey) else next.add(todayKey)
+                                                        onPersistHabit(habit.copy(dayKeys = serializeHabitDayKeys(next)))
+                                                    },
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Text(
+                                                    SimpleDateFormat("E", Locale.US).format(cal.time).take(1),
+                                                    color = Color(0xFFD0D0D0),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
