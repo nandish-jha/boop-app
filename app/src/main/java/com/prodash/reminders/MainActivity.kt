@@ -12,6 +12,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.TimePickerDialog
+import android.app.AlertDialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.text.TextUtils
@@ -20,6 +21,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.media.MediaPlayer
+import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
 import android.text.Editable
@@ -27,8 +30,11 @@ import android.text.Html
 import android.text.InputType
 import android.text.Spanned
 import android.text.style.AbsoluteSizeSpan
+import android.text.style.BulletSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
+import android.text.style.UnderlineSpan
+import android.text.style.URLSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.widget.EditText
@@ -83,6 +89,11 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Notifications
@@ -193,6 +204,7 @@ private sealed class ItemSheet {
         val title: String,
         val body: String,
         val attachmentUri: String?,
+        val audioUri: String?,
         val tagsCsv: String,
     ) : ItemSheet()
 
@@ -272,6 +284,7 @@ private fun BoopApp() {
             title = note?.title.orEmpty(),
             body = note?.body.orEmpty(),
             attachmentUri = note?.attachmentUri,
+            audioUri = note?.audioUri,
             tagsCsv = note?.tagsCsv.orEmpty(),
         )
         speedDialExpanded = false
@@ -1165,6 +1178,42 @@ private fun noteEditApplySpan(editText: EditText?, span: Any) {
     text.setSpan(span, s, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 }
 
+private fun noteEditToggleBullet(editText: EditText?) {
+    val et = editText ?: return
+    val text = et.text as? Editable ?: return
+    val len = text.length
+    var s = minOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
+    var e = maxOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
+    if (e <= s) e = (s + 1).coerceAtMost(len)
+    val paraStart = text.toString().lastIndexOf('\n', (s - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
+    val paraEndRaw = text.toString().indexOf('\n', e).let { if (it < 0) len else it }
+    val paraEnd = paraEndRaw.coerceAtLeast(paraStart + 1)
+    val existing = text.getSpans(paraStart, paraEnd, BulletSpan::class.java)
+    if (existing.isNotEmpty()) {
+        existing.forEach { text.removeSpan(it) }
+    } else {
+        text.setSpan(BulletSpan(20), paraStart, paraEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+    }
+}
+
+private fun noteEditInsertLink(editText: EditText?, url: String) {
+    val et = editText ?: return
+    val text = et.text as? Editable ?: return
+    val cleaned = url.trim()
+    if (cleaned.isBlank()) return
+    val normalized = if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) cleaned else "https://$cleaned"
+    val len = text.length
+    var s = minOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
+    var e = maxOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
+    if (e <= s) {
+        val label = normalized
+        text.insert(s, label)
+        e = s + label.length
+    }
+    text.getSpans(s, e, URLSpan::class.java).forEach { text.removeSpan(it) }
+    text.setSpan(URLSpan(normalized), s, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+}
+
 private fun noteEditSpToPx(sp: Float, context: Context): Int =
     TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp, context.resources.displayMetrics).toInt()
 
@@ -1184,6 +1233,12 @@ private fun NoteRichTextToolbar(editText: EditText?, context: Context) {
         }
         IconButton(onClick = { noteEditApplySpan(editText, StyleSpan(Typeface.ITALIC)) }) {
             Icon(Icons.Outlined.FormatItalic, contentDescription = "Italic", tint = Color.White)
+        }
+        IconButton(onClick = { noteEditApplySpan(editText, UnderlineSpan()) }) {
+            Text("U", color = Color.White, fontWeight = FontWeight.SemiBold)
+        }
+        IconButton(onClick = { noteEditToggleBullet(editText) }) {
+            Text("•", color = Color.White, fontWeight = FontWeight.Bold)
         }
         TextButton(onClick = { noteEditApplySpan(editText, AbsoluteSizeSpan(noteEditSpToPx(22f, context), true)) }) {
             Text("H1", color = Color.White)
@@ -1299,6 +1354,11 @@ private fun extractTextFromAttachment(context: Context, stored: String?): String
     } catch (_: Throwable) {
         ""
     }
+}
+
+private fun createNoteAudioFile(context: Context, baseName: String): File {
+    val dir = File(context.filesDir, "note_audio").apply { mkdirs() }
+    return File(dir, "$baseName.m4a")
 }
 
 @Composable
@@ -1568,6 +1628,7 @@ private fun NotesListScreen(
                         .clickable { onOpenNote(note) },
                 ) {
                     val hasImage = !note.attachmentUri.isNullOrBlank()
+                    val hasAudio = !note.audioUri.isNullOrBlank()
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = Color.White)
                         val tags = parseNoteTags(note.tagsCsv)
@@ -1602,6 +1663,9 @@ private fun NotesListScreen(
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             }
+                        }
+                        if (hasAudio) {
+                            Text("Audio attached", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -2202,14 +2266,48 @@ private fun NoteEditorSheet(
     var title by rememberSaveable(session) { mutableStateOf(initial.title) }
     var tagsCsv by rememberSaveable(session) { mutableStateOf(initial.tagsCsv) }
     var attachmentStored by remember(session) { mutableStateOf(initial.attachmentUri) }
+    var audioStored by remember(session) { mutableStateOf(initial.audioUri) }
     var bodyEdit by remember(session) { mutableStateOf<EditText?>(null) }
+    var recording by remember(session) { mutableStateOf(false) }
+    var recorder by remember(session) { mutableStateOf<MediaRecorder?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val copied = copyAttachmentToInternalFile(context, uri, UUID.randomUUID().toString())
         attachmentStored = copied ?: uri.toString()
     }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) return@rememberLauncherForActivityResult
+        val out = createNoteAudioFile(context, UUID.randomUUID().toString())
+        try {
+            val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
+            r.setAudioSource(MediaRecorder.AudioSource.MIC)
+            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            r.setOutputFile(out.absolutePath)
+            r.prepare()
+            r.start()
+            recorder = r
+            recording = true
+            audioStored = out.absolutePath
+        } catch (_: Throwable) {
+            recorder?.release()
+            recorder = null
+            recording = false
+        }
+    }
     DisposableEffect(session) {
-        onDispose { bodyEdit = null }
+        onDispose {
+            try {
+                recorder?.stop()
+            } catch (_: Throwable) {
+            }
+            try {
+                recorder?.release()
+            } catch (_: Throwable) {
+            }
+            recorder = null
+            bodyEdit = null
+        }
     }
     Row(
         Modifier.fillMaxWidth(),
@@ -2283,8 +2381,71 @@ private fun NoteEditorSheet(
     )
     NoteRichTextToolbar(bodyEdit, context)
     Spacer(Modifier.height(8.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        BoopWhiteButton("Attach") { picker.launch("image/*") }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { picker.launch("image/*") }) {
+            Icon(Icons.Outlined.Image, contentDescription = "Attach image", tint = Color.White)
+        }
+        IconButton(
+            onClick = {
+                val urlInput = EditText(context).apply {
+                    hint = "https://example.com"
+                    setTextColor(android.graphics.Color.WHITE)
+                    setHintTextColor(android.graphics.Color.parseColor("#8A8A8A"))
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                }
+                AlertDialog.Builder(context)
+                    .setTitle("Add link")
+                    .setView(urlInput)
+                    .setPositiveButton("Insert") { _, _ ->
+                        noteEditInsertLink(bodyEdit, urlInput.text?.toString().orEmpty())
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            },
+        ) {
+            Icon(Icons.Outlined.Link, contentDescription = "Insert link", tint = Color.White)
+        }
+        IconButton(
+            onClick = {
+                if (recording) {
+                    try {
+                        recorder?.stop()
+                    } catch (_: Throwable) {
+                    }
+                    try {
+                        recorder?.release()
+                    } catch (_: Throwable) {
+                    }
+                    recorder = null
+                    recording = false
+                } else {
+                    micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            },
+        ) {
+            Icon(
+                if (recording) Icons.Outlined.Stop else Icons.Outlined.Mic,
+                contentDescription = if (recording) "Stop recording" else "Record audio",
+                tint = if (recording) Color(0xFFFF8A8A) else Color.White,
+            )
+        }
+        if (!audioStored.isNullOrBlank()) {
+            IconButton(
+                onClick = {
+                    try {
+                        val player = MediaPlayer().apply {
+                            setDataSource(audioStored)
+                            prepare()
+                            start()
+                            setOnCompletionListener { mp -> mp.release() }
+                        }
+                    } catch (_: Throwable) {
+                    }
+                },
+            ) {
+                Icon(Icons.Outlined.PlayArrow, contentDescription = "Play audio", tint = Color.White)
+            }
+        }
     }
     attachmentStored?.let { stored ->
         Spacer(Modifier.height(8.dp))
@@ -2321,6 +2482,7 @@ private fun NoteEditorSheet(
                     title = title.trim(),
                     body = bodyHtml,
                     attachmentUri = resolvedAttachment,
+                    audioUri = audioStored,
                     tagsCsv = normalizeNoteTags(tagsCsv),
                     ocrText = ocrText,
                     updatedAtMillis = System.currentTimeMillis(),
@@ -2451,6 +2613,7 @@ data class BoopNote(
     val title: String,
     val body: String,
     val attachmentUri: String?,
+    val audioUri: String? = null,
     val tagsCsv: String = "",
     val ocrText: String = "",
     /** Last save time (local), used for week strip & search ordering. */
@@ -2530,6 +2693,7 @@ private class BoopRepository(private val store: LocalStore) {
                     item.optString("title"),
                     item.optString("body"),
                     item.optString("attachmentUri").ifBlank { null },
+                    item.optString("audioUri").ifBlank { null },
                     item.optString("tags"),
                     item.optString("ocrText"),
                     u,
@@ -2578,6 +2742,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("title", it.title)
                     .put("body", it.body)
                     .put("attachmentUri", it.attachmentUri ?: "")
+                    .put("audioUri", it.audioUri ?: "")
                     .put("tags", it.tagsCsv)
                     .put("ocrText", it.ocrText)
                     .put("updatedAt", it.updatedAtMillis),
@@ -2597,6 +2762,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("title", it.title)
                     .put("body", it.body)
                     .put("attachmentUri", it.attachmentUri ?: "")
+                    .put("audioUri", it.audioUri ?: "")
                     .put("tags", it.tagsCsv)
                     .put("ocrText", it.ocrText)
                     .put("updatedAt", it.updatedAtMillis),
