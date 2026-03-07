@@ -673,9 +673,7 @@ private fun BoopSpeedDialFab(
     Column(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier
-            .navigationBarsPadding()
-            .padding(bottom = 0.dp),
+        modifier = Modifier.padding(bottom = 0.dp),
     ) {
         AnimatedVisibility(
             visible = expanded,
@@ -1444,7 +1442,6 @@ private fun CalendarScreen(
     }
     val nextDay = remember(selectedMillis) { (selectedDay.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 1) } }
     val dayTasks = tasks.filter { it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }.sortedBy { it.reminderAt }
-    val monthTitle = remember(monthCal.timeInMillis) { SimpleDateFormat("MMM yyyy", Locale.US).format(monthCal.timeInMillis) }
     val headerLabel = remember(selectedMillis) { SimpleDateFormat("EEE, MMM dd", Locale.US).format(selectedMillis) }
 
     Column(
@@ -1454,7 +1451,6 @@ private fun CalendarScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(headerLabel, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
-        Text(monthTitle, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
         HorizontalPager(
             state = monthPager,
             modifier = Modifier.fillMaxWidth(),
@@ -1521,7 +1517,7 @@ private fun CalendarScreen(
                                         style = MaterialTheme.typography.labelSmall,
                                     )
                                     Text(
-                                        SimpleDateFormat("MMM", Locale.US).format(dayCal.time).uppercase(Locale.US).take(1) + day.toString().padStart(2, '0'),
+                                        day.toString().padStart(2, '0'),
                                         color = if (isSelected) Color.Black else Color.White,
                                         style = MaterialTheme.typography.labelSmall,
                                         maxLines = 1,
@@ -1732,6 +1728,42 @@ private fun HabitsListScreen(
                             trackColor = Color(0xFF2A2A2E),
                         )
                         if (habit.quantityMode) {
+                            val dayValues = parseHabitDayValues(habit.quantityDayValues)
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                for (row in 0 until 2) {
+                                    Row(
+                                        Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        for (col in 0 until 7) {
+                                            val i = row * 7 + col
+                                            val offset = i - 13
+                                            val cal = Calendar.getInstance().also { it.add(Calendar.DAY_OF_MONTH, offset) }
+                                            val key = habitDayKeyFormat.format(cal.time)
+                                            val done = (dayValues[key] ?: 0) >= habit.quantityDailyTarget.coerceAtLeast(1)
+                                            val isToday = key == todayKey
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(34.dp)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(if (done) Color(0xFF1B5E20) else Color(0xFF222224))
+                                                    .then(
+                                                        if (isToday) Modifier.border(1.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier,
+                                                    ),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Text(
+                                                    SimpleDateFormat("E", Locale.US).format(cal.time).take(1),
+                                                    color = Color(0xFFD0D0D0),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             Row(
                                 Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.End,
