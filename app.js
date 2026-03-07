@@ -182,6 +182,22 @@ function renderBudget(root) {
   const income = txns.filter(x=>x.type==='income').reduce((a,b)=>a+b.amount,0);
   const expense = txns.filter(x=>x.type==='expense').reduce((a,b)=>a+b.amount,0);
   const saved = income - expense;
+
+  const byCat = {};
+  txns.filter(x=>x.type==='expense').forEach(x => { byCat[x.category] = (byCat[x.category]||0) + x.amount; });
+  const cats = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  const totalE = cats.reduce((a,b)=>a+b[1],0);
+  const palette = ['#e8e8e8','#9a9a9a','#6e6e6e','#4a4a4a','#d0d0d0','#7ee787','#f0b72f','#ff9c9c','#9ed8ff'];
+  let cum = 0;
+  const pieStops = cats.map(([k,v],i) => {
+    const f = (cum/totalE)*360; cum += v; const to = (cum/totalE)*360;
+    return `${palette[i%palette.length]} ${f.toFixed(2)}deg ${to.toFixed(2)}deg`;
+  }).join(', ');
+
+  const days = [];
+  for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate()-i); days.push(todayISO(d)); }
+  const daily = days.map(d => state.transactions.filter(x=>x.date===d && x.type==='expense').reduce((a,b)=>a+b.amount,0));
+  const maxD = Math.max(1, ...daily);
   root.innerHTML = `
     <div class="card"><div class="card-h">This month</div>
       <div>Income: <b>${fmtMoney(income)}</b></div>
@@ -194,6 +210,10 @@ function renderBudget(root) {
           <div>${escapeHTML(t.category)} <span style="color:var(--text-3);font-size:12px">${escapeHTML(accountName(t.accountId))}</span></div>
           <div>${t.type==='income'?'+':'-'}${fmtMoney(t.amount)}</div>
         </div>`).join('')}
+    </div>
+    ${cats.length ? `<div class="card"><div class="card-h">Spending by category</div><div class="pie" style="background: conic-gradient(${pieStops});"></div><div class="legend">${cats.map(([k,v],i)=>`<span class="lg"><span class="dot" style="background:${palette[i%palette.length]}"></span>${k} · ${fmtMoney(v)}</span>`).join('')}</div></div>` : ''}
+    <div class="card"><div class="card-h">Last 7 days</div>
+      <div class="bar-chart">${daily.map((v,i)=>`<div class="bar" style="height:${(v/maxD)*100}%"><i>${days[i].slice(8)}</i></div>`).join('')}</div>
     </div>
     <button class="btn primary btn-block" id="addTxn">Add transaction</button>
   `;
