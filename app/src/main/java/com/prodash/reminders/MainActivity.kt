@@ -19,6 +19,7 @@ import android.text.TextUtils
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.CalendarContract
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.media.MediaPlayer
@@ -38,6 +39,7 @@ import android.text.style.URLSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.widget.EditText
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -98,6 +100,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -1041,7 +1044,13 @@ private fun DashboardHabitCompactCard(
     onOpenHabit: (BoopHabit) -> Unit,
 ) {
     val todayKey = todayHabitDayKey()
-    val doneToday = todayKey in parseHabitDayKeys(habit.dayKeys)
+    val doneToday = if (habit.quantityMode) {
+        val todayAmount = parseHabitDayValues(habit.quantityDayValues)[todayKey] ?: 0
+        todayAmount >= habit.quantityDailyTarget.coerceAtLeast(1)
+    } else {
+        todayKey in parseHabitDayKeys(habit.dayKeys)
+    }
+    val doneCount = parseHabitDayKeys(habit.dayKeys).size
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
         shape = RoundedCornerShape(14.dp),
@@ -1065,7 +1074,13 @@ private fun DashboardHabitCompactCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "${habit.progress}/${habit.goal} days · " + if (doneToday) "Logged today" else "Not logged today",
+                    if (habit.quantityMode) {
+                        val todayAmount = parseHabitDayValues(habit.quantityDayValues)[todayKey] ?: 0
+                        val unit = habit.quantityUnit.ifBlank { "units" }
+                        "$todayAmount/${habit.quantityDailyTarget} $unit · " + if (doneToday) "Logged today" else "Not logged today"
+                    } else {
+                        "$doneCount/${habit.goal} days · " + if (doneToday) "Logged today" else "Not logged today"
+                    },
                     color = Color(0xFFBFBFBF),
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -1408,6 +1423,7 @@ private fun CalendarScreen(
     tasks: List<BoopTask>,
     onOpenTask: (BoopTask) -> Unit,
 ) {
+    val context = LocalContext.current
     val basePage = 1200
     val monthPager = rememberPagerState(initialPage = basePage, pageCount = { 2400 })
     val now = Calendar.getInstance()
@@ -1450,7 +1466,24 @@ private fun CalendarScreen(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(headerLabel, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text(headerLabel, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+            IconButton(
+                onClick = {
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, CalendarContract.CONTENT_URI))
+                    } catch (_: Throwable) {
+                        Toast.makeText(context, "Google Calendar not available", Toast.LENGTH_SHORT).show()
+                    }
+                },
+            ) {
+                Icon(Icons.Outlined.Sync, contentDescription = "Sync with Google Calendar", tint = Color.White)
+            }
+        }
         HorizontalPager(
             state = monthPager,
             modifier = Modifier.fillMaxWidth(),
