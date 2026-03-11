@@ -57,7 +57,7 @@ input, select, textarea { font-family: inherit; font-size: 15px; }
   max-width: 720px; width: 100%; margin: 0 auto;
 }
 
-/* Bottom nav */
+/* Bottom nav — Material 3 with active pill */
 .bottom-nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
   height: calc(var(--nav-h) + var(--safe-b));
@@ -69,20 +69,33 @@ input, select, textarea { font-family: inherit; font-size: 15px; }
 .nav-btn {
   background: none; border: none; color: var(--text-3);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; font-size: 11px; cursor: pointer; padding: 8px 2px;
+  gap: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
+  cursor: pointer; padding: 8px 2px 6px; position: relative;
+  transition: color .2s ease;
 }
-.nav-btn .nav-ico { font-size: 20px; line-height: 1; }
-.nav-btn.active { color: var(--text); }
+.nav-btn .nav-ico {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 64px; height: 32px; border-radius: 16px;
+  transition: background .22s ease, transform .2s ease;
+}
+.nav-btn .nav-ico svg {
+  width: 24px; height: 24px;
+  transition: transform .2s cubic-bezier(.2,.8,.2,1);
+}
+.nav-btn.active { color: var(--text); font-weight: 700; }
 .nav-btn.active .nav-ico {
-  background: var(--surface-3); border-radius: 999px; padding: 4px 16px;
+  background: var(--surface-3);
 }
+.nav-btn.active .nav-ico svg { transform: scale(1.05); }
+.nav-btn:active .nav-ico { transform: scale(0.94); }
 
 /* FAB */
 .fab {
   position: fixed; right: 18px; bottom: calc(var(--nav-h) + var(--safe-b) + 18px); z-index: 25;
   width: 56px; height: 56px; border-radius: 18px;
   background: var(--accent); color: var(--accent-ink);
-  border: none; font-size: 28px; font-weight: 400;
+  border: none;
+  display: inline-flex; align-items: center; justify-content: center;
   box-shadow: 0 6px 20px rgba(255,255,255,0.12);
   cursor: pointer;
 }
