@@ -19,7 +19,6 @@ import android.text.TextUtils
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.provider.CalendarContract
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.media.MediaPlayer
@@ -1475,9 +1474,18 @@ private fun CalendarScreen(
             IconButton(
                 onClick = {
                     try {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, CalendarContract.CONTENT_URI))
+                        val pm = context.packageManager
+                        val googleCalIntent = pm.getLaunchIntentForPackage("com.google.android.calendar")
+                        if (googleCalIntent != null) {
+                            context.startActivity(googleCalIntent)
+                        } else {
+                            val calendarIntent = Intent(Intent.ACTION_MAIN).apply {
+                                addCategory(Intent.CATEGORY_APP_CALENDAR)
+                            }
+                            context.startActivity(calendarIntent)
+                        }
                     } catch (_: Throwable) {
-                        Toast.makeText(context, "Google Calendar not available", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Calendar app not available", Toast.LENGTH_SHORT).show()
                     }
                 },
             ) {
@@ -1544,11 +1552,6 @@ private fun CalendarScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center,
                                 ) {
-                                    Text(
-                                        SimpleDateFormat("E", Locale.US).format(dayCal.time).take(1),
-                                        color = if (isSelected) Color.Black else Color(0xFFBFBFBF),
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
                                     Text(
                                         day.toString().padStart(2, '0'),
                                         color = if (isSelected) Color.Black else Color.White,
