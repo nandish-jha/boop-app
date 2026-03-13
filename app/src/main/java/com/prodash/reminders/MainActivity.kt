@@ -25,6 +25,7 @@ import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
+import android.provider.CalendarContract
 import android.text.Editable
 import android.text.Html
 import android.text.InputType
@@ -132,6 +133,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -169,6 +171,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONArray
@@ -1373,6 +1377,79 @@ private fun createNoteAudioFile(context: Context, baseName: String): File {
     return File(dir, "$baseName.m4a")
 }
 
+private data class CalendarEventUi(
+    val id: Long,
+    val title: String,
+    val beginMillis: Long,
+    val endMillis: Long,
+    val calendarDisplayName: String,
+)
+
+private fun readGoogleCalendarIds(context: Context): Set<Long> {
+    val ids = mutableSetOf<Long>()
+    val projection = arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.ACCOUNT_TYPE)
+    val selection = "${CalendarContract.Calendars.VISIBLE} = 1"
+    context.contentResolver.query(
+        CalendarContract.Calendars.CONTENT_URI,
+        projection,
+        selection,
+        null,
+        null,
+    )?.use { c ->
+        val idIx = c.getColumnIndex(CalendarContract.Calendars._ID)
+        val typeIx = c.getColumnIndex(CalendarContract.Calendars.ACCOUNT_TYPE)
+        while (c.moveToNext()) {
+            val type = if (typeIx >= 0) c.getString(typeIx).orEmpty() else ""
+            if (type.equals("com.google", ignoreCase = true) && idIx >= 0) {
+                ids.add(c.getLong(idIx))
+            }
+        }
+    }
+    return ids
+}
+
+private fun readGoogleCalendarEventsForDay(
+    context: Context,
+    startMillis: Long,
+    endMillis: Long,
+): List<CalendarEventUi> {
+    val googleIds = readGoogleCalendarIds(context)
+    if (googleIds.isEmpty()) return emptyList()
+    val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
+        .appendPath(startMillis.toString())
+        .appendPath((endMillis - 1L).toString())
+        .build()
+    val projection = arrayOf(
+        CalendarContract.Instances.EVENT_ID,
+        CalendarContract.Instances.TITLE,
+        CalendarContract.Instances.BEGIN,
+        CalendarContract.Instances.END,
+        CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
+        CalendarContract.Instances.CALENDAR_ID,
+    )
+    val selection = "${CalendarContract.Instances.CALENDAR_ID} IN (${googleIds.joinToString(",")})"
+    val out = mutableListOf<CalendarEventUi>()
+    context.contentResolver.query(uri, projection, selection, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
+        val idIx = c.getColumnIndex(CalendarContract.Instances.EVENT_ID)
+        val titleIx = c.getColumnIndex(CalendarContract.Instances.TITLE)
+        val beginIx = c.getColumnIndex(CalendarContract.Instances.BEGIN)
+        val endIx = c.getColumnIndex(CalendarContract.Instances.END)
+        val calIx = c.getColumnIndex(CalendarContract.Instances.CALENDAR_DISPLAY_NAME)
+        while (c.moveToNext()) {
+            out.add(
+                CalendarEventUi(
+                    id = if (idIx >= 0) c.getLong(idIx) else 0L,
+                    title = if (titleIx >= 0) c.getString(titleIx).orEmpty().ifBlank { "Untitled event" } else "Untitled event",
+                    beginMillis = if (beginIx >= 0) c.getLong(beginIx) else startMillis,
+                    endMillis = if (endIx >= 0) c.getLong(endIx) else endMillis,
+                    calendarDisplayName = if (calIx >= 0) c.getString(calIx).orEmpty() else "",
+                ),
+            )
+        }
+    }
+    return out
+}
+
 @Composable
 private fun TaskListScreen(
     tasks: List<BoopTask>,
@@ -1458,6 +1535,36 @@ private fun CalendarScreen(
     val nextDay = remember(selectedMillis) { (selectedDay.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 1) } }
     val dayTasks = tasks.filter { it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }.sortedBy { it.reminderAt }
     val headerLabel = remember(selectedMillis) { SimpleDateFormat("EEE, MMM dd", Locale.US).format(selectedMillis) }
+    var calendarSyncNonce by rememberSaveable { mutableIntStateOf(0) }
+    var calendarGranted by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_CALENDAR,
+            ) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val calendarPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        calendarGranted = granted
+        if (granted) {
+            calendarSyncNonce++
+            Toast.makeText(context, "Google Calendar synced", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val googleEvents by produceState(
+        initialValue = emptyList<CalendarEventUi>(),
+        key1 = selectedMillis,
+        key2 = calendarGranted,
+        key3 = calendarSyncNonce,
+    ) {
+        if (!calendarGranted) {
+            value = emptyList()
+        } else {
+            value = withContext(Dispatchers.IO) {
+                readGoogleCalendarEventsForDay(context, selectedDay.timeInMillis, nextDay.timeInMillis)
+            }
+        }
+    }
 
     Column(
         Modifier
@@ -1473,19 +1580,11 @@ private fun CalendarScreen(
             Text(headerLabel, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
             IconButton(
                 onClick = {
-                    try {
-                        val pm = context.packageManager
-                        val googleCalIntent = pm.getLaunchIntentForPackage("com.google.android.calendar")
-                        if (googleCalIntent != null) {
-                            context.startActivity(googleCalIntent)
-                        } else {
-                            val calendarIntent = Intent(Intent.ACTION_MAIN).apply {
-                                addCategory(Intent.CATEGORY_APP_CALENDAR)
-                            }
-                            context.startActivity(calendarIntent)
-                        }
-                    } catch (_: Throwable) {
-                        Toast.makeText(context, "Calendar app not available", Toast.LENGTH_SHORT).show()
+                    if (!calendarGranted) {
+                        calendarPermLauncher.launch(Manifest.permission.READ_CALENDAR)
+                    } else {
+                        calendarSyncNonce++
+                        Toast.makeText(context, "Google Calendar synced", Toast.LENGTH_SHORT).show()
                     }
                 },
             ) {
@@ -1573,6 +1672,39 @@ private fun CalendarScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (calendarGranted) {
+                item {
+                    Text("Google Calendar events", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
+                }
+                if (googleEvents.isEmpty()) {
+                    item {
+                        Text("No Google Calendar events for this day.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
+                    }
+                } else {
+                    items(googleEvents, key = { "gcal_${it.id}_${it.beginMillis}" }) { event ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(Modifier.padding(14.dp)) {
+                                Text(event.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                val from = SimpleDateFormat("HH:mm", Locale.US).format(event.beginMillis)
+                                val to = SimpleDateFormat("HH:mm", Locale.US).format(event.endMillis)
+                                Text("$from - $to", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                if (event.calendarDisplayName.isNotBlank()) {
+                                    Text(event.calendarDisplayName, color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                }
+                item { Spacer(Modifier.height(8.dp)) }
+            } else {
+                item {
+                    Text("Tap sync to allow Calendar access and import Google events.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
+                }
+            }
             if (dayTasks.isEmpty()) {
                 item {
                     Text("No tasks for this day.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
