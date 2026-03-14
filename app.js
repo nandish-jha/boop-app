@@ -2,7 +2,7 @@ const STORAGE_KEY = 'nandish.productivity.v1';
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const todayISO = (d = new Date()) => d.toISOString().slice(0, 10);
 
-const defaultState = () => ({ tasks: [], habits: SEED.habits.map(h=>({...h})), habitLogs: {}, accounts: SEED.accounts.map(a=>({...a,balance:0})), categories: [...SEED.budgetCategories], transactions: [], budget: { monthlySavingsGoal: 500, monthlyBudget: 0 }, settings: {} });
+const defaultState = () => ({ tasks: [], habits: SEED.habits.map(h=>({...h})), habitLogs: {}, accounts: SEED.accounts.map(a=>({...a,balance:0})), categories: [...SEED.budgetCategories], transactions: [], budget: { monthlySavingsGoal: 500, monthlyBudget: 0 }, supplements: SEED.supplements.map(s=>({...s})), supplementLogs: {}, skincare: SEED.skincare.map(s=>({...s})), skincareLogs: {}, notes: [], goals: [], workouts: SEED.workouts.map(w=>({...w})), settings: {} });
 let state = load();
 function load() {
   try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return defaultState(); return { ...defaultState(), ...JSON.parse(raw) }; }
@@ -12,7 +12,7 @@ function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 function escapeHTML(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function escapeAttr(s){return escapeHTML(s);}
 
-let currentTab = 'home';
+let currentTab = 'home'; let moreSub = null;
 const setTitle = t => document.getElementById('pageTitle').textContent = t;
 
 // Sheet
@@ -33,7 +33,11 @@ function render() {
   else if (currentTab === 'tasks') { setTitle('Tasks'); renderTasks(v); }
   else if (currentTab === 'habits') { setTitle('Habits'); renderHabits(v); }
   else if (currentTab === 'budget') { setTitle('Budget'); renderBudget(v); }
-  else { setTitle('More'); v.innerHTML = '<div class="card">Coming soon.</div>'; }
+  else if (currentTab === 'more') {
+    if (!moreSub) { setTitle('More'); renderMore(v); }
+    else if (moreSub === 'supplements') { setTitle('Supplements'); renderSupplements(v); }
+    else { setTitle('More'); renderMore(v); }
+  }
 }
 
 function renderHome(root) {
@@ -245,5 +249,34 @@ function editTxn(id) {
       if (!id) state.transactions.push(tx);
       save(); closeSheet(); render();
     };
+  });
+}
+
+function renderMore(root) {
+  root.innerHTML = `
+    <button class="card btn-block" style="text-align:left;cursor:pointer;" data-k="supplements">💊 Supplements</button>
+  `;
+  root.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { moreSub = b.dataset.k; render(); });
+}
+function renderSupplements(root) {
+  const t = todayISO();
+  const log = state.supplementLogs[t] || {};
+  root.innerHTML = `
+    <button class="btn" id="back">← Back</button>
+    <div style="height:10px"></div>
+    ${['morning','workout','night'].map(g => `
+      <div class="card"><div class="card-h">${g}</div>
+        ${state.supplements.filter(s => s.time === g).map(s => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+            <div><div>${escapeHTML(s.name)}</div><div style="color:var(--text-3);font-size:12px">${escapeHTML(s.dose||'')}</div></div>
+            <button class="check ${log[s.id]?'done':''}" data-ls="${s.id}"></button></div>
+        `).join('')}
+      </div>`).join('')}
+  `;
+  root.querySelector('#back').onclick = () => { moreSub = null; render(); };
+  root.querySelectorAll('[data-ls]').forEach(b => b.onclick = () => {
+    if (!state.supplementLogs[t]) state.supplementLogs[t] = {};
+    state.supplementLogs[t][b.dataset.ls] = !state.supplementLogs[t][b.dataset.ls];
+    save(); render();
   });
 }
