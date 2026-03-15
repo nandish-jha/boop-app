@@ -394,6 +394,11 @@ private fun BoopApp() {
                             tasks = tasks,
                             notes = notes,
                             habits = habits,
+                            onPersistTask = { task ->
+                                repository.saveTask(task)
+                                ReminderScheduler.schedule(AppContextHolder.context, task)
+                                refresh()
+                            },
                             onPersistHabit = { habit ->
                                 repository.saveHabit(habit)
                                 refresh()
@@ -540,6 +545,7 @@ private fun BoopPagerPage(
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
     habits: List<BoopHabit>,
+    onPersistTask: (BoopTask) -> Unit,
     onPersistHabit: (BoopHabit) -> Unit,
     onSelectTab: (Int) -> Unit,
     onEditTask: (BoopTask) -> Unit,
@@ -571,6 +577,7 @@ private fun BoopPagerPage(
             )
             2 -> CalendarScreen(
                 tasks = tasks,
+                onPersistTask = onPersistTask,
                 onOpenTask = onEditTask,
             )
             3 -> NotesListScreen(
@@ -1497,9 +1504,11 @@ private fun TaskListScreen(
 @Composable
 private fun CalendarScreen(
     tasks: List<BoopTask>,
+    onPersistTask: (BoopTask) -> Unit,
     onOpenTask: (BoopTask) -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val basePage = 1200
     val monthPager = rememberPagerState(initialPage = basePage, pageCount = { 2400 })
     val now = Calendar.getInstance()
@@ -1544,11 +1553,39 @@ private fun CalendarScreen(
             ) == PackageManager.PERMISSION_GRANTED,
         )
     }
+    val importGoogleEvents: suspend () -> Int = {
+        val events = withContext(Dispatchers.IO) {
+            readGoogleCalendarEventsForDay(context, selectedDay.timeInMillis, nextDay.timeInMillis)
+        }
+        var imported = 0
+        val existingKeys = tasks.map { "${it.title.lowercase(Locale.US)}|${it.reminderAt}" }.toHashSet()
+        events.forEach { event ->
+            val title = "GCal: ${event.title}".trim()
+            val key = "${title.lowercase(Locale.US)}|${event.beginMillis}"
+            if (!existingKeys.contains(key)) {
+                onPersistTask(
+                    BoopTask(
+                        id = "gcal_${event.id}_${event.beginMillis}",
+                        title = title,
+                        reminderAt = event.beginMillis,
+                        done = false,
+                    ),
+                )
+                existingKeys.add(key)
+                imported++
+            }
+        }
+        calendarSyncNonce++
+        imported
+    }
     val calendarPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         calendarGranted = granted
         if (granted) {
-            calendarSyncNonce++
-            Toast.makeText(context, "Google Calendar synced", Toast.LENGTH_SHORT).show()
+            scope.launch {
+                val imported = importGoogleEvents()
+                val message = if (imported > 0) "Google Calendar synced: $imported imported" else "Google Calendar synced: no new events"
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
         }
     }
     val googleEvents by produceState(
@@ -1583,8 +1620,11 @@ private fun CalendarScreen(
                     if (!calendarGranted) {
                         calendarPermLauncher.launch(Manifest.permission.READ_CALENDAR)
                     } else {
-                        calendarSyncNonce++
-                        Toast.makeText(context, "Google Calendar synced", Toast.LENGTH_SHORT).show()
+                        scope.launch {
+                            val imported = importGoogleEvents()
+                            val message = if (imported > 0) "Google Calendar synced: $imported imported" else "Google Calendar synced: no new events"
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        }
                     }
                 },
             ) {
