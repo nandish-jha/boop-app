@@ -152,6 +152,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.border
 import androidx.compose.ui.unit.sp
@@ -1393,8 +1394,14 @@ private data class CalendarEventUi(
 )
 
 private fun readGoogleCalendarIds(context: Context): Set<Long> {
-    val ids = mutableSetOf<Long>()
-    val projection = arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.ACCOUNT_TYPE)
+    val googleIds = mutableSetOf<Long>()
+    val fallbackVisibleIds = mutableSetOf<Long>()
+    val projection = arrayOf(
+        CalendarContract.Calendars._ID,
+        CalendarContract.Calendars.ACCOUNT_TYPE,
+        CalendarContract.Calendars.ACCOUNT_NAME,
+        CalendarContract.Calendars.OWNER_ACCOUNT,
+    )
     val selection = "${CalendarContract.Calendars.VISIBLE} = 1"
     context.contentResolver.query(
         CalendarContract.Calendars.CONTENT_URI,
@@ -1405,14 +1412,26 @@ private fun readGoogleCalendarIds(context: Context): Set<Long> {
     )?.use { c ->
         val idIx = c.getColumnIndex(CalendarContract.Calendars._ID)
         val typeIx = c.getColumnIndex(CalendarContract.Calendars.ACCOUNT_TYPE)
+        val nameIx = c.getColumnIndex(CalendarContract.Calendars.ACCOUNT_NAME)
+        val ownerIx = c.getColumnIndex(CalendarContract.Calendars.OWNER_ACCOUNT)
         while (c.moveToNext()) {
+            if (idIx < 0) continue
+            val id = c.getLong(idIx)
+            fallbackVisibleIds.add(id)
             val type = if (typeIx >= 0) c.getString(typeIx).orEmpty() else ""
-            if (type.equals("com.google", ignoreCase = true) && idIx >= 0) {
-                ids.add(c.getLong(idIx))
+            val accountName = if (nameIx >= 0) c.getString(nameIx).orEmpty() else ""
+            val ownerAccount = if (ownerIx >= 0) c.getString(ownerIx).orEmpty() else ""
+            val isGoogleCalendar = type.equals("com.google", ignoreCase = true) ||
+                accountName.contains("@gmail.com", ignoreCase = true) ||
+                accountName.contains("@googlemail.com", ignoreCase = true) ||
+                ownerAccount.contains("@gmail.com", ignoreCase = true) ||
+                ownerAccount.contains("@googlemail.com", ignoreCase = true)
+            if (isGoogleCalendar) {
+                googleIds.add(id)
             }
         }
     }
-    return ids
+    return if (googleIds.isNotEmpty()) googleIds else fallbackVisibleIds
 }
 
 private fun readGoogleCalendarEventsForDay(
@@ -1545,6 +1564,7 @@ private fun CalendarScreen(
     val dayTasks = tasks.filter { it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }.sortedBy { it.reminderAt }
     val headerLabel = remember(selectedMillis) { SimpleDateFormat("EEE, MMM dd", Locale.US).format(selectedMillis) }
     var calendarSyncNonce by rememberSaveable { mutableIntStateOf(0) }
+    var lastSyncStatus by rememberSaveable { mutableStateOf("Tap sync to import events into tasks.") }
     var calendarGranted by remember {
         mutableStateOf(
             androidx.core.content.ContextCompat.checkSelfPermission(
@@ -1557,6 +1577,10 @@ private fun CalendarScreen(
         val events = withContext(Dispatchers.IO) {
             readGoogleCalendarEventsForDay(context, selectedDay.timeInMillis, nextDay.timeInMillis)
         }
+        if (events.isEmpty()) {
+            calendarSyncNonce++
+            0
+        } else {
         var imported = 0
         val existingKeys = tasks.map { "${it.title.lowercase(Locale.US)}|${it.reminderAt}" }.toHashSet()
         events.forEach { event ->
@@ -1577,15 +1601,19 @@ private fun CalendarScreen(
         }
         calendarSyncNonce++
         imported
+        }
     }
     val calendarPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         calendarGranted = granted
         if (granted) {
             scope.launch {
                 val imported = importGoogleEvents()
-                val message = if (imported > 0) "Google Calendar synced: $imported imported" else "Google Calendar synced: no new events"
+                val message = if (imported > 0) "Google Calendar synced: $imported imported" else "Google Calendar synced: no events/new events for this day"
+                lastSyncStatus = message
                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             }
+        } else {
+            lastSyncStatus = "Calendar permission denied. Sync cannot run."
         }
     }
     val googleEvents by produceState(
@@ -1617,12 +1645,14 @@ private fun CalendarScreen(
             Text(headerLabel, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
             IconButton(
                 onClick = {
+                    lastSyncStatus = "Syncing Google Calendar..."
                     if (!calendarGranted) {
                         calendarPermLauncher.launch(Manifest.permission.READ_CALENDAR)
                     } else {
                         scope.launch {
                             val imported = importGoogleEvents()
-                            val message = if (imported > 0) "Google Calendar synced: $imported imported" else "Google Calendar synced: no new events"
+                            val message = if (imported > 0) "Google Calendar synced: $imported imported" else "Google Calendar synced: no events/new events for this day"
+                            lastSyncStatus = message
                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }
                     }
@@ -1631,6 +1661,7 @@ private fun CalendarScreen(
                 Icon(Icons.Outlined.Sync, contentDescription = "Sync with Google Calendar", tint = Color.White)
             }
         }
+        Text(lastSyncStatus, color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
         HorizontalPager(
             state = monthPager,
             modifier = Modifier.fillMaxWidth(),
@@ -1661,6 +1692,7 @@ private fun CalendarScreen(
                             modifier = Modifier.weight(1f),
                             color = Color(0xFF8E8E90),
                             style = MaterialTheme.typography.labelSmall,
+                            textAlign = TextAlign.Center,
                         )
                     }
                 }
