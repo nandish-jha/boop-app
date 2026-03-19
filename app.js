@@ -36,6 +36,9 @@ function render() {
   else if (currentTab === 'more') {
     if (!moreSub) { setTitle('More'); renderMore(v); }
     else if (moreSub === 'supplements') { setTitle('Supplements'); renderSupplements(v); }
+    else if (moreSub === 'skincare') { setTitle('Skincare'); renderSkincare(v); }
+    else if (moreSub === 'notes') { setTitle('Notes'); renderNotes(v); }
+    else if (moreSub === 'goals') { setTitle('Goals'); renderGoals(v); }
     else { setTitle('More'); renderMore(v); }
   }
 }
@@ -255,6 +258,9 @@ function editTxn(id) {
 function renderMore(root) {
   root.innerHTML = `
     <button class="card btn-block" style="text-align:left;cursor:pointer;" data-k="supplements">💊 Supplements</button>
+    <button class="card btn-block" style="text-align:left;cursor:pointer;" data-k="skincare">✦ Skincare</button>
+    <button class="card btn-block" style="text-align:left;cursor:pointer;" data-k="notes">📝 Notes</button>
+    <button class="card btn-block" style="text-align:left;cursor:pointer;" data-k="goals">★ Goals</button>
   `;
   root.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { moreSub = b.dataset.k; render(); });
 }
@@ -278,5 +284,90 @@ function renderSupplements(root) {
     if (!state.supplementLogs[t]) state.supplementLogs[t] = {};
     state.supplementLogs[t][b.dataset.ls] = !state.supplementLogs[t][b.dataset.ls];
     save(); render();
+  });
+}
+
+function renderSkincare(root) {
+  const t = todayISO(); const log = state.skincareLogs[t] || {};
+  root.innerHTML = `
+    <button class="btn" id="back">← Back</button><div style="height:10px"></div>
+    ${['morning','night'].map(g => `
+      <div class="card"><div class="card-h">${g}</div>
+        ${state.skincare.filter(s => s.time === g).map(s => `
+          <div style="display:flex;justify-content:space-between;padding:8px 0;">
+            <span>${escapeHTML(s.name)}</span>
+            <button class="check ${log[s.id]?'done':''}" data-sk="${s.id}"></button></div>
+        `).join('')}
+      </div>`).join('')}
+  `;
+  root.querySelector('#back').onclick = () => { moreSub = null; render(); };
+  root.querySelectorAll('[data-sk]').forEach(b => b.onclick = () => {
+    if (!state.skincareLogs[t]) state.skincareLogs[t] = {};
+    state.skincareLogs[t][b.dataset.sk] = !state.skincareLogs[t][b.dataset.sk];
+    save(); render();
+  });
+}
+
+function renderNotes(root) {
+  root.innerHTML = `
+    <button class="btn" id="back">← Back</button><div style="height:10px"></div>
+    <button class="btn primary btn-block" id="addN">+ New note</button>
+    ${state.notes.length === 0 ? '<div class="card">No notes yet.</div>' : state.notes.slice().sort((a,b)=>(b.updated||0)-(a.updated||0)).map(n => `
+      <div class="card" data-n="${n.id}" style="cursor:pointer;">
+        <div style="font-weight:600;">${escapeHTML(n.title||'Untitled')}</div>
+        <div style="color:var(--text-2);font-size:13px;">${escapeHTML((n.body||'').slice(0,120))}</div>
+      </div>`).join('')}
+  `;
+  root.querySelector('#back').onclick = () => { moreSub = null; render(); };
+  root.querySelector('#addN').onclick = () => editNote();
+  root.querySelectorAll('[data-n]').forEach(el => el.onclick = () => editNote(el.dataset.n));
+}
+function editNote(id) {
+  const n = id ? state.notes.find(x=>x.id===id) : { id: uid(), title:'', body:'', tags:[], updated: Date.now() };
+  openSheet(`
+    <h2 style="margin:0 0 12px;">${id ? 'Edit note' : 'New note'}</h2>
+    <div class="field"><label>Title</label><input class="input" id="nt" value="${escapeAttr(n.title)}"></div>
+    <div class="field"><label>Tags (comma-separated)</label><input class="input" id="ng" value="${escapeAttr((n.tags||[]).join(', '))}"></div>
+    <div class="field"><label>Body</label><textarea class="input" id="nb" style="min-height:90px;">${escapeHTML(n.body||'')}</textarea></div>
+    <button class="btn primary btn-block" id="sv">Save</button>
+  `, root => {
+    root.querySelector('#sv').onclick = () => {
+      n.title = root.querySelector('#nt').value.trim();
+      n.body = root.querySelector('#nb').value;
+      n.tags = root.querySelector('#ng').value.split(',').map(s=>s.trim()).filter(Boolean);
+      n.updated = Date.now();
+      if (!id) state.notes.push(n);
+      save(); closeSheet(); render();
+    };
+  });
+}
+
+function renderGoals(root) {
+  root.innerHTML = `
+    <button class="btn" id="back">← Back</button><div style="height:10px"></div>
+    <button class="btn primary btn-block" id="addG">+ New goal</button>
+    ${state.goals.length === 0 ? '<div class="card">No goals yet.</div>' : state.goals.map(g => `
+      <div class="card" data-g="${g.id}">
+        <div style="display:flex;justify-content:space-between;"><b>${escapeHTML(g.title)}</b><span>${g.progress||0}%</span></div>
+      </div>`).join('')}
+  `;
+  root.querySelector('#back').onclick = () => { moreSub = null; render(); };
+  root.querySelector('#addG').onclick = () => editGoal();
+  root.querySelectorAll('[data-g]').forEach(el => el.onclick = () => editGoal(el.dataset.g));
+}
+function editGoal(id) {
+  const g = id ? state.goals.find(x=>x.id===id) : { id: uid(), title:'', target:'', deadline:'', progress:0 };
+  openSheet(`
+    <h2 style="margin:0 0 12px;">${id ? 'Edit goal' : 'New goal'}</h2>
+    <div class="field"><label>Title</label><input class="input" id="gt" value="${escapeAttr(g.title)}"></div>
+    <div class="field"><label>Progress %</label><input class="input" type="number" min="0" max="100" id="gp" value="${g.progress||0}"></div>
+    <button class="btn primary btn-block" id="sv">Save</button>
+  `, root => {
+    root.querySelector('#sv').onclick = () => {
+      g.title = root.querySelector('#gt').value.trim();
+      g.progress = Math.min(100, Math.max(0, parseFloat(root.querySelector('#gp').value)||0));
+      if (!id) state.goals.push(g);
+      save(); closeSheet(); render();
+    };
   });
 }
