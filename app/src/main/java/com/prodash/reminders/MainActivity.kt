@@ -133,7 +133,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -395,11 +394,6 @@ private fun BoopApp() {
                             tasks = tasks,
                             notes = notes,
                             habits = habits,
-                            onPersistTask = { task ->
-                                repository.saveTask(task)
-                                ReminderScheduler.schedule(AppContextHolder.context, task)
-                                refresh()
-                            },
                             onPersistHabit = { habit ->
                                 repository.saveHabit(habit)
                                 refresh()
@@ -546,7 +540,6 @@ private fun BoopPagerPage(
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
     habits: List<BoopHabit>,
-    onPersistTask: (BoopTask) -> Unit,
     onPersistHabit: (BoopHabit) -> Unit,
     onSelectTab: (Int) -> Unit,
     onEditTask: (BoopTask) -> Unit,
@@ -578,7 +571,6 @@ private fun BoopPagerPage(
             )
             2 -> CalendarScreen(
                 tasks = tasks,
-                onPersistTask = onPersistTask,
                 onOpenTask = onEditTask,
             )
             3 -> NotesListScreen(
@@ -1434,7 +1426,7 @@ private fun readGoogleCalendarIds(context: Context): Set<Long> {
     return if (googleIds.isNotEmpty()) googleIds else fallbackVisibleIds
 }
 
-private fun readGoogleCalendarEventsForDay(
+private fun readGoogleCalendarEventsInRange(
     context: Context,
     startMillis: Long,
     endMillis: Long,
@@ -1523,7 +1515,6 @@ private fun TaskListScreen(
 @Composable
 private fun CalendarScreen(
     tasks: List<BoopTask>,
-    onPersistTask: (BoopTask) -> Unit,
     onOpenTask: (BoopTask) -> Unit,
 ) {
     val context = LocalContext.current
@@ -1563,8 +1554,10 @@ private fun CalendarScreen(
     val nextDay = remember(selectedMillis) { (selectedDay.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 1) } }
     val dayTasks = tasks.filter { it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }.sortedBy { it.reminderAt }
     val headerLabel = remember(selectedMillis) { SimpleDateFormat("EEE, MMM dd", Locale.US).format(selectedMillis) }
-    var calendarSyncNonce by rememberSaveable { mutableIntStateOf(0) }
-    var lastSyncStatus by rememberSaveable { mutableStateOf("Tap sync to import events into tasks.") }
+    val syncRangeStart = remember { Calendar.getInstance().apply { add(Calendar.YEAR, -10); set(Calendar.MONTH, 0); set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis }
+    val syncRangeEnd = remember { Calendar.getInstance().apply { add(Calendar.YEAR, 10); set(Calendar.MONTH, 11); set(Calendar.DAY_OF_MONTH, 31); set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999) }.timeInMillis }
+    var lastSyncStatus by rememberSaveable { mutableStateOf("Tap sync to load Google events into Calendar.") }
+    var googleEventsCache by remember { mutableStateOf(emptyList<CalendarEventUi>()) }
     var calendarGranted by remember {
         mutableStateOf(
             androidx.core.content.ContextCompat.checkSelfPermission(
@@ -1573,62 +1566,46 @@ private fun CalendarScreen(
             ) == PackageManager.PERMISSION_GRANTED,
         )
     }
-    val importGoogleEvents: suspend () -> Int = {
+    val refreshGoogleEvents: suspend (Boolean) -> Int = { updateStatus ->
         val events = withContext(Dispatchers.IO) {
-            readGoogleCalendarEventsForDay(context, selectedDay.timeInMillis, nextDay.timeInMillis)
+            readGoogleCalendarEventsInRange(context, syncRangeStart, syncRangeEnd)
         }
-        if (events.isEmpty()) {
-            calendarSyncNonce++
-            0
-        } else {
-        var imported = 0
-        val existingKeys = tasks.map { "${it.title.lowercase(Locale.US)}|${it.reminderAt}" }.toHashSet()
-        events.forEach { event ->
-            val title = "GCal: ${event.title}".trim()
-            val key = "${title.lowercase(Locale.US)}|${event.beginMillis}"
-            if (!existingKeys.contains(key)) {
-                onPersistTask(
-                    BoopTask(
-                        id = "gcal_${event.id}_${event.beginMillis}",
-                        title = title,
-                        reminderAt = event.beginMillis,
-                        done = false,
-                    ),
-                )
-                existingKeys.add(key)
-                imported++
-            }
+        googleEventsCache = events
+        if (updateStatus) {
+            lastSyncStatus = "Google Calendar synced: ${events.size} events loaded."
         }
-        calendarSyncNonce++
-        imported
-        }
+        events.size
     }
     val calendarPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         calendarGranted = granted
         if (granted) {
             scope.launch {
-                val imported = importGoogleEvents()
-                val message = if (imported > 0) "Google Calendar synced: $imported imported" else "Google Calendar synced: no events/new events for this day"
-                lastSyncStatus = message
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                lastSyncStatus = "Syncing Google Calendar..."
+                val loaded = refreshGoogleEvents(true)
+                Toast.makeText(context, "Google Calendar synced: $loaded events", Toast.LENGTH_SHORT).show()
             }
         } else {
             lastSyncStatus = "Calendar permission denied. Sync cannot run."
         }
     }
-    val googleEvents by produceState(
-        initialValue = emptyList<CalendarEventUi>(),
-        key1 = selectedMillis,
-        key2 = calendarGranted,
-        key3 = calendarSyncNonce,
-    ) {
-        if (!calendarGranted) {
-            value = emptyList()
-        } else {
-            value = withContext(Dispatchers.IO) {
-                readGoogleCalendarEventsForDay(context, selectedDay.timeInMillis, nextDay.timeInMillis)
+    LaunchedEffect(calendarGranted) {
+        if (calendarGranted && googleEventsCache.isEmpty()) {
+            lastSyncStatus = "Syncing Google Calendar..."
+            refreshGoogleEvents(true)
+        }
+    }
+    LaunchedEffect(calendarGranted) {
+        if (calendarGranted) {
+            while (true) {
+                delay(60_000)
+                refreshGoogleEvents(false)
             }
         }
+    }
+    val googleEvents = remember(googleEventsCache, selectedDay.timeInMillis, nextDay.timeInMillis) {
+        googleEventsCache
+            .filter { it.beginMillis < nextDay.timeInMillis && it.endMillis > selectedDay.timeInMillis }
+            .sortedBy { it.beginMillis }
     }
 
     Column(
@@ -1650,10 +1627,8 @@ private fun CalendarScreen(
                         calendarPermLauncher.launch(Manifest.permission.READ_CALENDAR)
                     } else {
                         scope.launch {
-                            val imported = importGoogleEvents()
-                            val message = if (imported > 0) "Google Calendar synced: $imported imported" else "Google Calendar synced: no events/new events for this day"
-                            lastSyncStatus = message
-                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                            val loaded = refreshGoogleEvents(true)
+                            Toast.makeText(context, "Google Calendar synced: $loaded events", Toast.LENGTH_SHORT).show()
                         }
                     }
                 },
