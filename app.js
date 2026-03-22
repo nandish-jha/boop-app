@@ -1,4 +1,4 @@
-// ===== Nandish Productivity PWA =====
+// ===== ProDash — personal productivity dashboard =====
 // Local-only storage (localStorage). Export / import JSON supported.
 
 const STORAGE_KEY = 'nandish.productivity.v1';

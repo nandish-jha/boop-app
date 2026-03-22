@@ -1,10 +1,11 @@
-const CACHE = 'nandish-productivity-v1';
+const CACHE = 'prodash-v1';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './data/seed.js',
+  './data/quotes.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png'

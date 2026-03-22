@@ -1,7 +1,7 @@
 {
-  "name": "Nandish Productivity",
-  "short_name": "Productivity",
-  "description": "All-in-one personal tracker: tasks, habits, budget, workouts, supplements, notes.",
+  "name": "ProDash",
+  "short_name": "ProDash",
+  "description": "Personal productivity dashboard: tasks, habits, budget, workouts, supplements, notes.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -10,7 +10,8 @@
   "theme_color": "#000000",
   "categories": ["productivity", "health", "lifestyle"],
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
