@@ -77,12 +77,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Close
@@ -128,6 +130,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -910,8 +913,12 @@ private fun DashboardScreen(
                         Text("Good", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
                         Text(greetingSecond, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
                     }
-                    IconButton(onClick = { searchExpanded = true }) {
-                        Icon(Icons.Outlined.Search, contentDescription = "Search", tint = Color.White)
+                    SmallFloatingActionButton(
+                        onClick = { searchExpanded = true },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) {
+                        Icon(Icons.Outlined.Search, contentDescription = "Search")
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -1423,7 +1430,7 @@ private fun readGoogleCalendarIds(context: Context): Set<Long> {
             }
         }
     }
-    return if (googleIds.isNotEmpty()) googleIds else fallbackVisibleIds
+    return fallbackVisibleIds
 }
 
 private fun readGoogleCalendarEventsInRange(
@@ -1469,17 +1476,34 @@ private fun readGoogleCalendarEventsInRange(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun TaskListScreen(
     tasks: List<BoopTask>,
     onOpenTask: (BoopTask) -> Unit,
 ) {
+    val activeTasks = remember(tasks) { tasks.filter { !it.done } }
+    val archivedTasks = remember(tasks) { tasks.filter { it.done }.sortedByDescending { it.reminderAt } }
+    var showArchive by rememberSaveable { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxSize()
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Tasks", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text("Tasks", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+            SmallFloatingActionButton(
+                onClick = { showArchive = true },
+                containerColor = Color.White,
+                contentColor = Color.Black,
+            ) {
+                Icon(Icons.Outlined.Archive, contentDescription = "Archived tasks")
+            }
+        }
         LazyColumn(
             Modifier
                 .weight(1f)
@@ -1487,7 +1511,12 @@ private fun TaskListScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(tasks, key = { it.id }) { task ->
+            if (activeTasks.isEmpty()) {
+                item {
+                    Text("No active tasks. Completed ones are in archive.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            items(activeTasks, key = { it.id }) { task ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
@@ -1505,6 +1534,54 @@ private fun TaskListScreen(
                             )
                         }
                         Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    }
+    if (showArchive) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showArchive = false },
+            sheetState = sheetState,
+            containerColor = Color(0xFF111113),
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.75f)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("Archived tasks", fontWeight = FontWeight.Bold, color = Color.White, style = MaterialTheme.typography.titleLarge)
+                if (archivedTasks.isEmpty()) {
+                    Text("No archived tasks yet.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(archivedTasks, key = { it.id }) { task ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        showArchive = false
+                                        onOpenTask(task)
+                                    },
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                    Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1551,8 +1628,19 @@ private fun CalendarScreen(
             set(Calendar.MILLISECOND, 0)
         }
     }
+    val todayNoon = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 12)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
     val nextDay = remember(selectedMillis) { (selectedDay.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 1) } }
-    val dayTasks = tasks.filter { it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }.sortedBy { it.reminderAt }
+    val dayTasks = remember(tasks, selectedDay.timeInMillis, nextDay.timeInMillis) {
+        tasks.filter { !it.done && it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }
+            .sortedBy { it.reminderAt }
+    }
     val headerLabel = remember(selectedMillis) { SimpleDateFormat("EEE, MMM dd", Locale.US).format(selectedMillis) }
     val syncRangeStart = remember { Calendar.getInstance().apply { add(Calendar.YEAR, -10); set(Calendar.MONTH, 0); set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis }
     val syncRangeEnd = remember { Calendar.getInstance().apply { add(Calendar.YEAR, 10); set(Calendar.MONTH, 11); set(Calendar.DAY_OF_MONTH, 31); set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999) }.timeInMillis }
@@ -1607,6 +1695,45 @@ private fun CalendarScreen(
             .filter { it.beginMillis < nextDay.timeInMillis && it.endMillis > selectedDay.timeInMillis }
             .sortedBy { it.beginMillis }
     }
+    val timelineState = rememberLazyListState()
+    val compactWeekMode by remember {
+        derivedStateOf { timelineState.firstVisibleItemIndex > 0 || timelineState.firstVisibleItemScrollOffset > 24 }
+    }
+    val timelineItems = remember(googleEvents, dayTasks) {
+        buildList {
+            googleEvents.forEach { event ->
+                add(
+                    Triple(
+                        event.beginMillis,
+                        "event_${event.id}_${event.beginMillis}",
+                        Pair(
+                            event.title,
+                            "${SimpleDateFormat("HH:mm", Locale.US).format(event.beginMillis)} - ${
+                                SimpleDateFormat("HH:mm", Locale.US).format(event.endMillis)
+                            }${if (event.calendarDisplayName.isNotBlank()) " · ${event.calendarDisplayName}" else ""}",
+                        ),
+                    ),
+                )
+            }
+            dayTasks.forEach { task ->
+                add(
+                    Triple(
+                        task.reminderAt,
+                        "task_${task.id}",
+                        Pair(task.title, "Boop task"),
+                    ),
+                )
+            }
+        }.sortedBy { it.first }
+    }
+    val weekDays = remember(selectedMillis) {
+        val start = (selectedDay.clone() as Calendar).apply {
+            val shift = (get(Calendar.DAY_OF_WEEK) + 5) % 7
+            add(Calendar.DAY_OF_MONTH, -shift)
+            set(Calendar.HOUR_OF_DAY, 12)
+        }
+        List(7) { idx -> (start.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, idx) }.timeInMillis }
+    }
 
     Column(
         Modifier
@@ -1619,8 +1746,18 @@ private fun CalendarScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
-            Text(headerLabel, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
-            IconButton(
+            Text(
+                headerLabel,
+                fontSize = 58.sp,
+                lineHeight = 60.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White,
+                modifier = Modifier.clickable {
+                    selectedMillis = todayNoon
+                    scope.launch { monthPager.animateScrollToPage(basePage) }
+                },
+            )
+            SmallFloatingActionButton(
                 onClick = {
                     lastSyncStatus = "Syncing Google Calendar..."
                     if (!calendarGranted) {
@@ -1632,78 +1769,79 @@ private fun CalendarScreen(
                         }
                     }
                 },
+                containerColor = Color.White,
+                contentColor = Color.Black,
             ) {
-                Icon(Icons.Outlined.Sync, contentDescription = "Sync with Google Calendar", tint = Color.White)
+                Icon(Icons.Outlined.Sync, contentDescription = "Sync with Google Calendar")
             }
         }
         Text(lastSyncStatus, color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
-        HorizontalPager(
-            state = monthPager,
-            modifier = Modifier.fillMaxWidth(),
-        ) { page ->
-            val cal = Calendar.getInstance().apply {
-                set(Calendar.DAY_OF_MONTH, 1)
-                add(Calendar.MONTH, page - basePage)
-            }
-            val firstDayOffset = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
-            val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-            val cells = mutableListOf<Int>().apply {
-                repeat(firstDayOffset) { add(0) }
-                addAll(1..daysInMonth)
-            }
-            while (cells.size % 7 != 0) cells.add(0)
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF151517))
-                    .padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("M", "T", "W", "T", "F", "S", "S").forEach { label ->
-                        Text(
-                            label,
-                            modifier = Modifier.weight(1f),
-                            color = Color(0xFF8E8E90),
-                            style = MaterialTheme.typography.labelSmall,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
+        AnimatedVisibility(visible = !compactWeekMode, enter = fadeIn(), exit = fadeOut()) {
+            HorizontalPager(
+                state = monthPager,
+                modifier = Modifier.fillMaxWidth(),
+            ) { page ->
+                val cal = Calendar.getInstance().apply {
+                    set(Calendar.DAY_OF_MONTH, 1)
+                    add(Calendar.MONTH, page - basePage)
                 }
-                cells.chunked(7).forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        row.forEach { day ->
-                            if (day == 0) {
-                                Spacer(Modifier.weight(1f).height(44.dp))
-                            } else {
-                                val dayCal = (cal.clone() as Calendar).apply {
-                                    set(Calendar.DAY_OF_MONTH, day)
-                                    set(Calendar.HOUR_OF_DAY, 12)
-                                    set(Calendar.MINUTE, 0)
-                                    set(Calendar.SECOND, 0)
-                                    set(Calendar.MILLISECOND, 0)
-                                }
-                                val isSelected = SimpleDateFormat("yyyyMMdd", Locale.US).format(dayCal.timeInMillis) ==
-                                    SimpleDateFormat("yyyyMMdd", Locale.US).format(selectedMillis)
-                                val interaction = remember(page, day) { MutableInteractionSource() }
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(44.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isSelected) Color.White else Color(0xFF1E1E22))
-                                        .clickable(interactionSource = interaction, indication = null) { selectedMillis = dayCal.timeInMillis }
-                                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                ) {
-                                    Text(
-                                        day.toString().padStart(2, '0'),
-                                        color = if (isSelected) Color.Black else Color.White,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        maxLines = 1,
-                                    )
+                val firstDayOffset = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
+                val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+                val cells = mutableListOf<Int>().apply {
+                    repeat(firstDayOffset) { add(0) }
+                    addAll(1..daysInMonth)
+                }
+                while (cells.size % 7 != 0) cells.add(0)
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF151517))
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        listOf("M", "T", "W", "T", "F", "S", "S").forEach { label ->
+                            Text(
+                                label,
+                                modifier = Modifier.weight(1f),
+                                color = Color(0xFF8E8E90),
+                                style = MaterialTheme.typography.labelSmall,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    cells.chunked(7).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            row.forEach { day ->
+                                if (day == 0) {
+                                    Spacer(Modifier.weight(1f).height(34.dp))
+                                } else {
+                                    val dayCal = (cal.clone() as Calendar).apply {
+                                        set(Calendar.DAY_OF_MONTH, day)
+                                        set(Calendar.HOUR_OF_DAY, 12)
+                                        set(Calendar.MINUTE, 0)
+                                        set(Calendar.SECOND, 0)
+                                        set(Calendar.MILLISECOND, 0)
+                                    }
+                                    val isSelected = SimpleDateFormat("yyyyMMdd", Locale.US).format(dayCal.timeInMillis) ==
+                                        SimpleDateFormat("yyyyMMdd", Locale.US).format(selectedMillis)
+                                    val interaction = remember(page, day) { MutableInteractionSource() }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(34.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSelected) Color.White else Color(0xFF1E1E22))
+                                            .clickable(interactionSource = interaction, indication = null) { selectedMillis = dayCal.timeInMillis },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            day.toString().padStart(2, '0'),
+                                            color = if (isSelected) Color.Black else Color.White,
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1711,66 +1849,87 @@ private fun CalendarScreen(
                 }
             }
         }
-        Text("Tasks", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
+        AnimatedVisibility(visible = compactWeekMode, enter = fadeIn(), exit = fadeOut()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF151517))
+                    .padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                weekDays.forEach { dayMillis ->
+                    val dayCal = Calendar.getInstance().apply { timeInMillis = dayMillis }
+                    val isSelected = SimpleDateFormat("yyyyMMdd", Locale.US).format(dayMillis) ==
+                        SimpleDateFormat("yyyyMMdd", Locale.US).format(selectedMillis)
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) Color.White else Color(0xFF1E1E22))
+                            .clickable { selectedMillis = dayMillis }
+                            .padding(vertical = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(SimpleDateFormat("E", Locale.US).format(dayMillis).take(1), color = if (isSelected) Color.Black else Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
+                        Text(dayCal.get(Calendar.DAY_OF_MONTH).toString(), color = if (isSelected) Color.Black else Color.White, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+        }
         LazyColumn(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
+            state = timelineState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (calendarGranted) {
+            if (!calendarGranted) {
                 item {
-                    Text("Google Calendar events", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
-                }
-                if (googleEvents.isEmpty()) {
-                    item {
-                        Text("No Google Calendar events for this day.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
-                    }
-                } else {
-                    items(googleEvents, key = { "gcal_${it.id}_${it.beginMillis}" }) { event ->
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(Modifier.padding(14.dp)) {
-                                Text(event.title, fontWeight = FontWeight.SemiBold, color = Color.White)
-                                val from = SimpleDateFormat("HH:mm", Locale.US).format(event.beginMillis)
-                                val to = SimpleDateFormat("HH:mm", Locale.US).format(event.endMillis)
-                                Text("$from - $to", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
-                                if (event.calendarDisplayName.isNotBlank()) {
-                                    Text(event.calendarDisplayName, color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                        }
-                    }
-                }
-                item { Spacer(Modifier.height(8.dp)) }
-            } else {
-                item {
-                    Text("Tap sync to allow Calendar access and import Google events.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
+                    Text("Tap sync to allow Calendar access.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (dayTasks.isEmpty()) {
+            if (calendarGranted && timelineItems.isEmpty()) {
                 item {
-                    Text("No tasks for this day.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
+                    Text("No events or tasks for this day.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
-                items(dayTasks, key = { it.id }) { task ->
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenTask(task) },
+                items(timelineItems, key = { it.second }) { item ->
+                    val isTask = item.second.startsWith("task_")
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top,
                     ) {
-                        Column(Modifier.padding(14.dp)) {
-                            Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
-                            if (task.done) {
-                                Text("Completed", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                        Column(
+                            modifier = Modifier.width(56.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(SimpleDateFormat("HH:mm", Locale.US).format(item.first), color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
+                            Box(
+                                Modifier
+                                    .padding(top = 4.dp)
+                                    .width(2.dp)
+                                    .height(56.dp)
+                                    .background(Color(0xFF3B3B40)),
+                            )
+                        }
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = if (isTask) Color(0xFF1C2533) else Color(0xFF151517)),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(enabled = isTask) {
+                                    val taskId = item.second.removePrefix("task_")
+                                    dayTasks.firstOrNull { it.id == taskId }?.let(onOpenTask)
+                                },
+                        ) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(item.third.first, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                Text(item.third.second, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                Text(if (isTask) "Boop task" else "Google Calendar", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
                             }
-                            Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
