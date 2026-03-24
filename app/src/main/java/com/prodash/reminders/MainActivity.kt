@@ -57,6 +57,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -913,7 +914,7 @@ private fun DashboardScreen(
                         Text("Good", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
                         Text(greetingSecond, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
                     }
-                    SmallFloatingActionButton(
+                    FloatingActionButton(
                         onClick = { searchExpanded = true },
                         containerColor = Color.White,
                         contentColor = Color.Black,
@@ -1496,7 +1497,7 @@ private fun TaskListScreen(
             verticalAlignment = Alignment.Top,
         ) {
             Text("Tasks", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
-            SmallFloatingActionButton(
+            FloatingActionButton(
                 onClick = { showArchive = true },
                 containerColor = Color.White,
                 contentColor = Color.Black,
@@ -1696,35 +1697,62 @@ private fun CalendarScreen(
             .sortedBy { it.beginMillis }
     }
     val timelineState = rememberLazyListState()
+    var compactWeekForced by rememberSaveable { mutableStateOf(false) }
     val compactWeekMode by remember {
-        derivedStateOf { timelineState.firstVisibleItemIndex > 0 || timelineState.firstVisibleItemScrollOffset > 24 }
+        derivedStateOf { compactWeekForced || timelineState.firstVisibleItemIndex > 0 || timelineState.firstVisibleItemScrollOffset > 24 }
     }
-    val timelineItems = remember(googleEvents, dayTasks) {
+    data class TimelineEntry(
+        val id: String,
+        val startMillis: Long,
+        val endMillis: Long,
+        val title: String,
+        val detail: String,
+        val isTask: Boolean,
+    )
+    val timelineItems = remember(googleEvents, dayTasks, selectedDay.timeInMillis, nextDay.timeInMillis) {
         buildList {
             googleEvents.forEach { event ->
                 add(
-                    Triple(
-                        event.beginMillis,
-                        "event_${event.id}_${event.beginMillis}",
-                        Pair(
-                            event.title,
-                            "${SimpleDateFormat("HH:mm", Locale.US).format(event.beginMillis)} - ${
-                                SimpleDateFormat("HH:mm", Locale.US).format(event.endMillis)
-                            }${if (event.calendarDisplayName.isNotBlank()) " · ${event.calendarDisplayName}" else ""}",
-                        ),
+                    TimelineEntry(
+                        id = "event_${event.id}_${event.beginMillis}",
+                        startMillis = maxOf(event.beginMillis, selectedDay.timeInMillis),
+                        endMillis = minOf(event.endMillis, nextDay.timeInMillis),
+                        title = event.title,
+                        detail = if (event.calendarDisplayName.isNotBlank()) event.calendarDisplayName else "Google Calendar",
+                        isTask = false,
                     ),
                 )
             }
             dayTasks.forEach { task ->
+                val end = (task.reminderAt + 30 * 60 * 1000L).coerceAtMost(nextDay.timeInMillis)
                 add(
-                    Triple(
-                        task.reminderAt,
-                        "task_${task.id}",
-                        Pair(task.title, "Boop task"),
+                    TimelineEntry(
+                        id = "task_${task.id}",
+                        startMillis = task.reminderAt,
+                        endMillis = maxOf(end, task.reminderAt + 5 * 60 * 1000L),
+                        title = task.title,
+                        detail = "Boop task",
+                        isTask = true,
                     ),
                 )
             }
-        }.sortedBy { it.first }
+        }
+            .filter { it.endMillis > it.startMillis }
+            .sortedBy { it.startMillis }
+    }
+    data class TimelineRenderEntry(
+        val item: TimelineEntry,
+        val gapMinutesBefore: Long,
+    )
+    val timelineRenderItems = remember(timelineItems, selectedDay.timeInMillis) {
+        val out = mutableListOf<TimelineRenderEntry>()
+        var prevEnd = selectedDay.timeInMillis
+        timelineItems.forEach { item ->
+            val gap = ((item.startMillis - prevEnd) / 60_000L).coerceAtLeast(0)
+            out.add(TimelineRenderEntry(item = item, gapMinutesBefore = gap))
+            prevEnd = maxOf(prevEnd, item.endMillis)
+        }
+        out
     }
     val weekDays = remember(selectedMillis) {
         val start = (selectedDay.clone() as Calendar).apply {
@@ -1880,7 +1908,15 @@ private fun CalendarScreen(
         LazyColumn(
             Modifier
                 .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .pointerInput(timelineState.firstVisibleItemIndex, timelineState.firstVisibleItemScrollOffset) {
+                    detectVerticalDragGestures { _, dragAmount ->
+                        if (dragAmount < -3f) compactWeekForced = true
+                        if (dragAmount > 3f && timelineState.firstVisibleItemIndex == 0 && timelineState.firstVisibleItemScrollOffset == 0) {
+                            compactWeekForced = false
+                        }
+                    }
+                },
             state = timelineState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1895,8 +1931,16 @@ private fun CalendarScreen(
                     Text("No events or tasks for this day.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
-                items(timelineItems, key = { it.second }) { item ->
-                    val isTask = item.second.startsWith("task_")
+                val minuteHeight = 1.05f
+                val minBlockHeight = 30.dp
+                items(timelineRenderItems, key = { it.item.id }) { render ->
+                    val item = render.item
+                    val isTask = item.isTask
+                    if (render.gapMinutesBefore > 0) {
+                        Spacer(Modifier.height((render.gapMinutesBefore * minuteHeight).dp))
+                    }
+                    val durationMinutes = ((item.endMillis - item.startMillis) / 60_000L).coerceAtLeast(5)
+                    val blockHeight = maxOf(minBlockHeight, (durationMinutes * minuteHeight).dp)
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1906,12 +1950,12 @@ private fun CalendarScreen(
                             modifier = Modifier.width(56.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text(SimpleDateFormat("HH:mm", Locale.US).format(item.first), color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
+                            Text(SimpleDateFormat("HH:mm", Locale.US).format(item.startMillis), color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
                             Box(
                                 Modifier
                                     .padding(top = 4.dp)
                                     .width(2.dp)
-                                    .height(56.dp)
+                                    .height(blockHeight)
                                     .background(Color(0xFF3B3B40)),
                             )
                         }
@@ -1920,14 +1964,20 @@ private fun CalendarScreen(
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
                                 .weight(1f)
+                                .height(blockHeight)
                                 .clickable(enabled = isTask) {
-                                    val taskId = item.second.removePrefix("task_")
+                                    val taskId = item.id.removePrefix("task_")
                                     dayTasks.firstOrNull { it.id == taskId }?.let(onOpenTask)
                                 },
                         ) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(item.third.first, fontWeight = FontWeight.SemiBold, color = Color.White)
-                                Text(item.third.second, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                Text(item.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                Text(
+                                    "${SimpleDateFormat("HH:mm", Locale.US).format(item.startMillis)} - ${SimpleDateFormat("HH:mm", Locale.US).format(item.endMillis)}",
+                                    color = Color(0xFFBFBFBF),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(item.detail, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                 Text(if (isTask) "Boop task" else "Google Calendar", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
                             }
                         }
@@ -2143,21 +2193,47 @@ private fun HabitsListScreen(
                                 horizontalArrangement = Arrangement.End,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                TextButton(
-                                    onClick = {
+                                val unit = habit.quantityUnit.ifBlank { "units" }
+                                val quickAdd = listOf(
+                                    1,
+                                    maxOf(5, habit.quantityDailyTarget / 4),
+                                    maxOf(10, habit.quantityDailyTarget / 2),
+                                ).distinct()
+                                quickAdd.forEach { delta ->
+                                    Surface(
+                                        shape = RoundedCornerShape(999.dp),
+                                        color = Color(0xFF242426),
+                                        modifier = Modifier.clickable {
+                                            val map = parseHabitDayValues(habit.quantityDayValues).toMutableMap()
+                                            map[todayKey] = todayAmount + delta
+                                            onPersistHabit(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
+                                        },
+                                    ) {
+                                        Text(
+                                            "+$delta $unit",
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        )
+                                    }
+                                    Spacer(Modifier.width(6.dp))
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = Color(0xFF1F1F22),
+                                    modifier = Modifier.clickable {
                                         val map = parseHabitDayValues(habit.quantityDayValues).toMutableMap()
-                                        val next = (todayAmount - 1).coerceAtLeast(0)
-                                        map[todayKey] = next
+                                        map[todayKey] = 0
                                         onPersistHabit(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
                                     },
-                                ) { Text("-1", color = Color.White) }
-                                TextButton(
-                                    onClick = {
-                                        val map = parseHabitDayValues(habit.quantityDayValues).toMutableMap()
-                                        map[todayKey] = todayAmount + 1
-                                        onPersistHabit(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
-                                    },
-                                ) { Text("+1", color = Color.White) }
+                                ) {
+                                    Text(
+                                        "Reset",
+                                        color = Color(0xFFBFBFBF),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    )
+                                }
                             }
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -2484,24 +2560,34 @@ private fun HabitWeekStripCard(
                 ) {
                     Text("${todayAmount} / ${habit.quantityDailyTarget} $unit today", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.width(10.dp))
-                    TextButton(
-                        onClick = {
-                            val map = dayValues.toMutableMap()
-                            map[todayKey] = (todayAmount - 1).coerceAtLeast(0)
-                            onPersist(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
-                        },
-                    ) { Text("-1", color = Color.White) }
-                    TextButton(
-                        onClick = {
-                            val map = dayValues.toMutableMap()
-                            map[todayKey] = todayAmount + 1
-                            onPersist(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
-                        },
-                    ) { Text("+1", color = Color.White) }
+                    val quickAdd = listOf(
+                        1,
+                        maxOf(5, habit.quantityDailyTarget / 4),
+                        maxOf(10, habit.quantityDailyTarget / 2),
+                    ).distinct()
+                    quickAdd.forEach { delta ->
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = Color(0xFF242426),
+                            modifier = Modifier.clickable {
+                                val map = dayValues.toMutableMap()
+                                map[todayKey] = todayAmount + delta
+                                onPersist(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
+                            },
+                        ) {
+                            Text(
+                                "+$delta",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(6.dp))
+                    }
                 }
             }
             Text(
-                if (habit.quantityMode) "Adjust today's amount with +/- · tap title for details." else "Tap today’s column to log · tap the title for details.",
+                if (habit.quantityMode) "Quick-add amount chips for today · tap title for details." else "Tap today’s column to log · tap the title for details.",
                 color = Color(0xFF6E6E70),
                 style = MaterialTheme.typography.labelSmall,
             )
