@@ -14,6 +14,7 @@ import android.app.PendingIntent
 import android.app.TimePickerDialog
 import android.app.AlertDialog
 import android.content.BroadcastReceiver
+import android.content.ContentValues
 import android.content.Context
 import android.text.TextUtils
 import android.content.Intent
@@ -51,6 +52,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.clickable
@@ -185,6 +187,7 @@ import java.text.SimpleDateFormat
 import java.io.File
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 import java.util.UUID
 import kotlin.math.roundToInt
 
@@ -228,6 +231,16 @@ private sealed class ItemSheet {
         val quantityUnit: String,
         val quantityDailyTarget: Int,
         val quantityDayValues: String,
+    ) : ItemSheet()
+
+    data class EventSheet(
+        val sessionKey: String,
+        val title: String,
+        val description: String,
+        val location: String,
+        val allDay: Boolean,
+        val startAt: Long,
+        val endAt: Long,
     ) : ItemSheet()
 }
 
@@ -315,6 +328,20 @@ private fun BoopApp() {
         speedDialExpanded = false
     }
 
+    fun openEventSheet(startAt: Long = System.currentTimeMillis()) {
+        val endAt = startAt + 60 * 60_000L
+        itemSheet = ItemSheet.EventSheet(
+            sessionKey = UUID.randomUUID().toString(),
+            title = "",
+            description = "",
+            location = "",
+            allDay = false,
+            startAt = startAt,
+            endAt = endAt,
+        )
+        speedDialExpanded = false
+    }
+
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
             background = darkBg,
@@ -367,6 +394,7 @@ private fun BoopApp() {
                         expanded = speedDialExpanded,
                         onExpandedChange = { speedDialExpanded = it },
                         onOpenTask = { openTaskSheet(null) },
+                        onOpenEvent = { openEventSheet() },
                         onOpenNote = { openNoteSheet(null) },
                         onOpenHabit = { openHabitSheet(null) },
                     )
@@ -423,90 +451,120 @@ private fun BoopApp() {
             }
 
             itemSheet?.let { sheet ->
-                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-                ModalBottomSheet(
-                    onDismissRequest = { itemSheet = null },
-                    sheetState = sheetState,
-                    containerColor = darkSurface,
-                    dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
-                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                ) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(0.92f)
-                            .padding(horizontal = 20.dp)
-                            .padding(bottom = 28.dp)
-                            .verticalScroll(rememberScrollState()),
+                if (sheet is ItemSheet.NoteSheet) {
+                    Dialog(onDismissRequest = { itemSheet = null }) {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = darkSurface,
+                        ) {
+                            Column(
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 20.dp, vertical = 18.dp)
+                                    .verticalScroll(rememberScrollState()),
+                            ) {
+                                NoteEditorSheet(
+                                    initial = sheet,
+                                    onDismiss = { itemSheet = null },
+                                    onDelete = sheet.id?.let { id ->
+                                        {
+                                            repository.deleteNote(id)
+                                            refresh()
+                                            scope.launch {
+                                                delay(48)
+                                                itemSheet = null
+                                            }
+                                        }
+                                    },
+                                    onSave = { note ->
+                                        repository.saveNote(note)
+                                        refresh()
+                                        scope.launch {
+                                            delay(48)
+                                            itemSheet = null
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+                    ModalBottomSheet(
+                        onDismissRequest = { itemSheet = null },
+                        sheetState = sheetState,
+                        containerColor = darkSurface,
+                        dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
+                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                     ) {
-                        when (sheet) {
-                            is ItemSheet.TaskSheet -> TaskEditorSheet(
-                                initial = sheet,
-                                onDismiss = { itemSheet = null },
-                                onDelete = sheet.id?.let { id ->
-                                    {
-                                        repository.deleteTask(id)
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(0.92f)
+                                .padding(horizontal = 20.dp)
+                                .padding(bottom = 28.dp)
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            when (sheet) {
+                                is ItemSheet.TaskSheet -> TaskEditorSheet(
+                                    initial = sheet,
+                                    onDismiss = { itemSheet = null },
+                                    onDelete = sheet.id?.let { id ->
+                                        {
+                                            repository.deleteTask(id)
+                                            refresh()
+                                            scope.launch {
+                                                delay(48)
+                                                itemSheet = null
+                                            }
+                                        }
+                                    },
+                                    onSave = { task ->
+                                        repository.saveTask(task)
+                                        ReminderScheduler.schedule(AppContextHolder.context, task)
                                         refresh()
                                         scope.launch {
                                             delay(48)
                                             itemSheet = null
                                         }
-                                    }
-                                },
-                                onSave = { task ->
-                                    repository.saveTask(task)
-                                    ReminderScheduler.schedule(AppContextHolder.context, task)
-                                    refresh()
-                                    scope.launch {
-                                        delay(48)
-                                        itemSheet = null
-                                    }
-                                },
-                            )
-                            is ItemSheet.NoteSheet -> NoteEditorSheet(
-                                initial = sheet,
-                                onDismiss = { itemSheet = null },
-                                onDelete = sheet.id?.let { id ->
-                                    {
-                                        repository.deleteNote(id)
+                                    },
+                                )
+                                is ItemSheet.HabitSheet -> HabitEditorSheet(
+                                    initial = sheet,
+                                    onDismiss = { itemSheet = null },
+                                    onDelete = sheet.id?.let { id ->
+                                        {
+                                            repository.deleteHabit(id)
+                                            refresh()
+                                            scope.launch {
+                                                delay(48)
+                                                itemSheet = null
+                                            }
+                                        }
+                                    },
+                                    onSave = { habit ->
+                                        repository.saveHabit(habit)
                                         refresh()
                                         scope.launch {
                                             delay(48)
                                             itemSheet = null
                                         }
-                                    }
-                                },
-                                onSave = { note ->
-                                    repository.saveNote(note)
-                                    refresh()
-                                    scope.launch {
-                                        delay(48)
-                                        itemSheet = null
-                                    }
-                                },
-                            )
-                            is ItemSheet.HabitSheet -> HabitEditorSheet(
-                                initial = sheet,
-                                onDismiss = { itemSheet = null },
-                                onDelete = sheet.id?.let { id ->
-                                    {
-                                        repository.deleteHabit(id)
-                                        refresh()
-                                        scope.launch {
-                                            delay(48)
-                                            itemSheet = null
+                                    },
+                                )
+                                is ItemSheet.EventSheet -> EventEditorSheet(
+                                    initial = sheet,
+                                    onDismiss = { itemSheet = null },
+                                    onSave = { ok ->
+                                        if (ok) {
+                                            scope.launch {
+                                                delay(48)
+                                                itemSheet = null
+                                            }
                                         }
-                                    }
-                                },
-                                onSave = { habit ->
-                                    repository.saveHabit(habit)
-                                    refresh()
-                                    scope.launch {
-                                        delay(48)
-                                        itemSheet = null
-                                    }
-                                },
-                            )
+                                    },
+                                )
+                                is ItemSheet.NoteSheet -> Unit
+                            }
                         }
                     }
                 }
@@ -677,6 +735,7 @@ private fun BoopSpeedDialFab(
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onOpenTask: () -> Unit,
+    onOpenEvent: () -> Unit,
     onOpenNote: () -> Unit,
     onOpenHabit: () -> Unit,
 ) {
@@ -696,6 +755,13 @@ private fun BoopSpeedDialFab(
                     containerColor = Color.White,
                     contentColor = Color.Black,
                 ) { Icon(Icons.Outlined.Notifications, contentDescription = "Add task") }
+                if (selectedTab == 2) {
+                    SmallFloatingActionButton(
+                        onClick = { onOpenEvent(); onExpandedChange(false) },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.CalendarMonth, contentDescription = "Add event") }
+                }
                 SmallFloatingActionButton(
                     onClick = { onOpenNote(); onExpandedChange(false) },
                     containerColor = Color.White,
@@ -713,7 +779,7 @@ private fun BoopSpeedDialFab(
                 when (selectedTab) {
                     0 -> onExpandedChange(!expanded)
                     1 -> onOpenTask()
-                    2 -> onOpenTask()
+                    2 -> onExpandedChange(!expanded)
                     3 -> onOpenNote()
                     else -> onOpenHabit()
                 }
@@ -1202,22 +1268,27 @@ private fun noteEditApplySpan(editText: EditText?, span: Any) {
     text.setSpan(span, s, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 }
 
-private fun noteEditToggleBullet(editText: EditText?) {
+private fun noteEditInsertBulletLine(editText: EditText?) {
     val et = editText ?: return
     val text = et.text as? Editable ?: return
     val len = text.length
-    var s = minOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
-    var e = maxOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
-    if (e <= s) e = (s + 1).coerceAtMost(len)
-    val paraStart = text.toString().lastIndexOf('\n', (s - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
-    val paraEndRaw = text.toString().indexOf('\n', e).let { if (it < 0) len else it }
-    val paraEnd = paraEndRaw.coerceAtLeast(paraStart + 1)
-    val existing = text.getSpans(paraStart, paraEnd, BulletSpan::class.java)
-    if (existing.isNotEmpty()) {
-        existing.forEach { text.removeSpan(it) }
-    } else {
-        text.setSpan(BulletSpan(20), paraStart, paraEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-    }
+    val pos = et.selectionStart.coerceIn(0, len)
+    val prefix = if (pos == 0 || text.getOrNull(pos - 1) == '\n') "• " else "\n• "
+    text.insert(pos, prefix)
+    et.setSelection((pos + prefix.length).coerceAtMost(text.length))
+}
+
+private fun noteEditInsertNumberedLine(editText: EditText?) {
+    val et = editText ?: return
+    val text = et.text as? Editable ?: return
+    val len = text.length
+    val pos = et.selectionStart.coerceIn(0, len)
+    val before = text.substring(0, pos)
+    val lineMatches = Regex("""(?m)^(\d+)\.\s""").findAll(before).toList()
+    val nextNum = (lineMatches.lastOrNull()?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0) + 1
+    val prefix = if (pos == 0 || text.getOrNull(pos - 1) == '\n') "$nextNum. " else "\n$nextNum. "
+    text.insert(pos, prefix)
+    et.setSelection((pos + prefix.length).coerceAtMost(text.length))
 }
 
 private fun noteEditInsertLink(editText: EditText?, url: String) {
@@ -1261,8 +1332,11 @@ private fun NoteRichTextToolbar(editText: EditText?, context: Context) {
         IconButton(onClick = { noteEditApplySpan(editText, UnderlineSpan()) }) {
             Text("U", color = Color.White, fontWeight = FontWeight.SemiBold)
         }
-        IconButton(onClick = { noteEditToggleBullet(editText) }) {
+        IconButton(onClick = { noteEditInsertBulletLine(editText) }) {
             Text("•", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+        IconButton(onClick = { noteEditInsertNumberedLine(editText) }) {
+            Text("1.", color = Color.White, fontWeight = FontWeight.Bold)
         }
         TextButton(onClick = { noteEditApplySpan(editText, AbsoluteSizeSpan(noteEditSpToPx(22f, context), true)) }) {
             Text("H1", color = Color.White)
@@ -1391,6 +1465,12 @@ private data class CalendarEventUi(
     val beginMillis: Long,
     val endMillis: Long,
     val calendarDisplayName: String,
+    val allDay: Boolean,
+)
+
+private data class DeviceCalendarChoice(
+    val id: Long,
+    val displayName: String,
 )
 
 private fun readGoogleCalendarIds(context: Context): Set<Long> {
@@ -1434,13 +1514,40 @@ private fun readGoogleCalendarIds(context: Context): Set<Long> {
     return fallbackVisibleIds
 }
 
+private fun readVisibleCalendars(context: Context): List<DeviceCalendarChoice> {
+    val out = mutableListOf<DeviceCalendarChoice>()
+    val projection = arrayOf(
+        CalendarContract.Calendars._ID,
+        CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+    )
+    val selection = "${CalendarContract.Calendars.VISIBLE} = 1"
+    context.contentResolver.query(
+        CalendarContract.Calendars.CONTENT_URI,
+        projection,
+        selection,
+        null,
+        CalendarContract.Calendars.CALENDAR_DISPLAY_NAME + " ASC",
+    )?.use { c ->
+        val idIx = c.getColumnIndex(CalendarContract.Calendars._ID)
+        val nameIx = c.getColumnIndex(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
+        while (c.moveToNext()) {
+            if (idIx < 0) continue
+            out.add(
+                DeviceCalendarChoice(
+                    id = c.getLong(idIx),
+                    displayName = if (nameIx >= 0) c.getString(nameIx).orEmpty().ifBlank { "Calendar" } else "Calendar",
+                ),
+            )
+        }
+    }
+    return out
+}
+
 private fun readGoogleCalendarEventsInRange(
     context: Context,
     startMillis: Long,
     endMillis: Long,
 ): List<CalendarEventUi> {
-    val googleIds = readGoogleCalendarIds(context)
-    if (googleIds.isEmpty()) return emptyList()
     val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
         .appendPath(startMillis.toString())
         .appendPath((endMillis - 1L).toString())
@@ -1452,15 +1559,16 @@ private fun readGoogleCalendarEventsInRange(
         CalendarContract.Instances.END,
         CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
         CalendarContract.Instances.CALENDAR_ID,
+        CalendarContract.Instances.ALL_DAY,
     )
-    val selection = "${CalendarContract.Instances.CALENDAR_ID} IN (${googleIds.joinToString(",")})"
     val out = mutableListOf<CalendarEventUi>()
-    context.contentResolver.query(uri, projection, selection, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
+    context.contentResolver.query(uri, projection, null, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
         val idIx = c.getColumnIndex(CalendarContract.Instances.EVENT_ID)
         val titleIx = c.getColumnIndex(CalendarContract.Instances.TITLE)
         val beginIx = c.getColumnIndex(CalendarContract.Instances.BEGIN)
         val endIx = c.getColumnIndex(CalendarContract.Instances.END)
         val calIx = c.getColumnIndex(CalendarContract.Instances.CALENDAR_DISPLAY_NAME)
+        val allDayIx = c.getColumnIndex(CalendarContract.Instances.ALL_DAY)
         while (c.moveToNext()) {
             out.add(
                 CalendarEventUi(
@@ -1469,6 +1577,7 @@ private fun readGoogleCalendarEventsInRange(
                     beginMillis = if (beginIx >= 0) c.getLong(beginIx) else startMillis,
                     endMillis = if (endIx >= 0) c.getLong(endIx) else endMillis,
                     calendarDisplayName = if (calIx >= 0) c.getString(calIx).orEmpty() else "",
+                    allDay = allDayIx >= 0 && c.getInt(allDayIx) == 1,
                 ),
             )
         }
@@ -1696,6 +1805,10 @@ private fun CalendarScreen(
             .filter { it.beginMillis < nextDay.timeInMillis && it.endMillis > selectedDay.timeInMillis }
             .sortedBy { it.beginMillis }
     }
+    val allDayEvents = remember(googleEvents) {
+        googleEvents.filter { it.allDay || (it.endMillis - it.beginMillis) >= 23 * 60 * 60 * 1000L }
+    }
+    val timedGoogleEvents = remember(googleEvents) { googleEvents - allDayEvents.toSet() }
     val timelineState = rememberLazyListState()
     var compactWeekForced by rememberSaveable { mutableStateOf(false) }
     val compactWeekMode by remember {
@@ -1709,9 +1822,9 @@ private fun CalendarScreen(
         val detail: String,
         val isTask: Boolean,
     )
-    val timelineItems = remember(googleEvents, dayTasks, selectedDay.timeInMillis, nextDay.timeInMillis) {
+    val timelineItems = remember(timedGoogleEvents, dayTasks, selectedDay.timeInMillis, nextDay.timeInMillis) {
         buildList {
-            googleEvents.forEach { event ->
+            timedGoogleEvents.forEach { event ->
                 add(
                     TimelineEntry(
                         id = "event_${event.id}_${event.beginMillis}",
@@ -1785,7 +1898,7 @@ private fun CalendarScreen(
                     scope.launch { monthPager.animateScrollToPage(basePage) }
                 },
             )
-            SmallFloatingActionButton(
+            FloatingActionButton(
                 onClick = {
                     lastSyncStatus = "Syncing Google Calendar..."
                     if (!calendarGranted) {
@@ -1804,103 +1917,127 @@ private fun CalendarScreen(
             }
         }
         Text(lastSyncStatus, color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
-        AnimatedVisibility(visible = !compactWeekMode, enter = fadeIn(), exit = fadeOut()) {
-            HorizontalPager(
-                state = monthPager,
-                modifier = Modifier.fillMaxWidth(),
-            ) { page ->
-                val cal = Calendar.getInstance().apply {
-                    set(Calendar.DAY_OF_MONTH, 1)
-                    add(Calendar.MONTH, page - basePage)
-                }
-                val firstDayOffset = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
-                val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-                val cells = mutableListOf<Int>().apply {
-                    repeat(firstDayOffset) { add(0) }
-                    addAll(1..daysInMonth)
-                }
-                while (cells.size % 7 != 0) cells.add(0)
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF151517))
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        listOf("M", "T", "W", "T", "F", "S", "S").forEach { label ->
-                            Text(
-                                label,
-                                modifier = Modifier.weight(1f),
-                                color = Color(0xFF8E8E90),
-                                style = MaterialTheme.typography.labelSmall,
-                                textAlign = TextAlign.Center,
-                            )
+        Box(Modifier.fillMaxWidth().animateContentSize()) {
+            Crossfade(targetState = compactWeekMode, label = "month_week_smooth") { weekMode ->
+                if (!weekMode) {
+                    HorizontalPager(
+                        state = monthPager,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { page ->
+                        val cal = Calendar.getInstance().apply {
+                            set(Calendar.DAY_OF_MONTH, 1)
+                            add(Calendar.MONTH, page - basePage)
                         }
-                    }
-                    cells.chunked(7).forEach { row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                            row.forEach { day ->
-                                if (day == 0) {
-                                    Spacer(Modifier.weight(1f).height(34.dp))
-                                } else {
-                                    val dayCal = (cal.clone() as Calendar).apply {
-                                        set(Calendar.DAY_OF_MONTH, day)
-                                        set(Calendar.HOUR_OF_DAY, 12)
-                                        set(Calendar.MINUTE, 0)
-                                        set(Calendar.SECOND, 0)
-                                        set(Calendar.MILLISECOND, 0)
-                                    }
-                                    val isSelected = SimpleDateFormat("yyyyMMdd", Locale.US).format(dayCal.timeInMillis) ==
-                                        SimpleDateFormat("yyyyMMdd", Locale.US).format(selectedMillis)
-                                    val interaction = remember(page, day) { MutableInteractionSource() }
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(34.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isSelected) Color.White else Color(0xFF1E1E22))
-                                            .clickable(interactionSource = interaction, indication = null) { selectedMillis = dayCal.timeInMillis },
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Text(
-                                            day.toString().padStart(2, '0'),
-                                            color = if (isSelected) Color.Black else Color.White,
-                                            style = MaterialTheme.typography.labelSmall,
-                                        )
+                        val firstDayOffset = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
+                        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+                        val cells = mutableListOf<Int>().apply {
+                            repeat(firstDayOffset) { add(0) }
+                            addAll(1..daysInMonth)
+                        }
+                        while (cells.size % 7 != 0) cells.add(0)
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFF151517))
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                listOf("M", "T", "W", "T", "F", "S", "S").forEach { label ->
+                                    Text(
+                                        label,
+                                        modifier = Modifier.weight(1f),
+                                        color = Color(0xFF8E8E90),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                            }
+                            cells.chunked(7).forEach { row ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    row.forEach { day ->
+                                        if (day == 0) {
+                                            Spacer(Modifier.weight(1f).height(34.dp))
+                                        } else {
+                                            val dayCal = (cal.clone() as Calendar).apply {
+                                                set(Calendar.DAY_OF_MONTH, day)
+                                                set(Calendar.HOUR_OF_DAY, 12)
+                                                set(Calendar.MINUTE, 0)
+                                                set(Calendar.SECOND, 0)
+                                                set(Calendar.MILLISECOND, 0)
+                                            }
+                                            val isSelected = SimpleDateFormat("yyyyMMdd", Locale.US).format(dayCal.timeInMillis) ==
+                                                SimpleDateFormat("yyyyMMdd", Locale.US).format(selectedMillis)
+                                            val interaction = remember(page, day) { MutableInteractionSource() }
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(34.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(if (isSelected) Color.White else Color(0xFF1E1E22))
+                                                    .clickable(interactionSource = interaction, indication = null) { selectedMillis = dayCal.timeInMillis },
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Text(
+                                                    day.toString().padStart(2, '0'),
+                                                    color = if (isSelected) Color.Black else Color.White,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                )
+                                            }
+                                        }
                                     }
                                 }
+                            }
+                        }
+                    }
+                } else {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFF151517))
+                            .padding(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        weekDays.forEach { dayMillis ->
+                            val dayCal = Calendar.getInstance().apply { timeInMillis = dayMillis }
+                            val isSelected = SimpleDateFormat("yyyyMMdd", Locale.US).format(dayMillis) ==
+                                SimpleDateFormat("yyyyMMdd", Locale.US).format(selectedMillis)
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) Color.White else Color(0xFF1E1E22))
+                                    .clickable { selectedMillis = dayMillis }
+                                    .padding(vertical = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text(SimpleDateFormat("E", Locale.US).format(dayMillis).take(1), color = if (isSelected) Color.Black else Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
+                                Text(dayCal.get(Calendar.DAY_OF_MONTH).toString(), color = if (isSelected) Color.Black else Color.White, style = MaterialTheme.typography.labelMedium)
                             }
                         }
                     }
                 }
             }
         }
-        AnimatedVisibility(visible = compactWeekMode, enter = fadeIn(), exit = fadeOut()) {
+        if (allDayEvents.isNotEmpty()) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF151517))
-                    .padding(6.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                weekDays.forEach { dayMillis ->
-                    val dayCal = Calendar.getInstance().apply { timeInMillis = dayMillis }
-                    val isSelected = SimpleDateFormat("yyyyMMdd", Locale.US).format(dayMillis) ==
-                        SimpleDateFormat("yyyyMMdd", Locale.US).format(selectedMillis)
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) Color.White else Color(0xFF1E1E22))
-                            .clickable { selectedMillis = dayMillis }
-                            .padding(vertical = 6.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(SimpleDateFormat("E", Locale.US).format(dayMillis).take(1), color = if (isSelected) Color.Black else Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
-                        Text(dayCal.get(Calendar.DAY_OF_MONTH).toString(), color = if (isSelected) Color.Black else Color.White, style = MaterialTheme.typography.labelMedium)
+                allDayEvents.forEach { event ->
+                    Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFF26262B)) {
+                        Text(
+                            text = event.title.ifBlank { "All-day event" },
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
@@ -1932,12 +2069,36 @@ private fun CalendarScreen(
                 }
             } else {
                 val minuteHeight = 1.05f
-                val minBlockHeight = 30.dp
+                val minBlockHeight = 54.dp
                 items(timelineRenderItems, key = { it.item.id }) { render ->
                     val item = render.item
                     val isTask = item.isTask
                     if (render.gapMinutesBefore > 0) {
-                        Spacer(Modifier.height((render.gapMinutesBefore * minuteHeight).dp))
+                        val gapHeight = (render.gapMinutesBefore * minuteHeight).dp
+                        val lineCount = (render.gapMinutesBefore / 60L).toInt().coerceAtLeast(1)
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(gapHeight),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            repeat(lineCount) { idx ->
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    val stamp = item.startMillis - ((lineCount - idx).toLong() * 60L * 60_000L)
+                                    Text(
+                                        SimpleDateFormat("HH:mm", Locale.US).format(stamp.coerceAtLeast(selectedDay.timeInMillis)),
+                                        color = Color(0xFF66666A),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.width(56.dp),
+                                    )
+                                    Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF2D2D31)))
+                                }
+                            }
+                        }
                     }
                     val durationMinutes = ((item.endMillis - item.startMillis) / 60_000L).coerceAtLeast(5)
                     val blockHeight = maxOf(minBlockHeight, (durationMinutes * minuteHeight).dp)
@@ -1970,14 +2131,15 @@ private fun CalendarScreen(
                                     dayTasks.firstOrNull { it.id == taskId }?.let(onOpenTask)
                                 },
                         ) {
-                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(item.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            val short = durationMinutes <= 60
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(if (short) 2.dp else 4.dp)) {
+                                Text(item.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = if (short) 1 else 2, overflow = TextOverflow.Ellipsis)
                                 Text(
                                     "${SimpleDateFormat("HH:mm", Locale.US).format(item.startMillis)} - ${SimpleDateFormat("HH:mm", Locale.US).format(item.endMillis)}",
                                     color = Color(0xFFBFBFBF),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = if (short) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
                                 )
-                                Text(item.detail, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                Text(item.detail, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(if (isTask) "Boop task" else "Google Calendar", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
                             }
                         }
@@ -2132,16 +2294,33 @@ private fun HabitsListScreen(
                 ) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(habit.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            if (habit.quantityMode) {
-                                val unit = habit.quantityUnit.ifBlank { "units" }
-                                "$todayAmount / ${habit.quantityDailyTarget} $unit today"
-                            } else {
-                                "${habit.progress} of ${habit.goal} days  ·  $doneCount total checks"
-                            },
-                            color = Color(0xFFBFBFBF),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = Color(0xFF242426),
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(if (progressFraction >= 1f) Color(0xFF6BE28F) else Color(0xFF8E8E90)),
+                                )
+                                Text(
+                                    if (habit.quantityMode) {
+                                        val unit = habit.quantityUnit.ifBlank { "units" }
+                                        "Today ${todayAmount}/${habit.quantityDailyTarget} $unit"
+                                    } else {
+                                        "Progress ${habit.progress}/${habit.goal} · $doneCount checks"
+                                    },
+                                    color = Color(0xFFD0D0D0),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
                         LinearProgressIndicator(
                             progress = { progressFraction },
                             modifier = Modifier
@@ -2654,6 +2833,191 @@ private fun BoopSheetHeaderTitle(text: String) {
     )
 }
 
+private fun insertDeviceCalendarEvent(
+    context: Context,
+    calendarId: Long,
+    title: String,
+    description: String,
+    location: String,
+    allDay: Boolean,
+    startAt: Long,
+    endAt: Long,
+): Boolean {
+    return try {
+        val values = ContentValues().apply {
+            put(CalendarContract.Events.CALENDAR_ID, calendarId)
+            put(CalendarContract.Events.TITLE, title)
+            put(CalendarContract.Events.DESCRIPTION, description)
+            put(CalendarContract.Events.EVENT_LOCATION, location)
+            put(CalendarContract.Events.DTSTART, startAt)
+            put(CalendarContract.Events.DTEND, maxOf(endAt, startAt + 60_000L))
+            put(CalendarContract.Events.ALL_DAY, if (allDay) 1 else 0)
+            put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+        }
+        context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values) != null
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+@Composable
+private fun EventEditorSheet(
+    initial: ItemSheet.EventSheet,
+    onDismiss: () -> Unit,
+    onSave: (Boolean) -> Unit,
+) {
+    val context = LocalContext.current
+    var title by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.title) }
+    var description by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.description) }
+    var location by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.location) }
+    var allDay by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.allDay) }
+    var startAt by rememberSaveable(initial.sessionKey) { mutableLongStateOf(initial.startAt) }
+    var endAt by rememberSaveable(initial.sessionKey) { mutableLongStateOf(initial.endAt) }
+    var pickStart by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
+    var pickEnd by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
+    var selectedCalId by rememberSaveable(initial.sessionKey) { mutableLongStateOf(-1L) }
+    var calendars by remember { mutableStateOf(emptyList<DeviceCalendarChoice>()) }
+    var writeGranted by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.WRITE_CALENDAR,
+            ) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val writePermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        writeGranted = granted
+        if (!granted) Toast.makeText(context, "Calendar write permission denied.", Toast.LENGTH_SHORT).show()
+    }
+    LaunchedEffect(writeGranted) {
+        if (writeGranted) {
+            calendars = withContext(Dispatchers.IO) { readVisibleCalendars(context) }
+            if (selectedCalId < 0 && calendars.isNotEmpty()) selectedCalId = calendars.first().id
+        }
+    }
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(Modifier.weight(1f)) {
+            BoopSheetHeaderTitle("New event")
+        }
+        IconButton(onClick = onDismiss) {
+            Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    BoopFilledTextField(value = title, onValueChange = { title = it }, label = { Text("Title") })
+    Spacer(Modifier.height(8.dp))
+    BoopFilledTextField(value = location, onValueChange = { location = it }, label = { Text("Location") })
+    Spacer(Modifier.height(8.dp))
+    BoopFilledTextField(value = description, onValueChange = { description = it }, label = { Text("Description") })
+    Spacer(Modifier.height(8.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text("All day", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = allDay, onCheckedChange = { allDay = it })
+    }
+    Spacer(Modifier.height(8.dp))
+    Surface(
+        onClick = { pickStart = true },
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF242426),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text("Starts", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+            Text(SimpleDateFormat("EEE, MMM dd · HH:mm", Locale.US).format(startAt), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+            Text("Tap to edit", color = Color(0xFF6E6E70), style = MaterialTheme.typography.labelSmall)
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    Surface(
+        onClick = { pickEnd = true },
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF242426),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text("Ends", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+            Text(SimpleDateFormat("EEE, MMM dd · HH:mm", Locale.US).format(endAt), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+    ReminderPickerDialog(
+        visible = pickStart,
+        initialMillis = startAt,
+        onDismiss = { pickStart = false },
+        onConfirm = { picked ->
+            startAt = picked
+            if (endAt <= startAt) endAt = startAt + 60 * 60_000L
+            pickStart = false
+        },
+    )
+    ReminderPickerDialog(
+        visible = pickEnd,
+        initialMillis = endAt,
+        onDismiss = { pickEnd = false },
+        onConfirm = { picked ->
+            endAt = maxOf(picked, startAt + 60_000L)
+            pickEnd = false
+        },
+    )
+    Spacer(Modifier.height(8.dp))
+    if (writeGranted && calendars.isNotEmpty()) {
+        val selectedName = calendars.firstOrNull { it.id == selectedCalId }?.displayName ?: calendars.first().displayName
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            calendars.forEach { cal ->
+                val active = cal.id == selectedCalId
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (active) Color.White else Color(0xFF242426),
+                    modifier = Modifier.clickable { selectedCalId = cal.id },
+                ) {
+                    Text(
+                        cal.displayName,
+                        color = if (active) Color.Black else Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text("Calendar: $selectedName", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+    }
+    Spacer(Modifier.height(20.dp))
+    BoopWhiteButton("Save event") {
+        if (!writeGranted) {
+            writePermLauncher.launch(Manifest.permission.WRITE_CALENDAR)
+            return@BoopWhiteButton
+        }
+        if (title.isBlank()) return@BoopWhiteButton
+        val calendarId = selectedCalId.takeIf { it >= 0 } ?: calendars.firstOrNull()?.id
+        if (calendarId == null) {
+            Toast.makeText(context, "No writable calendar found.", Toast.LENGTH_SHORT).show()
+            return@BoopWhiteButton
+        }
+        val ok = insertDeviceCalendarEvent(
+            context = context,
+            calendarId = calendarId,
+            title = title.trim(),
+            description = description.trim(),
+            location = location.trim(),
+            allDay = allDay,
+            startAt = startAt,
+            endAt = endAt,
+        )
+        Toast.makeText(context, if (ok) "Event saved to Calendar" else "Failed to save event", Toast.LENGTH_SHORT).show()
+        onSave(ok)
+    }
+}
+
 @Composable
 private fun TaskEditorSheet(
     initial: ItemSheet.TaskSheet,
@@ -2761,6 +3125,7 @@ private fun NoteEditorSheet(
     var audioStored by remember(session) { mutableStateOf(initial.audioUri) }
     var bodyEdit by remember(session) { mutableStateOf<EditText?>(null) }
     var recording by remember(session) { mutableStateOf(false) }
+    var recordingStartedAt by remember(session) { mutableLongStateOf(0L) }
     var recorder by remember(session) { mutableStateOf<MediaRecorder?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -2780,11 +3145,15 @@ private fun NoteEditorSheet(
             r.start()
             recorder = r
             recording = true
+            recordingStartedAt = System.currentTimeMillis()
             audioStored = out.absolutePath
+            Toast.makeText(context, "Recording started", Toast.LENGTH_SHORT).show()
         } catch (_: Throwable) {
             recorder?.release()
             recorder = null
             recording = false
+            recordingStartedAt = 0L
+            Toast.makeText(context, "Audio recording failed to start", Toast.LENGTH_SHORT).show()
         }
     }
     DisposableEffect(session) {
@@ -2798,6 +3167,7 @@ private fun NoteEditorSheet(
             } catch (_: Throwable) {
             }
             recorder = null
+            recordingStartedAt = 0L
             bodyEdit = null
         }
     }
@@ -2872,6 +3242,15 @@ private fun NoteEditorSheet(
         },
     )
     NoteRichTextToolbar(bodyEdit, context)
+    val currentBodyText = remember(bodyEdit?.text?.toString()) { bodyEdit?.text?.toString().orEmpty() }
+    val linkRegex = remember { Regex("""https?://[^\s<>()]+""") }
+    val typedLinks = remember(currentBodyText) { linkRegex.findAll(currentBodyText).map { it.value }.distinct().toList() }
+    val spannedLinks = remember(bodyEdit?.text) {
+        val et = bodyEdit
+        val editable = et?.text as? Editable
+        editable?.getSpans(0, editable.length, URLSpan::class.java)?.map { it.url }?.distinct().orEmpty()
+    }
+    val previewLinks = remember(typedLinks, spannedLinks) { (typedLinks + spannedLinks).distinct() }
     Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { picker.launch("image/*") }) {
@@ -2910,6 +3289,9 @@ private fun NoteEditorSheet(
                     }
                     recorder = null
                     recording = false
+                    val secs = ((System.currentTimeMillis() - recordingStartedAt) / 1000L).coerceAtLeast(1L)
+                    recordingStartedAt = 0L
+                    Toast.makeText(context, "Recording saved (${secs}s)", Toast.LENGTH_SHORT).show()
                 } else {
                     micPermission.launch(Manifest.permission.RECORD_AUDIO)
                 }
@@ -2936,6 +3318,42 @@ private fun NoteEditorSheet(
                 },
             ) {
                 Icon(Icons.Outlined.PlayArrow, contentDescription = "Play audio", tint = Color.White)
+            }
+        }
+    }
+    if (recording) {
+        Spacer(Modifier.height(6.dp))
+        Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFF3A1414)) {
+            Text("Recording... tap stop to save", color = Color(0xFFFFB4B4), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+        }
+    }
+    if (previewLinks.isNotEmpty()) {
+        Spacer(Modifier.height(8.dp))
+        Text("Links", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
+        Spacer(Modifier.height(6.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            previewLinks.forEach { link ->
+                val interaction = remember(link) { MutableInteractionSource() }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF202024),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = interaction,
+                            indication = null,
+                        ) {
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
+                            } catch (_: Throwable) {
+                            }
+                        },
+                ) {
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("Link preview", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall)
+                        Text(link, color = Color(0xFF9EC2FF), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         }
     }
