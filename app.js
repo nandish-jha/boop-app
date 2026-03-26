@@ -39,6 +39,7 @@ function render() {
     else if (moreSub === 'skincare') { setTitle('Skincare'); renderSkincare(v); }
     else if (moreSub === 'notes') { setTitle('Notes'); renderNotes(v); }
     else if (moreSub === 'goals') { setTitle('Goals'); renderGoals(v); }
+    else if (moreSub === 'workouts') { setTitle('Workouts'); renderWorkouts(v); }
     else { setTitle('More'); renderMore(v); }
   }
 }
@@ -257,6 +258,7 @@ function editTxn(id) {
 
 function renderMore(root) {
   root.innerHTML = `
+    <button class="card btn-block" style="text-align:left;cursor:pointer;" data-k="workouts">🏋 Workouts</button>
     <button class="card btn-block" style="text-align:left;cursor:pointer;" data-k="supplements">💊 Supplements</button>
     <button class="card btn-block" style="text-align:left;cursor:pointer;" data-k="skincare">✦ Skincare</button>
     <button class="card btn-block" style="text-align:left;cursor:pointer;" data-k="notes">📝 Notes</button>
@@ -370,4 +372,24 @@ function editGoal(id) {
       save(); closeSheet(); render();
     };
   });
+}
+
+function renderWorkouts(root) {
+  root.innerHTML = `
+    <button class="btn" id="back">← Back</button><div style="height:10px"></div>
+    ${state.workouts.map(w => `<button class="card btn-block" style="text-align:left;cursor:pointer;" data-w="${w.id}"><b>${escapeHTML(w.name)}</b><div style="color:var(--text-3);font-size:12px;">${w.days.length} day${w.days.length>1?'s':''}</div></button>`).join('')}
+  `;
+  root.querySelector('#back').onclick = () => { moreSub = null; render(); };
+  root.querySelectorAll('[data-w]').forEach(b => b.onclick = () => showWorkout(b.dataset.w));
+}
+function showWorkout(id) {
+  const w = state.workouts.find(x=>x.id===id);
+  document.getElementById('pageTitle').textContent = w.name;
+  const v = document.getElementById('view');
+  v.innerHTML = `
+    <button class="btn" id="back">← Back</button><div style="height:10px"></div>
+    ${w.note ? `<div class="card" style="color:var(--text-2);font-size:13px;">${escapeHTML(w.note)}</div>` : ''}
+    ${w.days.map(d => `<div class="card"><div class="card-h">${escapeHTML(d.day)}</div>${d.exercises.map(e=>`<div style="padding:8px 0;border-bottom:1px dashed var(--border);">${escapeHTML(e)}</div>`).join('')}</div>`).join('')}
+  `;
+  v.querySelector('#back').onclick = () => render();
 }
