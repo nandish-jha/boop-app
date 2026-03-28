@@ -73,6 +73,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -185,6 +186,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.io.File
+import java.net.URL
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
@@ -241,6 +243,9 @@ private sealed class ItemSheet {
         val allDay: Boolean,
         val startAt: Long,
         val endAt: Long,
+        val notifyWeeksBefore: Int,
+        val notifyDaysBefore: Int,
+        val notifyHoursBefore: Int,
     ) : ItemSheet()
 }
 
@@ -256,6 +261,7 @@ private fun BoopApp() {
     var itemSheet by remember { mutableStateOf<ItemSheet?>(null) }
     var habitCheckInOpen by remember { mutableStateOf(false) }
     var speedDialExpanded by remember { mutableStateOf(false) }
+    var calendarSyncRequest by rememberSaveable { mutableIntStateOf(0) }
 
     fun refresh() {
         tasks.clear()
@@ -338,6 +344,9 @@ private fun BoopApp() {
             allDay = false,
             startAt = startAt,
             endAt = endAt,
+            notifyWeeksBefore = 0,
+            notifyDaysBefore = 0,
+            notifyHoursBefore = 0,
         )
         speedDialExpanded = false
     }
@@ -393,6 +402,11 @@ private fun BoopApp() {
                         selectedTab = selectedTab,
                         expanded = speedDialExpanded,
                         onExpandedChange = { speedDialExpanded = it },
+                        onSyncCalendar = {
+                            selectedTab = 2
+                            calendarSyncRequest++
+                            speedDialExpanded = false
+                        },
                         onOpenTask = { openTaskSheet(null) },
                         onOpenEvent = { openEventSheet() },
                         onOpenNote = { openNoteSheet(null) },
@@ -426,6 +440,7 @@ private fun BoopApp() {
                             tasks = tasks,
                             notes = notes,
                             habits = habits,
+                            calendarSyncRequest = calendarSyncRequest,
                             onPersistHabit = { habit ->
                                 repository.saveHabit(habit)
                                 refresh()
@@ -451,120 +466,103 @@ private fun BoopApp() {
             }
 
             itemSheet?.let { sheet ->
-                if (sheet is ItemSheet.NoteSheet) {
-                    Dialog(onDismissRequest = { itemSheet = null }) {
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            color = darkSurface,
-                        ) {
-                            Column(
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 20.dp, vertical = 18.dp)
-                                    .verticalScroll(rememberScrollState()),
-                            ) {
-                                NoteEditorSheet(
-                                    initial = sheet,
-                                    onDismiss = { itemSheet = null },
-                                    onDelete = sheet.id?.let { id ->
-                                        {
-                                            repository.deleteNote(id)
-                                            refresh()
-                                            scope.launch {
-                                                delay(48)
-                                                itemSheet = null
-                                            }
-                                        }
-                                    },
-                                    onSave = { note ->
-                                        repository.saveNote(note)
-                                        refresh()
-                                        scope.launch {
-                                            delay(48)
-                                            itemSheet = null
-                                        }
-                                    },
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-                    ModalBottomSheet(
-                        onDismissRequest = { itemSheet = null },
-                        sheetState = sheetState,
-                        containerColor = darkSurface,
-                        dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
-                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                ModalBottomSheet(
+                    onDismissRequest = { itemSheet = null },
+                    sheetState = sheetState,
+                    containerColor = darkSurface,
+                    dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.96f)
+                            .padding(horizontal = 20.dp)
+                            .padding(bottom = 28.dp)
+                            .imePadding()
+                            .verticalScroll(rememberScrollState()),
                     ) {
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(0.92f)
-                                .padding(horizontal = 20.dp)
-                                .padding(bottom = 28.dp)
-                                .verticalScroll(rememberScrollState()),
-                        ) {
-                            when (sheet) {
-                                is ItemSheet.TaskSheet -> TaskEditorSheet(
-                                    initial = sheet,
-                                    onDismiss = { itemSheet = null },
-                                    onDelete = sheet.id?.let { id ->
-                                        {
-                                            repository.deleteTask(id)
-                                            refresh()
-                                            scope.launch {
-                                                delay(48)
-                                                itemSheet = null
-                                            }
-                                        }
-                                    },
-                                    onSave = { task ->
-                                        repository.saveTask(task)
-                                        ReminderScheduler.schedule(AppContextHolder.context, task)
+                        when (sheet) {
+                            is ItemSheet.TaskSheet -> TaskEditorSheet(
+                                initial = sheet,
+                                onDismiss = { itemSheet = null },
+                                onDelete = sheet.id?.let { id ->
+                                    {
+                                        repository.deleteTask(id)
                                         refresh()
                                         scope.launch {
                                             delay(48)
                                             itemSheet = null
                                         }
-                                    },
-                                )
-                                is ItemSheet.HabitSheet -> HabitEditorSheet(
-                                    initial = sheet,
-                                    onDismiss = { itemSheet = null },
-                                    onDelete = sheet.id?.let { id ->
-                                        {
-                                            repository.deleteHabit(id)
-                                            refresh()
-                                            scope.launch {
-                                                delay(48)
-                                                itemSheet = null
-                                            }
-                                        }
-                                    },
-                                    onSave = { habit ->
-                                        repository.saveHabit(habit)
+                                    }
+                                },
+                                onSave = { task ->
+                                    repository.saveTask(task)
+                                    ReminderScheduler.schedule(AppContextHolder.context, task)
+                                    refresh()
+                                    scope.launch {
+                                        delay(48)
+                                        itemSheet = null
+                                    }
+                                },
+                            )
+                            is ItemSheet.NoteSheet -> NoteEditorSheet(
+                                initial = sheet,
+                                onDismiss = { itemSheet = null },
+                                onDelete = sheet.id?.let { id ->
+                                    {
+                                        repository.deleteNote(id)
                                         refresh()
                                         scope.launch {
                                             delay(48)
                                             itemSheet = null
                                         }
-                                    },
-                                )
-                                is ItemSheet.EventSheet -> EventEditorSheet(
-                                    initial = sheet,
-                                    onDismiss = { itemSheet = null },
-                                    onSave = { ok ->
-                                        if (ok) {
-                                            scope.launch {
-                                                delay(48)
-                                                itemSheet = null
-                                            }
+                                    }
+                                },
+                                onSave = { note ->
+                                    repository.saveNote(note)
+                                    refresh()
+                                    scope.launch {
+                                        delay(48)
+                                        itemSheet = null
+                                    }
+                                },
+                            )
+                            is ItemSheet.HabitSheet -> HabitEditorSheet(
+                                initial = sheet,
+                                onDismiss = { itemSheet = null },
+                                onDelete = sheet.id?.let { id ->
+                                    {
+                                        repository.deleteHabit(id)
+                                        refresh()
+                                        scope.launch {
+                                            delay(48)
+                                            itemSheet = null
                                         }
-                                    },
-                                )
-                                is ItemSheet.NoteSheet -> Unit
-                            }
+                                    }
+                                },
+                                onSave = { habit ->
+                                    repository.saveHabit(habit)
+                                    refresh()
+                                    scope.launch {
+                                        delay(48)
+                                        itemSheet = null
+                                    }
+                                },
+                            )
+                            is ItemSheet.EventSheet -> EventEditorSheet(
+                                initial = sheet,
+                                onDismiss = { itemSheet = null },
+                                onSave = { ok ->
+                                    if (ok) {
+                                        scope.launch {
+                                            delay(48)
+                                            itemSheet = null
+                                        }
+                                    }
+                                },
+                            )
                         }
                     }
                 }
@@ -602,6 +600,7 @@ private fun BoopPagerPage(
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
     habits: List<BoopHabit>,
+    calendarSyncRequest: Int,
     onPersistHabit: (BoopHabit) -> Unit,
     onSelectTab: (Int) -> Unit,
     onEditTask: (BoopTask) -> Unit,
@@ -633,6 +632,7 @@ private fun BoopPagerPage(
             )
             2 -> CalendarScreen(
                 tasks = tasks,
+                syncRequest = calendarSyncRequest,
                 onOpenTask = onEditTask,
             )
             3 -> NotesListScreen(
@@ -734,6 +734,7 @@ private fun BoopSpeedDialFab(
     selectedTab: Int,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    onSyncCalendar: () -> Unit,
     onOpenTask: () -> Unit,
     onOpenEvent: () -> Unit,
     onOpenNote: () -> Unit,
@@ -761,17 +762,23 @@ private fun BoopSpeedDialFab(
                         containerColor = Color.White,
                         contentColor = Color.Black,
                     ) { Icon(Icons.Outlined.CalendarMonth, contentDescription = "Add event") }
+                    SmallFloatingActionButton(
+                        onClick = { onSyncCalendar() },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.Sync, contentDescription = "Sync calendar") }
+                } else {
+                    SmallFloatingActionButton(
+                        onClick = { onOpenNote(); onExpandedChange(false) },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.EditNote, contentDescription = "Add note") }
+                    SmallFloatingActionButton(
+                        onClick = { onOpenHabit(); onExpandedChange(false) },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.Flag, contentDescription = "Add habit") }
                 }
-                SmallFloatingActionButton(
-                    onClick = { onOpenNote(); onExpandedChange(false) },
-                    containerColor = Color.White,
-                    contentColor = Color.Black,
-                ) { Icon(Icons.Outlined.EditNote, contentDescription = "Add note") }
-                SmallFloatingActionButton(
-                    onClick = { onOpenHabit(); onExpandedChange(false) },
-                    containerColor = Color.White,
-                    contentColor = Color.Black,
-                ) { Icon(Icons.Outlined.Flag, contentDescription = "Add habit") }
             }
         }
         FloatingActionButton(
@@ -838,6 +845,63 @@ private fun plainNoteSnippet(html: String, maxLen: Int): String {
         .trim()
     if (plain.length <= maxLen) return plain
     return plain.take(maxLen - 1).trimEnd() + "…"
+}
+
+private fun extractLinksFromBody(htmlOrText: String): List<String> {
+    val plain = HtmlCompat.fromHtml(htmlOrText, HtmlCompat.FROM_HTML_MODE_COMPACT).toString()
+    val regex = Regex("""https?://[^\s<>()]+""")
+    return regex.findAll(plain).map { it.value.trim() }.distinct().toList()
+}
+
+private suspend fun fetchWebTitle(url: String): String? = withContext(Dispatchers.IO) {
+    try {
+        val conn = URL(url).openConnection().apply {
+            connectTimeout = 2500
+            readTimeout = 2500
+        }
+        conn.getInputStream().bufferedReader().use { r ->
+            val chunk = r.readText().take(16_000)
+            Regex("""<title>(.*?)</title>""", RegexOption.IGNORE_CASE)
+                .find(chunk)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+        }
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+@Composable
+private fun NoteLinkPreviewCard(link: String) {
+    val context = LocalContext.current
+    var title by remember(link) { mutableStateOf<String?>(null) }
+    val host = remember(link) { runCatching { Uri.parse(link).host.orEmpty() }.getOrDefault("") }
+    LaunchedEffect(link) {
+        title = fetchWebTitle(link)
+    }
+    val interaction = remember(link) { MutableInteractionSource() }
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF202024),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(interactionSource = interaction, indication = null) {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
+                } catch (_: Throwable) {
+                }
+            },
+    ) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title ?: "Loading preview...", color = Color(0xFFE2E2E2), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (host.isNotBlank()) {
+                Text(host, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(link, color = Color(0xFF9EC2FF), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
 }
 
 private fun parseNoteTags(raw: String): List<String> =
@@ -1570,14 +1634,34 @@ private fun readGoogleCalendarEventsInRange(
         val calIx = c.getColumnIndex(CalendarContract.Instances.CALENDAR_DISPLAY_NAME)
         val allDayIx = c.getColumnIndex(CalendarContract.Instances.ALL_DAY)
         while (c.moveToNext()) {
+            val rawBegin = if (beginIx >= 0) c.getLong(beginIx) else startMillis
+            val rawEnd = if (endIx >= 0) c.getLong(endIx) else endMillis
+            val isAllDay = allDayIx >= 0 && c.getInt(allDayIx) == 1
+            val normalized = if (isAllDay) {
+                val utc = TimeZone.getTimeZone("UTC")
+                val local = TimeZone.getDefault()
+                val beginUtc = Calendar.getInstance(utc).apply { timeInMillis = rawBegin }
+                val endUtc = Calendar.getInstance(utc).apply { timeInMillis = rawEnd }
+                val beginLocal = Calendar.getInstance(local).apply {
+                    set(beginUtc.get(Calendar.YEAR), beginUtc.get(Calendar.MONTH), beginUtc.get(Calendar.DAY_OF_MONTH), 0, 0, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                val endLocal = Calendar.getInstance(local).apply {
+                    set(endUtc.get(Calendar.YEAR), endUtc.get(Calendar.MONTH), endUtc.get(Calendar.DAY_OF_MONTH), 0, 0, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                beginLocal.timeInMillis to endLocal.timeInMillis
+            } else {
+                rawBegin to rawEnd
+            }
             out.add(
                 CalendarEventUi(
                     id = if (idIx >= 0) c.getLong(idIx) else 0L,
                     title = if (titleIx >= 0) c.getString(titleIx).orEmpty().ifBlank { "Untitled event" } else "Untitled event",
-                    beginMillis = if (beginIx >= 0) c.getLong(beginIx) else startMillis,
-                    endMillis = if (endIx >= 0) c.getLong(endIx) else endMillis,
+                    beginMillis = normalized.first,
+                    endMillis = normalized.second,
                     calendarDisplayName = if (calIx >= 0) c.getString(calIx).orEmpty() else "",
-                    allDay = allDayIx >= 0 && c.getInt(allDayIx) == 1,
+                    allDay = isAllDay,
                 ),
             )
         }
@@ -1702,6 +1786,7 @@ private fun TaskListScreen(
 @Composable
 private fun CalendarScreen(
     tasks: List<BoopTask>,
+    syncRequest: Int,
     onOpenTask: (BoopTask) -> Unit,
 ) {
     val context = LocalContext.current
@@ -1800,6 +1885,15 @@ private fun CalendarScreen(
             }
         }
     }
+    LaunchedEffect(syncRequest, calendarGranted) {
+        if (syncRequest <= 0) return@LaunchedEffect
+        if (!calendarGranted) {
+            calendarPermLauncher.launch(Manifest.permission.READ_CALENDAR)
+        } else {
+            lastSyncStatus = "Syncing Google Calendar..."
+            refreshGoogleEvents(true)
+        }
+    }
     val googleEvents = remember(googleEventsCache, selectedDay.timeInMillis, nextDay.timeInMillis) {
         googleEventsCache
             .filter { it.beginMillis < nextDay.timeInMillis && it.endMillis > selectedDay.timeInMillis }
@@ -1884,7 +1978,7 @@ private fun CalendarScreen(
     ) {
         Row(
             Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.Top,
         ) {
             Text(
@@ -1898,23 +1992,6 @@ private fun CalendarScreen(
                     scope.launch { monthPager.animateScrollToPage(basePage) }
                 },
             )
-            FloatingActionButton(
-                onClick = {
-                    lastSyncStatus = "Syncing Google Calendar..."
-                    if (!calendarGranted) {
-                        calendarPermLauncher.launch(Manifest.permission.READ_CALENDAR)
-                    } else {
-                        scope.launch {
-                            val loaded = refreshGoogleEvents(true)
-                            Toast.makeText(context, "Google Calendar synced: $loaded events", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                },
-                containerColor = Color.White,
-                contentColor = Color.Black,
-            ) {
-                Icon(Icons.Outlined.Sync, contentDescription = "Sync with Google Calendar")
-            }
         }
         Text(lastSyncStatus, color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
         Box(Modifier.fillMaxWidth().animateContentSize()) {
@@ -2056,7 +2133,7 @@ private fun CalendarScreen(
                 },
             state = timelineState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             if (!calendarGranted) {
                 item {
@@ -2248,6 +2325,12 @@ private fun NotesListScreen(
                         }
                         if (hasAudio) {
                             Text("Audio attached", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+                        }
+                        val links = extractLinksFromBody(note.body)
+                        if (links.isNotEmpty()) {
+                            links.take(2).forEach { link ->
+                                NoteLinkPreviewCard(link)
+                            }
                         }
                     }
                 }
@@ -2842,7 +2925,7 @@ private fun insertDeviceCalendarEvent(
     allDay: Boolean,
     startAt: Long,
     endAt: Long,
-): Boolean {
+): Long {
     return try {
         val values = ContentValues().apply {
             put(CalendarContract.Events.CALENDAR_ID, calendarId)
@@ -2854,9 +2937,10 @@ private fun insertDeviceCalendarEvent(
             put(CalendarContract.Events.ALL_DAY, if (allDay) 1 else 0)
             put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
         }
-        context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values) != null
+        val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
+        uri?.lastPathSegment?.toLongOrNull() ?: -1L
     } catch (_: Throwable) {
-        false
+        -1L
     }
 }
 
@@ -2873,6 +2957,9 @@ private fun EventEditorSheet(
     var allDay by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.allDay) }
     var startAt by rememberSaveable(initial.sessionKey) { mutableLongStateOf(initial.startAt) }
     var endAt by rememberSaveable(initial.sessionKey) { mutableLongStateOf(initial.endAt) }
+    var notifyWeeksBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyWeeksBefore.toString()) }
+    var notifyDaysBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyDaysBefore.toString()) }
+    var notifyHoursBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyHoursBefore.toString()) }
     var pickStart by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
     var pickEnd by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
     var selectedCalId by rememberSaveable(initial.sessionKey) { mutableLongStateOf(-1L) }
@@ -2991,6 +3078,32 @@ private fun EventEditorSheet(
         Spacer(Modifier.height(6.dp))
         Text("Calendar: $selectedName", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
     }
+    Spacer(Modifier.height(8.dp))
+    Text("Notifications before start", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelMedium)
+    Spacer(Modifier.height(6.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        BoopFilledTextField(
+            value = notifyWeeksBefore,
+            onValueChange = { notifyWeeksBefore = it.filter { ch -> ch.isDigit() }.take(2) },
+            label = { Text("Weeks") },
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+        )
+        BoopFilledTextField(
+            value = notifyDaysBefore,
+            onValueChange = { notifyDaysBefore = it.filter { ch -> ch.isDigit() }.take(3) },
+            label = { Text("Days") },
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+        )
+        BoopFilledTextField(
+            value = notifyHoursBefore,
+            onValueChange = { notifyHoursBefore = it.filter { ch -> ch.isDigit() }.take(3) },
+            label = { Text("Hours") },
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+        )
+    }
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save event") {
         if (!writeGranted) {
@@ -3003,7 +3116,7 @@ private fun EventEditorSheet(
             Toast.makeText(context, "No writable calendar found.", Toast.LENGTH_SHORT).show()
             return@BoopWhiteButton
         }
-        val ok = insertDeviceCalendarEvent(
+        val eventId = insertDeviceCalendarEvent(
             context = context,
             calendarId = calendarId,
             title = title.trim(),
@@ -3013,6 +3126,18 @@ private fun EventEditorSheet(
             startAt = startAt,
             endAt = endAt,
         )
+        val ok = eventId > 0
+        if (ok) {
+            EventReminderScheduler.schedule(
+                context = context,
+                eventId = eventId,
+                title = title.trim(),
+                eventStartAt = startAt,
+                weeksBefore = notifyWeeksBefore.toIntOrNull() ?: 0,
+                daysBefore = notifyDaysBefore.toIntOrNull() ?: 0,
+                hoursBefore = notifyHoursBefore.toIntOrNull() ?: 0,
+            )
+        }
         Toast.makeText(context, if (ok) "Event saved to Calendar" else "Failed to save event", Toast.LENGTH_SHORT).show()
         onSave(ok)
     }
@@ -3333,27 +3458,7 @@ private fun NoteEditorSheet(
         Spacer(Modifier.height(6.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             previewLinks.forEach { link ->
-                val interaction = remember(link) { MutableInteractionSource() }
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF202024),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(
-                            interactionSource = interaction,
-                            indication = null,
-                        ) {
-                            try {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
-                            } catch (_: Throwable) {
-                            }
-                        },
-                ) {
-                    Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("Link preview", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall)
-                        Text(link, color = Color(0xFF9EC2FF), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                }
+                NoteLinkPreviewCard(link)
             }
         }
     }
@@ -3806,6 +3911,51 @@ object ReminderScheduler {
     }
 }
 
+object EventReminderScheduler {
+    fun schedule(
+        context: Context,
+        eventId: Long,
+        title: String,
+        eventStartAt: Long,
+        weeksBefore: Int,
+        daysBefore: Int,
+        hoursBefore: Int,
+    ) {
+        val offsets = listOf(
+            weeksBefore * 7L * 24L * 60L * 60L * 1000L,
+            daysBefore * 24L * 60L * 60L * 1000L,
+            hoursBefore * 60L * 60L * 1000L,
+        ).filter { it > 0L }
+        if (offsets.isEmpty()) return
+        val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        offsets.forEachIndexed { idx, offset ->
+            val at = eventStartAt - offset
+            if (at <= System.currentTimeMillis()) return@forEachIndexed
+            val requestCode = ((eventId % Int.MAX_VALUE) + (idx + 1) * 13_337).toInt()
+            val intent = Intent(context, TaskReminderReceiver::class.java).apply {
+                putExtra("title", "Event: $title")
+                putExtra("id", requestCode)
+                putExtra("taskId", "")
+            }
+            val pending = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
+                } else {
+                    @Suppress("DEPRECATION")
+                    manager.setExact(AlarmManager.RTC_WAKEUP, at, pending)
+                }
+            } catch (_: Throwable) {
+            }
+        }
+    }
+}
+
 class TaskReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == ReminderNotifier.ACTION_COMPLETE_TASK) {
@@ -3850,14 +4000,16 @@ object ReminderNotifier {
             completeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val notification = androidx.core.app.NotificationCompat.Builder(context, CHANNEL)
+        val builder = androidx.core.app.NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification_minimal)
             .setContentTitle("Boop reminder")
             .setContentText(title)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
-            .addAction(0, "Mark as completed", completePending)
             .setAutoCancel(true)
-            .build()
+        if (taskId.isNotBlank()) {
+            builder.addAction(0, "Mark as completed", completePending)
+        }
+        val notification = builder.build()
         androidx.core.app.NotificationManagerCompat.from(context).notify(id, notification)
     }
 }
