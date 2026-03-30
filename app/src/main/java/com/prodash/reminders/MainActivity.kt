@@ -2133,7 +2133,7 @@ private fun CalendarScreen(
                 },
             state = timelineState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (!calendarGranted) {
                 item {
@@ -2145,8 +2145,8 @@ private fun CalendarScreen(
                     Text("No events or tasks for this day.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
-                val minuteHeight = 1.05f
-                val minBlockHeight = 54.dp
+                val minuteHeight = 1.1f
+                val minBlockHeight = 88.dp
                 items(timelineRenderItems, key = { it.item.id }) { render ->
                     val item = render.item
                     val isTask = item.isTask
@@ -2180,7 +2180,9 @@ private fun CalendarScreen(
                     val durationMinutes = ((item.endMillis - item.startMillis) / 60_000L).coerceAtLeast(5)
                     val blockHeight = maxOf(minBlockHeight, (durationMinutes * minuteHeight).dp)
                     Row(
-                        Modifier.fillMaxWidth(),
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.Top,
                     ) {
@@ -2209,12 +2211,12 @@ private fun CalendarScreen(
                                 },
                         ) {
                             val short = durationMinutes <= 60
-                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(if (short) 2.dp else 4.dp)) {
-                                Text(item.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = if (short) 1 else 2, overflow = TextOverflow.Ellipsis)
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(item.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text(
                                     "${SimpleDateFormat("HH:mm", Locale.US).format(item.startMillis)} - ${SimpleDateFormat("HH:mm", Locale.US).format(item.endMillis)}",
                                     color = Color(0xFFBFBFBF),
-                                    style = if (short) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
+                                    style = if (short) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodySmall,
                                 )
                                 Text(item.detail, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(if (isTask) "Boop task" else "Google Calendar", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
