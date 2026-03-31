@@ -8,17 +8,22 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>Productivity</title>
 <link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app">
     <header class="topbar">
       <div class="title" id="pageTitle">Home</div>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙</button>
     </header>
+
     <main id="view" class="view"></main>
+
     <nav class="bottom-nav" role="navigation">
       <button class="nav-btn active" data-tab="home"><span class="nav-ico">◎</span><span>Home</span></button>
       <button class="nav-btn" data-tab="tasks"><span class="nav-ico">✓</span><span>Tasks</span></button>
@@ -26,8 +31,10 @@
       <button class="nav-btn" data-tab="budget"><span class="nav-ico">$</span><span>Budget</span></button>
       <button class="nav-btn" data-tab="more"><span class="nav-ico">≡</span><span>More</span></button>
     </nav>
+
     <button class="fab" id="fab" aria-label="Add">+</button>
   </div>
+
   <div class="sheet" id="sheet" aria-hidden="true">
     <div class="sheet-backdrop" data-close></div>
     <div class="sheet-panel">
@@ -35,10 +42,15 @@
       <div class="sheet-content" id="sheetContent"></div>
     </div>
   </div>
+
+  <div class="toast" id="toast"></div>
+
   <script src="data/seed.js"></script>
   <script src="app.js"></script>
   <script>
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+    }
   </script>
 </body>
 </html>
