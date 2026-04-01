@@ -236,6 +236,8 @@ private sealed class ItemSheet {
     ) : ItemSheet()
 
     data class EventSheet(
+        val eventId: Long?,
+        val calendarId: Long?,
         val sessionKey: String,
         val title: String,
         val description: String,
@@ -334,21 +336,31 @@ private fun BoopApp() {
         speedDialExpanded = false
     }
 
-    fun openEventSheet(startAt: Long = System.currentTimeMillis()) {
-        val endAt = startAt + 60 * 60_000L
+    val context = LocalContext.current
+
+    fun openEventSheet(startAt: Long = System.currentTimeMillis(), existing: CalendarEventDetail? = null) {
+        val start = existing?.startAt ?: startAt
+        val endAt = existing?.endAt ?: (start + 60 * 60_000L)
         itemSheet = ItemSheet.EventSheet(
+            eventId = existing?.eventId,
+            calendarId = existing?.calendarId,
             sessionKey = UUID.randomUUID().toString(),
-            title = "",
-            description = "",
-            location = "",
-            allDay = false,
-            startAt = startAt,
+            title = existing?.title.orEmpty(),
+            description = existing?.description.orEmpty(),
+            location = existing?.location.orEmpty(),
+            allDay = existing?.allDay ?: false,
+            startAt = start,
             endAt = endAt,
             notifyWeeksBefore = 0,
             notifyDaysBefore = 0,
             notifyHoursBefore = 0,
         )
         speedDialExpanded = false
+    }
+
+    fun openEventSheetById(eventId: Long) {
+        val detail = readCalendarEventDetail(context, eventId)
+        openEventSheet(existing = detail)
     }
 
     MaterialTheme(
@@ -447,6 +459,7 @@ private fun BoopApp() {
                             },
                             onSelectTab = { selectedTab = it },
                             onEditTask = { openTaskSheet(it) },
+                            onEditEvent = { openEventSheetById(it) },
                             onEditNote = { openNoteSheet(it) },
                             onEditHabit = { openHabitSheet(it) },
                             onOpenHabitCheckIn = {
@@ -604,6 +617,7 @@ private fun BoopPagerPage(
     onPersistHabit: (BoopHabit) -> Unit,
     onSelectTab: (Int) -> Unit,
     onEditTask: (BoopTask) -> Unit,
+    onEditEvent: (Long) -> Unit,
     onEditNote: (BoopNote) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
     onOpenHabitCheckIn: () -> Unit,
@@ -634,6 +648,7 @@ private fun BoopPagerPage(
                 tasks = tasks,
                 syncRequest = calendarSyncRequest,
                 onOpenTask = onEditTask,
+                onOpenEvent = onEditEvent,
             )
             3 -> NotesListScreen(
                 notes = notes,
@@ -1537,6 +1552,17 @@ private data class DeviceCalendarChoice(
     val displayName: String,
 )
 
+private data class CalendarEventDetail(
+    val eventId: Long,
+    val calendarId: Long,
+    val title: String,
+    val description: String,
+    val location: String,
+    val allDay: Boolean,
+    val startAt: Long,
+    val endAt: Long,
+)
+
 private fun readGoogleCalendarIds(context: Context): Set<Long> {
     val googleIds = mutableSetOf<Long>()
     val fallbackVisibleIds = mutableSetOf<Long>()
@@ -1607,6 +1633,41 @@ private fun readVisibleCalendars(context: Context): List<DeviceCalendarChoice> {
     return out
 }
 
+private fun readCalendarEventDetail(context: Context, eventId: Long): CalendarEventDetail? {
+    val projection = arrayOf(
+        CalendarContract.Events._ID,
+        CalendarContract.Events.CALENDAR_ID,
+        CalendarContract.Events.TITLE,
+        CalendarContract.Events.DESCRIPTION,
+        CalendarContract.Events.EVENT_LOCATION,
+        CalendarContract.Events.ALL_DAY,
+        CalendarContract.Events.DTSTART,
+        CalendarContract.Events.DTEND,
+    )
+    val sel = "${CalendarContract.Events._ID} = ?"
+    val args = arrayOf(eventId.toString())
+    context.contentResolver.query(
+        CalendarContract.Events.CONTENT_URI,
+        projection,
+        sel,
+        args,
+        null,
+    )?.use { c ->
+        if (!c.moveToFirst()) return null
+        return CalendarEventDetail(
+            eventId = c.getLong(c.getColumnIndex(CalendarContract.Events._ID)),
+            calendarId = c.getLong(c.getColumnIndex(CalendarContract.Events.CALENDAR_ID)),
+            title = c.getString(c.getColumnIndex(CalendarContract.Events.TITLE)).orEmpty(),
+            description = c.getString(c.getColumnIndex(CalendarContract.Events.DESCRIPTION)).orEmpty(),
+            location = c.getString(c.getColumnIndex(CalendarContract.Events.EVENT_LOCATION)).orEmpty(),
+            allDay = c.getInt(c.getColumnIndex(CalendarContract.Events.ALL_DAY)) == 1,
+            startAt = c.getLong(c.getColumnIndex(CalendarContract.Events.DTSTART)),
+            endAt = c.getLong(c.getColumnIndex(CalendarContract.Events.DTEND)),
+        )
+    }
+    return null
+}
+
 private fun readGoogleCalendarEventsInRange(
     context: Context,
     startMillis: Long,
@@ -1666,7 +1727,45 @@ private fun readGoogleCalendarEventsInRange(
             )
         }
     }
-    return out
+    // Fallback pass: pull directly from Events for subscribed feeds that may not always expand in Instances.
+    val eventProjection = arrayOf(
+        CalendarContract.Events._ID,
+        CalendarContract.Events.TITLE,
+        CalendarContract.Events.DTSTART,
+        CalendarContract.Events.DTEND,
+        CalendarContract.Events.CALENDAR_ID,
+        CalendarContract.Events.ALL_DAY,
+    )
+    val eventSel = "(${CalendarContract.Events.DTSTART} < ?) AND (${CalendarContract.Events.DTEND} > ?)"
+    val eventArgs = arrayOf(endMillis.toString(), startMillis.toString())
+    context.contentResolver.query(
+        CalendarContract.Events.CONTENT_URI,
+        eventProjection,
+        eventSel,
+        eventArgs,
+        "${CalendarContract.Events.DTSTART} ASC",
+    )?.use { c ->
+        val idIx = c.getColumnIndex(CalendarContract.Events._ID)
+        val titleIx = c.getColumnIndex(CalendarContract.Events.TITLE)
+        val beginIx = c.getColumnIndex(CalendarContract.Events.DTSTART)
+        val endIx = c.getColumnIndex(CalendarContract.Events.DTEND)
+        val allDayIx = c.getColumnIndex(CalendarContract.Events.ALL_DAY)
+        while (c.moveToNext()) {
+            val id = if (idIx >= 0) c.getLong(idIx) else 0L
+            if (out.any { it.id == id && it.beginMillis == (if (beginIx >= 0) c.getLong(beginIx) else 0L) }) continue
+            out.add(
+                CalendarEventUi(
+                    id = id,
+                    title = if (titleIx >= 0) c.getString(titleIx).orEmpty().ifBlank { "Untitled event" } else "Untitled event",
+                    beginMillis = if (beginIx >= 0) c.getLong(beginIx) else startMillis,
+                    endMillis = if (endIx >= 0) c.getLong(endIx) else endMillis,
+                    calendarDisplayName = "",
+                    allDay = allDayIx >= 0 && c.getInt(allDayIx) == 1,
+                ),
+            )
+        }
+    }
+    return out.sortedBy { it.beginMillis }
 }
 
 @Composable
@@ -1788,6 +1887,7 @@ private fun CalendarScreen(
     tasks: List<BoopTask>,
     syncRequest: Int,
     onOpenTask: (BoopTask) -> Unit,
+    onOpenEvent: (Long) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1993,7 +2093,6 @@ private fun CalendarScreen(
                 },
             )
         }
-        Text(lastSyncStatus, color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
         Box(Modifier.fillMaxWidth().animateContentSize()) {
             Crossfade(targetState = compactWeekMode, label = "month_week_smooth") { weekMode ->
                 if (!weekMode) {
@@ -2146,7 +2245,7 @@ private fun CalendarScreen(
                 }
             } else {
                 val minuteHeight = 1.1f
-                val minBlockHeight = 88.dp
+                val uniformBlockHeight = 110.dp
                 items(timelineRenderItems, key = { it.item.id }) { render ->
                     val item = render.item
                     val isTask = item.isTask
@@ -2177,47 +2276,42 @@ private fun CalendarScreen(
                             }
                         }
                     }
-                    val durationMinutes = ((item.endMillis - item.startMillis) / 60_000L).coerceAtLeast(5)
-                    val blockHeight = maxOf(minBlockHeight, (durationMinutes * minuteHeight).dp)
-                    Row(
-                        Modifier
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = if (isTask) Color(0xFF1C2533) else Color(0xFF151517)),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Column(
-                            modifier = Modifier.width(56.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(SimpleDateFormat("HH:mm", Locale.US).format(item.startMillis), color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
-                            Box(
-                                Modifier
-                                    .padding(top = 4.dp)
-                                    .width(2.dp)
-                                    .height(blockHeight)
-                                    .background(Color(0xFF3B3B40)),
-                            )
-                        }
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = if (isTask) Color(0xFF1C2533) else Color(0xFF151517)),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(blockHeight)
-                                .clickable(enabled = isTask) {
+                            .height(uniformBlockHeight)
+                            .clickable {
+                                if (isTask) {
                                     val taskId = item.id.removePrefix("task_")
                                     dayTasks.firstOrNull { it.id == taskId }?.let(onOpenTask)
-                                },
-                        ) {
-                            val short = durationMinutes <= 60
-                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                } else {
+                                    val eventId = item.id.removePrefix("event_").substringBefore('_').toLongOrNull()
+                                    if (eventId != null) onOpenEvent(eventId)
+                                }
+                            },
+                    ) {
+                        Box(Modifier.fillMaxSize().padding(12.dp)) {
+                            Text(
+                                text = SimpleDateFormat("HH:mm", Locale.US).format(item.startMillis),
+                                color = Color(0xFFBFBFBF),
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.align(Alignment.TopEnd),
+                            )
+                            Text(
+                                text = SimpleDateFormat("HH:mm", Locale.US).format(item.endMillis),
+                                color = Color(0xFF8E8E90),
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.align(Alignment.BottomEnd),
+                            )
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.CenterStart)
+                                    .fillMaxWidth(0.78f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
                                 Text(item.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text(
-                                    "${SimpleDateFormat("HH:mm", Locale.US).format(item.startMillis)} - ${SimpleDateFormat("HH:mm", Locale.US).format(item.endMillis)}",
-                                    color = Color(0xFFBFBFBF),
-                                    style = if (short) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodySmall,
-                                )
                                 Text(item.detail, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(if (isTask) "Boop task" else "Google Calendar", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
                             }
@@ -2946,6 +3040,40 @@ private fun insertDeviceCalendarEvent(
     }
 }
 
+private fun updateDeviceCalendarEvent(
+    context: Context,
+    eventId: Long,
+    calendarId: Long,
+    title: String,
+    description: String,
+    location: String,
+    allDay: Boolean,
+    startAt: Long,
+    endAt: Long,
+): Boolean {
+    return try {
+        val values = ContentValues().apply {
+            put(CalendarContract.Events.CALENDAR_ID, calendarId)
+            put(CalendarContract.Events.TITLE, title)
+            put(CalendarContract.Events.DESCRIPTION, description)
+            put(CalendarContract.Events.EVENT_LOCATION, location)
+            put(CalendarContract.Events.DTSTART, startAt)
+            put(CalendarContract.Events.DTEND, maxOf(endAt, startAt + 60_000L))
+            put(CalendarContract.Events.ALL_DAY, if (allDay) 1 else 0)
+            put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+        }
+        val rows = context.contentResolver.update(
+            CalendarContract.Events.CONTENT_URI,
+            values,
+            "${CalendarContract.Events._ID} = ?",
+            arrayOf(eventId.toString()),
+        )
+        rows > 0
+    } catch (_: Throwable) {
+        false
+    }
+}
+
 @Composable
 private fun EventEditorSheet(
     initial: ItemSheet.EventSheet,
@@ -2964,7 +3092,7 @@ private fun EventEditorSheet(
     var notifyHoursBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyHoursBefore.toString()) }
     var pickStart by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
     var pickEnd by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
-    var selectedCalId by rememberSaveable(initial.sessionKey) { mutableLongStateOf(-1L) }
+    var selectedCalId by rememberSaveable(initial.sessionKey) { mutableLongStateOf(initial.calendarId ?: -1L) }
     var calendars by remember { mutableStateOf(emptyList<DeviceCalendarChoice>()) }
     var writeGranted by remember {
         mutableStateOf(
@@ -2991,7 +3119,7 @@ private fun EventEditorSheet(
         verticalAlignment = Alignment.Top,
     ) {
         Column(Modifier.weight(1f)) {
-            BoopSheetHeaderTitle("New event")
+            BoopSheetHeaderTitle(if (initial.eventId == null) "New event" else "Edit event")
         }
         IconButton(onClick = onDismiss) {
             Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
@@ -3118,16 +3246,31 @@ private fun EventEditorSheet(
             Toast.makeText(context, "No writable calendar found.", Toast.LENGTH_SHORT).show()
             return@BoopWhiteButton
         }
-        val eventId = insertDeviceCalendarEvent(
-            context = context,
-            calendarId = calendarId,
-            title = title.trim(),
-            description = description.trim(),
-            location = location.trim(),
-            allDay = allDay,
-            startAt = startAt,
-            endAt = endAt,
-        )
+        val eventId = if (initial.eventId == null) {
+            insertDeviceCalendarEvent(
+                context = context,
+                calendarId = calendarId,
+                title = title.trim(),
+                description = description.trim(),
+                location = location.trim(),
+                allDay = allDay,
+                startAt = startAt,
+                endAt = endAt,
+            )
+        } else {
+            val okUpdate = updateDeviceCalendarEvent(
+                context = context,
+                eventId = initial.eventId,
+                calendarId = calendarId,
+                title = title.trim(),
+                description = description.trim(),
+                location = location.trim(),
+                allDay = allDay,
+                startAt = startAt,
+                endAt = endAt,
+            )
+            if (okUpdate) initial.eventId else -1L
+        }
         val ok = eventId > 0
         if (ok) {
             EventReminderScheduler.schedule(
