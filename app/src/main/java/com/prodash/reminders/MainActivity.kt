@@ -490,7 +490,7 @@ private fun BoopApp() {
                     Column(
                         Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight(0.96f)
+                                .fillMaxHeight(0.9f)
                             .padding(horizontal = 20.dp)
                             .padding(bottom = 28.dp)
                             .imePadding()
@@ -866,6 +866,29 @@ private fun extractLinksFromBody(htmlOrText: String): List<String> {
     val plain = HtmlCompat.fromHtml(htmlOrText, HtmlCompat.FROM_HTML_MODE_COMPACT).toString()
     val regex = Regex("""https?://[^\s<>()]+""")
     return regex.findAll(plain).map { it.value.trim() }.distinct().toList()
+}
+
+private fun parseNoteAttachments(raw: String?): List<String> {
+    val value = raw.orEmpty().trim()
+    if (value.isBlank()) return emptyList()
+    if (value.startsWith("[")) {
+        return try {
+            val arr = JSONArray(value)
+            (0 until arr.length()).mapNotNull { idx -> arr.optString(idx).takeIf { it.isNotBlank() } }
+        } catch (_: Throwable) {
+            listOf(value)
+        }
+    }
+    return listOf(value)
+}
+
+private fun serializeNoteAttachments(values: List<String>): String? {
+    val clean = values.map { it.trim() }.filter { it.isNotBlank() }.distinct().take(25)
+    if (clean.isEmpty()) return null
+    if (clean.size == 1) return clean.first()
+    val arr = JSONArray()
+    clean.forEach { arr.put(it) }
+    return arr.toString()
 }
 
 private suspend fun fetchWebTitle(url: String): String? = withContext(Dispatchers.IO) {
@@ -1351,23 +1374,46 @@ private fun noteEditInsertBulletLine(editText: EditText?) {
     val et = editText ?: return
     val text = et.text as? Editable ?: return
     val len = text.length
-    val pos = et.selectionStart.coerceIn(0, len)
-    val prefix = if (pos == 0 || text.getOrNull(pos - 1) == '\n') "• " else "\n• "
-    text.insert(pos, prefix)
-    et.setSelection((pos + prefix.length).coerceAtMost(text.length))
+    val s = minOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
+    val e = maxOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
+    if (e > s) {
+        val selected = text.substring(s, e)
+        val replaced = selected.split('\n').joinToString("\n") { line ->
+            if (line.trim().isBlank()) line else "• ${line.trimStart()}"
+        }
+        text.replace(s, e, replaced)
+        et.setSelection((s + replaced.length).coerceAtMost(text.length))
+    } else {
+        val pos = s
+        val prefix = if (pos == 0 || text.getOrNull(pos - 1) == '\n') "• " else "\n• "
+        text.insert(pos, prefix)
+        et.setSelection((pos + prefix.length).coerceAtMost(text.length))
+    }
 }
 
 private fun noteEditInsertNumberedLine(editText: EditText?) {
     val et = editText ?: return
     val text = et.text as? Editable ?: return
     val len = text.length
-    val pos = et.selectionStart.coerceIn(0, len)
-    val before = text.substring(0, pos)
-    val lineMatches = Regex("""(?m)^(\d+)\.\s""").findAll(before).toList()
-    val nextNum = (lineMatches.lastOrNull()?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0) + 1
-    val prefix = if (pos == 0 || text.getOrNull(pos - 1) == '\n') "$nextNum. " else "\n$nextNum. "
-    text.insert(pos, prefix)
-    et.setSelection((pos + prefix.length).coerceAtMost(text.length))
+    val s = minOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
+    val e = maxOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
+    if (e > s) {
+        val selected = text.substring(s, e)
+        var idx = 1
+        val replaced = selected.split('\n').joinToString("\n") { line ->
+            if (line.trim().isBlank()) line else "${idx++}. ${line.trimStart()}"
+        }
+        text.replace(s, e, replaced)
+        et.setSelection((s + replaced.length).coerceAtMost(text.length))
+    } else {
+        val pos = s
+        val before = text.substring(0, pos)
+        val lineMatches = Regex("""(?m)^(\d+)\.\s""").findAll(before).toList()
+        val nextNum = (lineMatches.lastOrNull()?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0) + 1
+        val prefix = if (pos == 0 || text.getOrNull(pos - 1) == '\n') "$nextNum. " else "\n$nextNum. "
+        text.insert(pos, prefix)
+        et.setSelection((pos + prefix.length).coerceAtMost(text.length))
+    }
 }
 
 private fun noteEditInsertLink(editText: EditText?, url: String) {
@@ -1515,11 +1561,12 @@ private fun storedAttachmentForCoil(stored: String?): Any? {
 private fun extractTextFromAttachment(context: Context, stored: String?): String {
     if (stored.isNullOrBlank()) return ""
     return try {
+        val primary = parseNoteAttachments(stored).firstOrNull() ?: return ""
         val image = when {
-            stored.startsWith("content:") -> InputImage.fromFilePath(context, Uri.parse(stored))
-            stored.startsWith("file:") -> InputImage.fromFilePath(context, Uri.parse(stored))
+            primary.startsWith("content:") -> InputImage.fromFilePath(context, Uri.parse(primary))
+            primary.startsWith("file:") -> InputImage.fromFilePath(context, Uri.parse(primary))
             else -> {
-                val file = File(stored)
+                val file = File(primary)
                 if (!file.exists()) return ""
                 InputImage.fromFilePath(context, Uri.fromFile(file))
             }
@@ -1891,6 +1938,8 @@ private fun CalendarScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var showExternalCalDialog by rememberSaveable { mutableStateOf(false) }
+    var externalCalUrl by rememberSaveable { mutableStateOf("") }
     val basePage = 1200
     val monthPager = rememberPagerState(initialPage = basePage, pageCount = { 2400 })
     val now = Calendar.getInstance()
@@ -2093,6 +2142,49 @@ private fun CalendarScreen(
                 },
             )
         }
+        TextButton(onClick = { showExternalCalDialog = true }) {
+            Text("Add external calendar", color = Color(0xFFBFBFBF))
+        }
+        if (showExternalCalDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showExternalCalDialog = false },
+                title = { Text("Subscribe external calendar", color = Color.White) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Paste ICS/webcal URL (e.g., F1 feed).", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                        BoopFilledTextField(
+                            value = externalCalUrl,
+                            onValueChange = { externalCalUrl = it },
+                            label = { Text("Calendar URL") },
+                            singleLine = true,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val raw = externalCalUrl.trim()
+                            val openUrl = when {
+                                raw.startsWith("webcal://", true) -> "https://" + raw.removePrefix("webcal://")
+                                raw.startsWith("http://", true) || raw.startsWith("https://", true) -> raw
+                                else -> "https://$raw"
+                            }
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(openUrl)))
+                            } catch (_: Throwable) {
+                            }
+                            showExternalCalDialog = false
+                        },
+                    ) { Text("Open", color = Color.White) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showExternalCalDialog = false }) {
+                        Text("Cancel", color = Color(0xFFBFBFBF))
+                    }
+                },
+                containerColor = Color(0xFF151517),
+            )
+        }
         Box(Modifier.fillMaxWidth().animateContentSize()) {
             Crossfade(targetState = compactWeekMode, label = "month_week_smooth") { weekMode ->
                 if (!weekMode) {
@@ -2205,7 +2297,13 @@ private fun CalendarScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 allDayEvents.forEach { event ->
-                    Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFF26262B)) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF26262B),
+                        modifier = Modifier.clickable {
+                            onOpenEvent(event.id)
+                        },
+                    ) {
                         Text(
                             text = event.title.ifBlank { "All-day event" },
                             color = Color.White,
@@ -2250,31 +2348,7 @@ private fun CalendarScreen(
                     val item = render.item
                     val isTask = item.isTask
                     if (render.gapMinutesBefore > 0) {
-                        val gapHeight = (render.gapMinutesBefore * minuteHeight).dp
-                        val lineCount = (render.gapMinutesBefore / 60L).toInt().coerceAtLeast(1)
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(gapHeight),
-                            verticalArrangement = Arrangement.SpaceEvenly,
-                        ) {
-                            repeat(lineCount) { idx ->
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    val stamp = item.startMillis - ((lineCount - idx).toLong() * 60L * 60_000L)
-                                    Text(
-                                        SimpleDateFormat("HH:mm", Locale.US).format(stamp.coerceAtLeast(selectedDay.timeInMillis)),
-                                        color = Color(0xFF66666A),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.width(56.dp),
-                                    )
-                                    Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF2D2D31)))
-                                }
-                            }
-                        }
+                        Spacer(Modifier.height((render.gapMinutesBefore * minuteHeight).dp.coerceAtMost(80.dp)))
                     }
                     Card(
                         colors = CardDefaults.cardColors(containerColor = if (isTask) Color(0xFF1C2533) else Color(0xFF151517)),
@@ -2324,14 +2398,18 @@ private fun CalendarScreen(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun NotesListScreen(
     notes: List<BoopNote>,
     onOpenNote: (BoopNote) -> Unit,
 ) {
+    val activeNotes = remember(notes) { notes.filter { !it.archived } }
+    val archivedNotes = remember(notes) { notes.filter { it.archived }.sortedByDescending { it.updatedAtMillis } }
+    var showArchive by rememberSaveable { mutableStateOf(false) }
     var selectedTag by rememberSaveable { mutableStateOf("All") }
-    val availableTags = remember(notes) { notes.flatMap { parseNoteTags(it.tagsCsv) }.distinctBy { it.lowercase(Locale.getDefault()) } }
-    val visibleNotes = remember(notes, selectedTag) {
-        if (selectedTag == "All") notes else notes.filter { n ->
+    val availableTags = remember(activeNotes) { activeNotes.flatMap { parseNoteTags(it.tagsCsv) }.distinctBy { it.lowercase(Locale.getDefault()) } }
+    val visibleNotes = remember(activeNotes, selectedTag) {
+        if (selectedTag == "All") activeNotes else activeNotes.filter { n ->
             parseNoteTags(n.tagsCsv).any { it.equals(selectedTag, ignoreCase = true) }
         }
     }
@@ -2341,7 +2419,20 @@ private fun NotesListScreen(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Notes", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text("Notes", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+            FloatingActionButton(
+                onClick = { showArchive = true },
+                containerColor = Color.White,
+                contentColor = Color.Black,
+            ) {
+                Icon(Icons.Outlined.Archive, contentDescription = "Archived notes")
+            }
+        }
         if (availableTags.isNotEmpty()) {
             Row(
                 Modifier
@@ -2382,7 +2473,8 @@ private fun NotesListScreen(
                         .fillMaxWidth()
                         .clickable { onOpenNote(note) },
                 ) {
-                    val hasImage = !note.attachmentUri.isNullOrBlank()
+                    val images = parseNoteAttachments(note.attachmentUri)
+                    val hasImage = images.isNotEmpty()
                     val hasAudio = !note.audioUri.isNullOrBlank()
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = Color.White)
@@ -2401,22 +2493,37 @@ private fun NotesListScreen(
                         }
                         if (hasImage) {
                             val ctx = LocalContext.current
-                            Box(
+                            Row(
                                 Modifier
                                     .fillMaxWidth()
                                     .height(160.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF0A0A0B)),
+                                    .clip(RoundedCornerShape(12.dp)),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(ctx)
-                                        .data(storedAttachmentForCoil(note.attachmentUri))
-                                        .crossfade(false)
-                                        .build(),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
+                                images.take(3).forEach { imageUri ->
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(ctx)
+                                            .data(storedAttachmentForCoil(imageUri))
+                                            .crossfade(false)
+                                            .build(),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF0A0A0B)),
+                                    )
+                                }
+                                repeat((3 - images.take(3).size).coerceAtLeast(0)) {
+                                    Box(
+                                        Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF0A0A0B)),
+                                    )
+                                }
                             }
                         }
                         if (hasAudio) {
@@ -2426,6 +2533,54 @@ private fun NotesListScreen(
                         if (links.isNotEmpty()) {
                             links.take(2).forEach { link ->
                                 NoteLinkPreviewCard(link)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showArchive) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showArchive = false },
+            sheetState = sheetState,
+            containerColor = Color(0xFF111113),
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.75f)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("Archived notes", fontWeight = FontWeight.Bold, color = Color.White, style = MaterialTheme.typography.titleLarge)
+                if (archivedNotes.isEmpty()) {
+                    Text("No archived notes yet.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(archivedNotes, key = { it.id }) { note ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        showArchive = false
+                                        onOpenNote(note)
+                                    },
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                    Text(plainNoteSnippet(note.body, 80), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }
@@ -2964,7 +3119,7 @@ private fun HabitTodayCheckInSheet(
     Column(
         Modifier
             .fillMaxWidth()
-            .fillMaxHeight(0.92f)
+            .fillMaxHeight(0.88f)
             .verticalScroll(scroll)
             .padding(horizontal = 20.dp)
             .padding(bottom = 28.dp),
@@ -2978,9 +3133,6 @@ private fun HabitTodayCheckInSheet(
                 BoopSheetHeaderTitle("Habits week")
                 Spacer(Modifier.height(4.dp))
                 Text("Check-off habits toggle today; quantity habits let you add minutes/mL with +/-.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodySmall)
-            }
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -3120,9 +3272,6 @@ private fun EventEditorSheet(
     ) {
         Column(Modifier.weight(1f)) {
             BoopSheetHeaderTitle(if (initial.eventId == null) "New event" else "Edit event")
-        }
-        IconButton(onClick = onDismiss) {
-            Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
         }
     }
     Spacer(Modifier.height(12.dp))
@@ -3314,9 +3463,6 @@ private fun TaskEditorSheet(
                     Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFF8A8A))
                 }
             }
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
-            }
         }
     }
     Spacer(Modifier.height(12.dp))
@@ -3391,16 +3537,20 @@ private fun NoteEditorSheet(
     val session = initial.sessionKey
     var title by rememberSaveable(session) { mutableStateOf(initial.title) }
     var tagsCsv by rememberSaveable(session) { mutableStateOf(initial.tagsCsv) }
-    var attachmentStored by remember(session) { mutableStateOf(initial.attachmentUri) }
+    var attachmentStored by remember(session) { mutableStateOf(parseNoteAttachments(initial.attachmentUri)) }
     var audioStored by remember(session) { mutableStateOf(initial.audioUri) }
     var bodyEdit by remember(session) { mutableStateOf<EditText?>(null) }
     var recording by remember(session) { mutableStateOf(false) }
     var recordingStartedAt by remember(session) { mutableLongStateOf(0L) }
     var recorder by remember(session) { mutableStateOf<MediaRecorder?>(null) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val copied = copyAttachmentToInternalFile(context, uri, UUID.randomUUID().toString())
-        attachmentStored = copied ?: uri.toString()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        val existing = attachmentStored.toMutableList()
+        uris.take((25 - existing.size).coerceAtLeast(0)).forEach { uri ->
+            val copied = copyAttachmentToInternalFile(context, uri, UUID.randomUUID().toString())
+            existing.add(copied ?: uri.toString())
+        }
+        attachmentStored = existing.distinct().take(25)
     }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted) return@rememberLauncherForActivityResult
@@ -3450,13 +3600,38 @@ private fun NoteEditorSheet(
             BoopSheetHeaderTitle(if (initial.id == null) "New note" else "Edit note")
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
+            if (initial.id != null) {
+                IconButton(
+                    onClick = {
+                        val editable = bodyEdit?.text
+                        val bodyHtml = if (editable is Spanned) {
+                            Html.toHtml(editable, 0x1).trim()
+                        } else {
+                            editable?.toString()?.trim().orEmpty()
+                        }
+                        val serializedAttachments = serializeNoteAttachments(attachmentStored)
+                        onSave(
+                            BoopNote(
+                                id = initial.id,
+                                title = title.trim(),
+                                body = bodyHtml,
+                                attachmentUri = serializedAttachments,
+                                audioUri = audioStored,
+                                tagsCsv = normalizeNoteTags(tagsCsv),
+                                ocrText = extractTextFromAttachment(context, serializedAttachments),
+                                archived = true,
+                                updatedAtMillis = System.currentTimeMillis(),
+                            ),
+                        )
+                    },
+                ) {
+                    Icon(Icons.Outlined.Archive, contentDescription = "Archive", tint = Color(0xFFFFD98A))
+                }
+            }
             if (onDelete != null) {
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFF8A8A))
                 }
-            }
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
             }
         }
     }
@@ -3533,11 +3708,18 @@ private fun NoteEditorSheet(
                     setTextColor(android.graphics.Color.WHITE)
                     setHintTextColor(android.graphics.Color.parseColor("#8A8A8A"))
                     setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    setText("https://")
+                    setSelection(text.length)
+                }
+                if (previewLinks.size >= 25) {
+                    Toast.makeText(context, "Maximum 25 links per note.", Toast.LENGTH_SHORT).show()
+                    return@IconButton
                 }
                 AlertDialog.Builder(context)
-                    .setTitle("Add link")
+                    .setTitle("Add link preview")
+                    .setMessage("Link will be added to the note and shown as a preview card.")
                     .setView(urlInput)
-                    .setPositiveButton("Insert") { _, _ ->
+                    .setPositiveButton("Add link") { _, _ ->
                         noteEditInsertLink(bodyEdit, urlInput.text?.toString().orEmpty())
                     }
                     .setNegativeButton("Cancel", null)
@@ -3607,34 +3789,47 @@ private fun NoteEditorSheet(
             }
         }
     }
-    attachmentStored?.let { stored ->
+    if (attachmentStored.isNotEmpty()) {
         Spacer(Modifier.height(8.dp))
-        AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(storedAttachmentForCoil(stored))
-                .crossfade(false)
-                .build(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp)
-                .clip(RoundedCornerShape(16.dp)),
-        )
+        attachmentStored.chunked(3).forEach { row ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                row.forEach { stored ->
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(storedAttachmentForCoil(stored))
+                            .crossfade(false)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(12.dp)),
+                    )
+                }
+                repeat((3 - row.size).coerceAtLeast(0)) {
+                    Spacer(Modifier.weight(1f).fillMaxHeight())
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+        }
     }
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
         val noteId = initial.id ?: UUID.randomUUID().toString()
-        val resolvedAttachment = attachmentStored?.let { att ->
-            if (att.startsWith("content:")) copyAttachmentToInternalFile(context, Uri.parse(att), noteId) ?: att else att
-        }
+        val resolvedAttachment = serializeNoteAttachments(attachmentStored)
         val editable = bodyEdit?.text
         val bodyHtml = if (editable is Spanned) {
             Html.toHtml(editable, 0x1 /* Html.TO_HTML_PARCEL_OUTPUT_MODE */).trim()
         } else {
             editable?.toString()?.trim().orEmpty()
         }
-        if (title.isNotBlank() || bodyHtml.isNotBlank() || !resolvedAttachment.isNullOrBlank()) {
+        if (title.isNotBlank() || bodyHtml.isNotBlank()) {
             val ocrText = extractTextFromAttachment(context, resolvedAttachment)
             onSave(
                 BoopNote(
@@ -3645,6 +3840,7 @@ private fun NoteEditorSheet(
                     audioUri = audioStored,
                     tagsCsv = normalizeNoteTags(tagsCsv),
                     ocrText = ocrText,
+                    archived = initial.id?.let { false } ?: false,
                     updatedAtMillis = System.currentTimeMillis(),
                 ),
             )
@@ -3678,9 +3874,6 @@ private fun HabitEditorSheet(
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFF8A8A))
                 }
-            }
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White)
             }
         }
     }
@@ -3776,6 +3969,7 @@ data class BoopNote(
     val audioUri: String? = null,
     val tagsCsv: String = "",
     val ocrText: String = "",
+    val archived: Boolean = false,
     /** Last save time (local), used for week strip & search ordering. */
     val updatedAtMillis: Long = 0L,
 )
@@ -3856,6 +4050,7 @@ private class BoopRepository(private val store: LocalStore) {
                     item.optString("audioUri").ifBlank { null },
                     item.optString("tags"),
                     item.optString("ocrText"),
+                    item.optBoolean("archived", false),
                     u,
                 ),
             )
@@ -3905,6 +4100,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("audioUri", it.audioUri ?: "")
                     .put("tags", it.tagsCsv)
                     .put("ocrText", it.ocrText)
+                    .put("archived", it.archived)
                     .put("updatedAt", it.updatedAtMillis),
             )
         }
@@ -3925,6 +4121,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("audioUri", it.audioUri ?: "")
                     .put("tags", it.tagsCsv)
                     .put("ocrText", it.ocrText)
+                    .put("archived", it.archived)
                     .put("updatedAt", it.updatedAtMillis),
             )
         }
