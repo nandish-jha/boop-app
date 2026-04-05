@@ -210,6 +210,7 @@ private sealed class ItemSheet {
         val title: String,
         val reminderAt: Long,
         val done: Boolean,
+        val repeatEveryDays: Int,
     ) : ItemSheet()
 
     data class NoteSheet(
@@ -248,6 +249,7 @@ private sealed class ItemSheet {
         val notifyWeeksBefore: Int,
         val notifyDaysBefore: Int,
         val notifyHoursBefore: Int,
+        val repeatEveryDays: Int,
     ) : ItemSheet()
 }
 
@@ -304,6 +306,7 @@ private fun BoopApp() {
             title = task?.title.orEmpty(),
             reminderAt = task?.reminderAt ?: (System.currentTimeMillis() + 30 * 60_000),
             done = task?.done ?: false,
+            repeatEveryDays = task?.repeatEveryDays ?: 0,
         )
         speedDialExpanded = false
     }
@@ -354,6 +357,7 @@ private fun BoopApp() {
             notifyWeeksBefore = 0,
             notifyDaysBefore = 0,
             notifyHoursBefore = 0,
+            repeatEveryDays = existing?.repeatEveryDays ?: 0,
         )
         speedDialExpanded = false
     }
@@ -421,6 +425,13 @@ private fun BoopApp() {
                         },
                         onOpenTask = { openTaskSheet(null) },
                         onOpenEvent = { openEventSheet() },
+                        onOpenExternalCalendar = {
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://calendar.formula1.com/")))
+                            } catch (_: Throwable) {
+                            }
+                            speedDialExpanded = false
+                        },
                         onOpenNote = { openNoteSheet(null) },
                         onOpenHabit = { openHabitSheet(null) },
                     )
@@ -504,20 +515,14 @@ private fun BoopApp() {
                                     {
                                         repository.deleteTask(id)
                                         refresh()
-                                        scope.launch {
-                                            delay(48)
-                                            itemSheet = null
-                                        }
+                                        itemSheet = null
                                     }
                                 },
                                 onSave = { task ->
                                     repository.saveTask(task)
                                     ReminderScheduler.schedule(AppContextHolder.context, task)
                                     refresh()
-                                    scope.launch {
-                                        delay(48)
-                                        itemSheet = null
-                                    }
+                                    itemSheet = null
                                 },
                             )
                             is ItemSheet.NoteSheet -> NoteEditorSheet(
@@ -527,19 +532,13 @@ private fun BoopApp() {
                                     {
                                         repository.deleteNote(id)
                                         refresh()
-                                        scope.launch {
-                                            delay(48)
-                                            itemSheet = null
-                                        }
+                                        itemSheet = null
                                     }
                                 },
                                 onSave = { note ->
                                     repository.saveNote(note)
                                     refresh()
-                                    scope.launch {
-                                        delay(48)
-                                        itemSheet = null
-                                    }
+                                    itemSheet = null
                                 },
                             )
                             is ItemSheet.HabitSheet -> HabitEditorSheet(
@@ -549,19 +548,13 @@ private fun BoopApp() {
                                     {
                                         repository.deleteHabit(id)
                                         refresh()
-                                        scope.launch {
-                                            delay(48)
-                                            itemSheet = null
-                                        }
+                                        itemSheet = null
                                     }
                                 },
                                 onSave = { habit ->
                                     repository.saveHabit(habit)
                                     refresh()
-                                    scope.launch {
-                                        delay(48)
-                                        itemSheet = null
-                                    }
+                                    itemSheet = null
                                 },
                             )
                             is ItemSheet.EventSheet -> EventEditorSheet(
@@ -569,10 +562,7 @@ private fun BoopApp() {
                                 onDismiss = { itemSheet = null },
                                 onSave = { ok ->
                                     if (ok) {
-                                        scope.launch {
-                                            delay(48)
-                                            itemSheet = null
-                                        }
+                                        itemSheet = null
                                     }
                                 },
                             )
@@ -752,6 +742,7 @@ private fun BoopSpeedDialFab(
     onSyncCalendar: () -> Unit,
     onOpenTask: () -> Unit,
     onOpenEvent: () -> Unit,
+    onOpenExternalCalendar: () -> Unit,
     onOpenNote: () -> Unit,
     onOpenHabit: () -> Unit,
 ) {
@@ -782,6 +773,11 @@ private fun BoopSpeedDialFab(
                         containerColor = Color.White,
                         contentColor = Color.Black,
                     ) { Icon(Icons.Outlined.Sync, contentDescription = "Sync calendar") }
+                    SmallFloatingActionButton(
+                        onClick = { onOpenExternalCalendar(); onExpandedChange(false) },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.Link, contentDescription = "Add external calendar") }
                 } else {
                     SmallFloatingActionButton(
                         onClick = { onOpenNote(); onExpandedChange(false) },
@@ -815,7 +811,7 @@ private fun BoopSpeedDialFab(
             contentColor = Color.Black,
             elevation = FloatingActionButtonDefaults.elevation(),
         ) {
-            Crossfade(targetState = expanded && selectedTab == 0, label = "fab_icon") { showClose ->
+            Crossfade(targetState = expanded, label = "fab_icon") { showClose ->
                 Icon(
                     imageVector = if (showClose) Icons.Outlined.Close else Icons.Outlined.Add,
                     contentDescription = if (showClose) "Close" else "Add",
@@ -1608,6 +1604,7 @@ private data class CalendarEventDetail(
     val allDay: Boolean,
     val startAt: Long,
     val endAt: Long,
+    val repeatEveryDays: Int,
 )
 
 private fun readGoogleCalendarIds(context: Context): Set<Long> {
@@ -1690,6 +1687,7 @@ private fun readCalendarEventDetail(context: Context, eventId: Long): CalendarEv
         CalendarContract.Events.ALL_DAY,
         CalendarContract.Events.DTSTART,
         CalendarContract.Events.DTEND,
+        CalendarContract.Events.RRULE,
     )
     val sel = "${CalendarContract.Events._ID} = ?"
     val args = arrayOf(eventId.toString())
@@ -1710,6 +1708,7 @@ private fun readCalendarEventDetail(context: Context, eventId: Long): CalendarEv
             allDay = c.getInt(c.getColumnIndex(CalendarContract.Events.ALL_DAY)) == 1,
             startAt = c.getLong(c.getColumnIndex(CalendarContract.Events.DTSTART)),
             endAt = c.getLong(c.getColumnIndex(CalendarContract.Events.DTEND)),
+            repeatEveryDays = parseRepeatDaysFromRRule(c.getString(c.getColumnIndex(CalendarContract.Events.RRULE)).orEmpty()),
         )
     }
     return null
@@ -1938,8 +1937,6 @@ private fun CalendarScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var showExternalCalDialog by rememberSaveable { mutableStateOf(false) }
-    var externalCalUrl by rememberSaveable { mutableStateOf("") }
     val basePage = 1200
     val monthPager = rememberPagerState(initialPage = basePage, pageCount = { 2400 })
     val now = Calendar.getInstance()
@@ -2142,49 +2139,6 @@ private fun CalendarScreen(
                 },
             )
         }
-        TextButton(onClick = { showExternalCalDialog = true }) {
-            Text("Add external calendar", color = Color(0xFFBFBFBF))
-        }
-        if (showExternalCalDialog) {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showExternalCalDialog = false },
-                title = { Text("Subscribe external calendar", color = Color.White) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Paste ICS/webcal URL (e.g., F1 feed).", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
-                        BoopFilledTextField(
-                            value = externalCalUrl,
-                            onValueChange = { externalCalUrl = it },
-                            label = { Text("Calendar URL") },
-                            singleLine = true,
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            val raw = externalCalUrl.trim()
-                            val openUrl = when {
-                                raw.startsWith("webcal://", true) -> "https://" + raw.removePrefix("webcal://")
-                                raw.startsWith("http://", true) || raw.startsWith("https://", true) -> raw
-                                else -> "https://$raw"
-                            }
-                            try {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(openUrl)))
-                            } catch (_: Throwable) {
-                            }
-                            showExternalCalDialog = false
-                        },
-                    ) { Text("Open", color = Color.White) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showExternalCalDialog = false }) {
-                        Text("Cancel", color = Color(0xFFBFBFBF))
-                    }
-                },
-                containerColor = Color(0xFF151517),
-            )
-        }
         Box(Modifier.fillMaxWidth().animateContentSize()) {
             Crossfade(targetState = compactWeekMode, label = "month_week_smooth") { weekMode ->
                 if (!weekMode) {
@@ -2342,14 +2296,10 @@ private fun CalendarScreen(
                     Text("No events or tasks for this day.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
-                val minuteHeight = 1.1f
                 val uniformBlockHeight = 110.dp
                 items(timelineRenderItems, key = { it.item.id }) { render ->
                     val item = render.item
                     val isTask = item.isTask
-                    if (render.gapMinutesBefore > 0) {
-                        Spacer(Modifier.height((render.gapMinutesBefore * minuteHeight).dp.coerceAtMost(80.dp)))
-                    }
                     Card(
                         colors = CardDefaults.cardColors(containerColor = if (isTask) Color(0xFF1C2533) else Color(0xFF151517)),
                         shape = RoundedCornerShape(14.dp),
@@ -2509,15 +2459,6 @@ private fun NotesListScreen(
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(Color(0xFF0A0A0B)),
-                                    )
-                                }
-                                repeat((3 - images.take(3).size).coerceAtLeast(0)) {
-                                    Box(
-                                        Modifier
                                             .weight(1f)
                                             .fillMaxHeight()
                                             .clip(RoundedCornerShape(10.dp))
@@ -3173,6 +3114,7 @@ private fun insertDeviceCalendarEvent(
     allDay: Boolean,
     startAt: Long,
     endAt: Long,
+    repeatEveryDays: Int,
 ): Long {
     return try {
         val values = ContentValues().apply {
@@ -3184,6 +3126,7 @@ private fun insertDeviceCalendarEvent(
             put(CalendarContract.Events.DTEND, maxOf(endAt, startAt + 60_000L))
             put(CalendarContract.Events.ALL_DAY, if (allDay) 1 else 0)
             put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+            if (repeatEveryDays > 0) put(CalendarContract.Events.RRULE, calendarRRuleFromRepeatDays(repeatEveryDays))
         }
         val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
         uri?.lastPathSegment?.toLongOrNull() ?: -1L
@@ -3202,6 +3145,7 @@ private fun updateDeviceCalendarEvent(
     allDay: Boolean,
     startAt: Long,
     endAt: Long,
+    repeatEveryDays: Int,
 ): Boolean {
     return try {
         val values = ContentValues().apply {
@@ -3213,6 +3157,11 @@ private fun updateDeviceCalendarEvent(
             put(CalendarContract.Events.DTEND, maxOf(endAt, startAt + 60_000L))
             put(CalendarContract.Events.ALL_DAY, if (allDay) 1 else 0)
             put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+            if (repeatEveryDays > 0) {
+                put(CalendarContract.Events.RRULE, calendarRRuleFromRepeatDays(repeatEveryDays))
+            } else {
+                putNull(CalendarContract.Events.RRULE)
+            }
         }
         val rows = context.contentResolver.update(
             CalendarContract.Events.CONTENT_URI,
@@ -3223,6 +3172,26 @@ private fun updateDeviceCalendarEvent(
         rows > 0
     } catch (_: Throwable) {
         false
+    }
+}
+
+private fun calendarRRuleFromRepeatDays(repeatEveryDays: Int): String {
+    val days = repeatEveryDays.coerceAtLeast(1)
+    return when {
+        days == 365 -> "FREQ=YEARLY;INTERVAL=1"
+        days % 7 == 0 -> "FREQ=WEEKLY;INTERVAL=${(days / 7).coerceAtLeast(1)}"
+        else -> "FREQ=DAILY;INTERVAL=$days"
+    }
+}
+
+private fun parseRepeatDaysFromRRule(rrule: String): Int {
+    val normalized = rrule.uppercase(Locale.US)
+    val interval = Regex("INTERVAL=(\\d+)").find(normalized)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+    return when {
+        "FREQ=YEARLY" in normalized -> 365 * interval
+        "FREQ=WEEKLY" in normalized -> 7 * interval
+        "FREQ=DAILY" in normalized -> interval
+        else -> 0
     }
 }
 
@@ -3242,6 +3211,7 @@ private fun EventEditorSheet(
     var notifyWeeksBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyWeeksBefore.toString()) }
     var notifyDaysBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyDaysBefore.toString()) }
     var notifyHoursBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyHoursBefore.toString()) }
+    var repeatEveryDays by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.repeatEveryDays.toString().takeIf { it != "0" } ?: "") }
     var pickStart by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
     var pickEnd by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
     var selectedCalId by rememberSaveable(initial.sessionKey) { mutableLongStateOf(initial.calendarId ?: -1L) }
@@ -3383,6 +3353,13 @@ private fun EventEditorSheet(
             singleLine = true,
         )
     }
+    Spacer(Modifier.height(8.dp))
+    BoopFilledTextField(
+        value = repeatEveryDays,
+        onValueChange = { repeatEveryDays = it.filter { ch -> ch.isDigit() }.take(3) },
+        label = { Text("Repeat every N days (1=daily, 7=weekly, 365=yearly)") },
+        singleLine = true,
+    )
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save event") {
         if (!writeGranted) {
@@ -3405,6 +3382,7 @@ private fun EventEditorSheet(
                 allDay = allDay,
                 startAt = startAt,
                 endAt = endAt,
+                repeatEveryDays = repeatEveryDays.toIntOrNull()?.coerceAtLeast(0) ?: 0,
             )
         } else {
             val okUpdate = updateDeviceCalendarEvent(
@@ -3417,6 +3395,7 @@ private fun EventEditorSheet(
                 allDay = allDay,
                 startAt = startAt,
                 endAt = endAt,
+                repeatEveryDays = repeatEveryDays.toIntOrNull()?.coerceAtLeast(0) ?: 0,
             )
             if (okUpdate) initial.eventId else -1L
         }
@@ -3448,6 +3427,7 @@ private fun TaskEditorSheet(
     var title by rememberSaveable(sheetKey) { mutableStateOf(initial.title) }
     var reminderAt by remember(sheetKey, initial.reminderAt) { mutableLongStateOf(initial.reminderAt) }
     var done by remember(sheetKey) { mutableStateOf(initial.done) }
+    var repeatEveryDays by rememberSaveable(sheetKey) { mutableStateOf(initial.repeatEveryDays.toString().takeIf { it != "0" } ?: "") }
     var showReminderPicker by remember(sheetKey) { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth(),
@@ -3470,6 +3450,13 @@ private fun TaskEditorSheet(
         value = title,
         onValueChange = { title = it },
         label = { Text("Task") },
+    )
+    Spacer(Modifier.height(8.dp))
+    BoopFilledTextField(
+        value = repeatEveryDays,
+        onValueChange = { repeatEveryDays = it.filter { ch -> ch.isDigit() }.take(3) },
+        label = { Text("Repeat every N days (0 = no repeat)") },
+        singleLine = true,
     )
     Spacer(Modifier.height(12.dp))
     Surface(
@@ -3520,6 +3507,7 @@ private fun TaskEditorSheet(
                     title = title.trim(),
                     reminderAt = reminderAt,
                     done = done,
+                    repeatEveryDays = repeatEveryDays.toIntOrNull()?.coerceAtLeast(0) ?: 0,
                 ),
             )
         }
@@ -3812,9 +3800,6 @@ private fun NoteEditorSheet(
                             .clip(RoundedCornerShape(12.dp)),
                     )
                 }
-                repeat((3 - row.size).coerceAtLeast(0)) {
-                    Spacer(Modifier.weight(1f).fillMaxHeight())
-                }
             }
             Spacer(Modifier.height(4.dp))
         }
@@ -3960,7 +3945,13 @@ private fun BoopWhiteButton(label: String, onClick: () -> Unit) {
     }
 }
 
-data class BoopTask(val id: String, val title: String, val reminderAt: Long, val done: Boolean)
+data class BoopTask(
+    val id: String,
+    val title: String,
+    val reminderAt: Long,
+    val done: Boolean,
+    val repeatEveryDays: Int = 0,
+)
 data class BoopNote(
     val id: String,
     val title: String,
@@ -4025,7 +4016,13 @@ private class BoopRepository(private val store: LocalStore) {
 
     fun readTasks(): List<BoopTask> {
         return parseArray(store.read("tasks")) { item ->
-            BoopTask(item.getString("id"), item.getString("title"), item.getLong("reminderAt"), item.getBoolean("done"))
+            BoopTask(
+                id = item.getString("id"),
+                title = item.getString("title"),
+                reminderAt = item.getLong("reminderAt"),
+                done = item.getBoolean("done"),
+                repeatEveryDays = item.optInt("repeatEveryDays", 0),
+            )
         }
     }
 
@@ -4183,7 +4180,14 @@ private class BoopRepository(private val store: LocalStore) {
         }
         val arr = JSONArray()
         updated.forEach {
-            arr.put(JSONObject().put("id", it.id).put("title", it.title).put("reminderAt", it.reminderAt).put("done", it.done))
+            arr.put(
+                JSONObject()
+                    .put("id", it.id)
+                    .put("title", it.title)
+                    .put("reminderAt", it.reminderAt)
+                    .put("done", it.done)
+                    .put("repeatEveryDays", it.repeatEveryDays),
+            )
         }
         store.save("tasks", arr.toString())
         sync("tasks", arr.toString())
@@ -4222,7 +4226,21 @@ object ReminderScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        if (task.done) {
+            manager.cancel(pending)
+            return
+        }
         try {
+            if (task.repeatEveryDays > 0) {
+                val intervalMillis = task.repeatEveryDays * 24L * 60L * 60L * 1000L
+                manager.setRepeating(
+                    AlarmManager.RTC_WAKEUP,
+                    task.reminderAt,
+                    intervalMillis,
+                    pending,
+                )
+                return
+            }
             when {
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
                     if (manager.canScheduleExactAlarms()) {
@@ -4362,10 +4380,27 @@ private object TaskNotificationActions {
         val raw = pref.getString("tasks", "[]").orEmpty()
         val arr = JSONArray(raw)
         var changed = false
+        var rescheduleTask: BoopTask? = null
         for (i in 0 until arr.length()) {
             val item = arr.getJSONObject(i)
             if (item.optString("id") == taskId) {
-                if (!item.optBoolean("done", false)) {
+                val repeatEveryDays = item.optInt("repeatEveryDays", 0)
+                if (repeatEveryDays > 0) {
+                    val step = repeatEveryDays * 24L * 60L * 60L * 1000L
+                    val base = item.optLong("reminderAt", System.currentTimeMillis())
+                    var nextAt = base + step
+                    while (nextAt <= System.currentTimeMillis()) nextAt += step
+                    item.put("reminderAt", nextAt)
+                    item.put("done", false)
+                    changed = true
+                    rescheduleTask = BoopTask(
+                        id = item.optString("id"),
+                        title = item.optString("title"),
+                        reminderAt = nextAt,
+                        done = false,
+                        repeatEveryDays = repeatEveryDays,
+                    )
+                } else if (!item.optBoolean("done", false)) {
                     item.put("done", true)
                     changed = true
                 }
@@ -4374,6 +4409,7 @@ private object TaskNotificationActions {
         }
         if (changed) {
             pref.edit().putString("tasks", arr.toString()).apply()
+            rescheduleTask?.let { ReminderScheduler.schedule(context, it) }
         }
     }
 }
