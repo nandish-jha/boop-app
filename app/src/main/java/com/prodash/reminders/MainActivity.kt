@@ -2284,7 +2284,7 @@ private fun CalendarScreen(
                 },
             state = timelineState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             if (!calendarGranted) {
                 item {
@@ -3189,10 +3189,20 @@ private fun parseRepeatDaysFromRRule(rrule: String): Int {
     val interval = Regex("INTERVAL=(\\d+)").find(normalized)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
     return when {
         "FREQ=YEARLY" in normalized -> 365 * interval
+        "FREQ=MONTHLY" in normalized -> 30 * interval
         "FREQ=WEEKLY" in normalized -> 7 * interval
         "FREQ=DAILY" in normalized -> interval
         else -> 0
     }
+}
+
+private fun repeatFrequencyLabel(days: Int): String {
+    if (days <= 0) return "Does not repeat"
+    if (days == 1) return "Daily"
+    if (days == 7) return "Weekly"
+    if (days == 365) return "Yearly"
+    if (days % 7 == 0) return "Every ${days / 7} weeks"
+    return "Every $days days"
 }
 
 @Composable
@@ -3354,6 +3364,12 @@ private fun EventEditorSheet(
         )
     }
     Spacer(Modifier.height(8.dp))
+    Text(
+        text = "Repeat: ${repeatFrequencyLabel(repeatEveryDays.toIntOrNull() ?: initial.repeatEveryDays)}",
+        color = Color(0xFF8E8E90),
+        style = MaterialTheme.typography.labelSmall,
+    )
+    Spacer(Modifier.height(6.dp))
     BoopFilledTextField(
         value = repeatEveryDays,
         onValueChange = { repeatEveryDays = it.filter { ch -> ch.isDigit() }.take(3) },
