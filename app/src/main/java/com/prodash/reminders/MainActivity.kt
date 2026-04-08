@@ -2284,7 +2284,7 @@ private fun CalendarScreen(
                 },
             state = timelineState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (!calendarGranted) {
                 item {
@@ -2353,15 +2353,13 @@ private fun NotesListScreen(
     notes: List<BoopNote>,
     onOpenNote: (BoopNote) -> Unit,
 ) {
-    val activeNotes = remember(notes) { notes.filter { !it.archived } }
-    val archivedNotes = remember(notes) { notes.filter { it.archived }.sortedByDescending { it.updatedAtMillis } }
+    val activeNotes = notes.filter { !it.archived }
+    val archivedNotes = notes.filter { it.archived }.sortedByDescending { it.updatedAtMillis }
     var showArchive by rememberSaveable { mutableStateOf(false) }
     var selectedTag by rememberSaveable { mutableStateOf("All") }
-    val availableTags = remember(activeNotes) { activeNotes.flatMap { parseNoteTags(it.tagsCsv) }.distinctBy { it.lowercase(Locale.getDefault()) } }
-    val visibleNotes = remember(activeNotes, selectedTag) {
-        if (selectedTag == "All") activeNotes else activeNotes.filter { n ->
-            parseNoteTags(n.tagsCsv).any { it.equals(selectedTag, ignoreCase = true) }
-        }
+    val availableTags = activeNotes.flatMap { parseNoteTags(it.tagsCsv) }.distinctBy { it.lowercase(Locale.getDefault()) }
+    val visibleNotes = if (selectedTag == "All") activeNotes else activeNotes.filter { n ->
+        parseNoteTags(n.tagsCsv).any { it.equals(selectedTag, ignoreCase = true) }
     }
     Column(
         Modifier
@@ -3221,7 +3219,12 @@ private fun EventEditorSheet(
     var notifyWeeksBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyWeeksBefore.toString()) }
     var notifyDaysBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyDaysBefore.toString()) }
     var notifyHoursBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyHoursBefore.toString()) }
-    var repeatEveryDays by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.repeatEveryDays.toString().takeIf { it != "0" } ?: "") }
+    var repeatEveryDays by rememberSaveable(initial.sessionKey) { mutableIntStateOf(initial.repeatEveryDays.coerceAtLeast(0)) }
+    var customRepeatDays by rememberSaveable(initial.sessionKey) {
+        mutableStateOf(
+            initial.repeatEveryDays.takeIf { it !in setOf(0, 1, 7, 30, 365) }?.toString().orEmpty(),
+        )
+    }
     var pickStart by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
     var pickEnd by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
     var selectedCalId by rememberSaveable(initial.sessionKey) { mutableLongStateOf(initial.calendarId ?: -1L) }
@@ -3365,16 +3368,74 @@ private fun EventEditorSheet(
     }
     Spacer(Modifier.height(8.dp))
     Text(
-        text = "Repeat: ${repeatFrequencyLabel(repeatEveryDays.toIntOrNull() ?: initial.repeatEveryDays)}",
+        text = "Repeat",
         color = Color(0xFF8E8E90),
         style = MaterialTheme.typography.labelSmall,
     )
     Spacer(Modifier.height(6.dp))
-    BoopFilledTextField(
-        value = repeatEveryDays,
-        onValueChange = { repeatEveryDays = it.filter { ch -> ch.isDigit() }.take(3) },
-        label = { Text("Repeat every N days (1=daily, 7=weekly, 365=yearly)") },
-        singleLine = true,
+    val repeatOptions = listOf(
+        0 to "None",
+        1 to "Daily",
+        7 to "Weekly",
+        30 to "Monthly",
+        365 to "Yearly",
+    )
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        repeatOptions.forEach { (days, label) ->
+            val active = repeatEveryDays == days
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = if (active) Color.White else Color(0xFF242426),
+                modifier = Modifier.clickable {
+                    repeatEveryDays = days
+                    if (days in setOf(0, 1, 7, 30, 365)) customRepeatDays = ""
+                },
+            ) {
+                Text(
+                    label,
+                    color = if (active) Color.Black else Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                )
+            }
+        }
+        val customActive = repeatEveryDays !in setOf(0, 1, 7, 30, 365)
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = if (customActive) Color.White else Color(0xFF242426),
+            modifier = Modifier.clickable { if (repeatEveryDays in setOf(0, 1, 7, 30, 365)) repeatEveryDays = 2 },
+        ) {
+            Text(
+                "Custom",
+                color = if (customActive) Color.Black else Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            )
+        }
+    }
+    if (repeatEveryDays !in setOf(0, 1, 7, 30, 365)) {
+        Spacer(Modifier.height(6.dp))
+        BoopFilledTextField(
+            value = customRepeatDays,
+            onValueChange = {
+                val filtered = it.filter { ch -> ch.isDigit() }.take(3)
+                customRepeatDays = filtered
+                repeatEveryDays = filtered.toIntOrNull()?.coerceAtLeast(1) ?: repeatEveryDays
+            },
+            label = { Text("Every N days") },
+            singleLine = true,
+        )
+    }
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = repeatFrequencyLabel(repeatEveryDays),
+        color = Color(0xFF8E8E90),
+        style = MaterialTheme.typography.labelSmall,
     )
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save event") {
@@ -3398,7 +3459,7 @@ private fun EventEditorSheet(
                 allDay = allDay,
                 startAt = startAt,
                 endAt = endAt,
-                repeatEveryDays = repeatEveryDays.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+                repeatEveryDays = repeatEveryDays.coerceAtLeast(0),
             )
         } else {
             val okUpdate = updateDeviceCalendarEvent(
@@ -3411,7 +3472,7 @@ private fun EventEditorSheet(
                 allDay = allDay,
                 startAt = startAt,
                 endAt = endAt,
-                repeatEveryDays = repeatEveryDays.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+                repeatEveryDays = repeatEveryDays.coerceAtLeast(0),
             )
             if (okUpdate) initial.eventId else -1L
         }
@@ -3443,7 +3504,12 @@ private fun TaskEditorSheet(
     var title by rememberSaveable(sheetKey) { mutableStateOf(initial.title) }
     var reminderAt by remember(sheetKey, initial.reminderAt) { mutableLongStateOf(initial.reminderAt) }
     var done by remember(sheetKey) { mutableStateOf(initial.done) }
-    var repeatEveryDays by rememberSaveable(sheetKey) { mutableStateOf(initial.repeatEveryDays.toString().takeIf { it != "0" } ?: "") }
+    var repeatEveryDays by rememberSaveable(sheetKey) { mutableIntStateOf(initial.repeatEveryDays.coerceAtLeast(0)) }
+    var customRepeatDays by rememberSaveable(sheetKey) {
+        mutableStateOf(
+            initial.repeatEveryDays.takeIf { it !in setOf(0, 1, 7, 30, 365) }?.toString().orEmpty(),
+        )
+    }
     var showReminderPicker by remember(sheetKey) { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth(),
@@ -3468,12 +3534,68 @@ private fun TaskEditorSheet(
         label = { Text("Task") },
     )
     Spacer(Modifier.height(8.dp))
-    BoopFilledTextField(
-        value = repeatEveryDays,
-        onValueChange = { repeatEveryDays = it.filter { ch -> ch.isDigit() }.take(3) },
-        label = { Text("Repeat every N days (0 = no repeat)") },
-        singleLine = true,
+    Text("Repeat", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+    Spacer(Modifier.height(6.dp))
+    val repeatOptions = listOf(
+        0 to "None",
+        1 to "Daily",
+        7 to "Weekly",
+        30 to "Monthly",
+        365 to "Yearly",
     )
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        repeatOptions.forEach { (days, label) ->
+            val active = repeatEveryDays == days
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = if (active) Color.White else Color(0xFF242426),
+                modifier = Modifier.clickable {
+                    repeatEveryDays = days
+                    if (days in setOf(0, 1, 7, 30, 365)) customRepeatDays = ""
+                },
+            ) {
+                Text(
+                    label,
+                    color = if (active) Color.Black else Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                )
+            }
+        }
+        val customActive = repeatEveryDays !in setOf(0, 1, 7, 30, 365)
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = if (customActive) Color.White else Color(0xFF242426),
+            modifier = Modifier.clickable { if (repeatEveryDays in setOf(0, 1, 7, 30, 365)) repeatEveryDays = 2 },
+        ) {
+            Text(
+                "Custom",
+                color = if (customActive) Color.Black else Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            )
+        }
+    }
+    if (repeatEveryDays !in setOf(0, 1, 7, 30, 365)) {
+        Spacer(Modifier.height(6.dp))
+        BoopFilledTextField(
+            value = customRepeatDays,
+            onValueChange = {
+                val filtered = it.filter { ch -> ch.isDigit() }.take(3)
+                customRepeatDays = filtered
+                repeatEveryDays = filtered.toIntOrNull()?.coerceAtLeast(1) ?: repeatEveryDays
+            },
+            label = { Text("Every N days") },
+            singleLine = true,
+        )
+    }
+    Spacer(Modifier.height(4.dp))
+    Text(repeatFrequencyLabel(repeatEveryDays), color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
     Spacer(Modifier.height(12.dp))
     Surface(
         onClick = { showReminderPicker = true },
@@ -3523,7 +3645,7 @@ private fun TaskEditorSheet(
                     title = title.trim(),
                     reminderAt = reminderAt,
                     done = done,
-                    repeatEveryDays = repeatEveryDays.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+                    repeatEveryDays = repeatEveryDays.coerceAtLeast(0),
                 ),
             )
         }
