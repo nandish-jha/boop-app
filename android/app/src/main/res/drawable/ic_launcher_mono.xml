@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Monochrome layer for Material You themed icons.
+    Silhouette only (no bg). The system tints this with the user's wallpaper
+    theme. Hole is a transparent cutout via a matching color over the bowl.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Single compound path using even-odd fill so the bowl hole is transparent -->
+    <path
+        android:fillType="evenOdd"
+        android:pathData="
+            M38,34 h26 a12,12 0 0 1 12,12 v0 a12,12 0 0 1 -12,12 h-14 v16 h-12 Z
+            M50,40 h14 a6,6 0 0 1 6,6 v0 a6,6 0 0 1 -6,6 h-14 Z"
+        android:fillColor="#FFFFFF"/>
+</vector>
