@@ -107,6 +107,7 @@ import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -151,6 +152,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -222,6 +226,7 @@ private sealed class ItemSheet {
         val attachmentUri: String?,
         val audioUri: String?,
         val tagsCsv: String,
+        val archived: Boolean = false,
     ) : ItemSheet()
 
     data class HabitSheet(
@@ -320,6 +325,7 @@ private fun BoopApp() {
             attachmentUri = note?.attachmentUri,
             audioUri = note?.audioUri,
             tagsCsv = note?.tagsCsv.orEmpty(),
+            archived = note?.archived ?: false,
         )
         speedDialExpanded = false
     }
@@ -397,6 +403,16 @@ private fun BoopApp() {
                 }
             },
         )
+        val lifecycleOwner = LocalLifecycleOwner.current
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    refresh()
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
         val pagerState = rememberPagerState(initialPage = selectedTab, pageCount = { 5 })
         val pagerScrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
         LaunchedEffect(pagerState.isScrollInProgress, pagerState.currentPage) {
@@ -472,6 +488,16 @@ private fun BoopApp() {
                             onEditTask = { openTaskSheet(it) },
                             onEditEvent = { openEventSheetById(it) },
                             onEditNote = { openNoteSheet(it) },
+                            onArchiveTask = { t ->
+                                repository.saveTask(t.copy(done = true))
+                                ReminderScheduler.schedule(AppContextHolder.context, t.copy(done = true))
+                                refresh()
+                            },
+                            onUnarchiveTask = { t ->
+                                repository.saveTask(t.copy(done = false))
+                                ReminderScheduler.schedule(AppContextHolder.context, t.copy(done = false))
+                                refresh()
+                            },
                             onEditHabit = { openHabitSheet(it) },
                             onOpenHabitCheckIn = {
                                 itemSheet = null
@@ -609,6 +635,8 @@ private fun BoopPagerPage(
     onEditTask: (BoopTask) -> Unit,
     onEditEvent: (Long) -> Unit,
     onEditNote: (BoopNote) -> Unit,
+    onArchiveTask: (BoopTask) -> Unit,
+    onUnarchiveTask: (BoopTask) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
     onOpenHabitCheckIn: () -> Unit,
 ) {
@@ -633,6 +661,8 @@ private fun BoopPagerPage(
             1 -> TaskListScreen(
                 tasks = tasks,
                 onOpenTask = onEditTask,
+                onArchiveTask = onArchiveTask,
+                onUnarchiveTask = onUnarchiveTask,
             )
             2 -> CalendarScreen(
                 tasks = tasks,
@@ -1819,6 +1849,8 @@ private fun readGoogleCalendarEventsInRange(
 private fun TaskListScreen(
     tasks: List<BoopTask>,
     onOpenTask: (BoopTask) -> Unit,
+    onArchiveTask: (BoopTask) -> Unit,
+    onUnarchiveTask: (BoopTask) -> Unit,
 ) {
     val activeTasks = remember(tasks) { tasks.filter { !it.done } }
     val archivedTasks = remember(tasks) { tasks.filter { it.done }.sortedByDescending { it.reminderAt } }
@@ -1859,20 +1891,31 @@ private fun TaskListScreen(
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenTask(task) },
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
-                        if (task.done) {
-                            Text(
-                                "Completed",
-                                color = Color(0xFFBFBFBF),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .clickable { onOpenTask(task) }
+                                .padding(14.dp),
+                        ) {
+                            Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            if (task.done) {
+                                Text(
+                                    "Completed",
+                                    color = Color(0xFFBFBFBF),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                            Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
                         }
-                        Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+                        IconButton(onClick = { onArchiveTask(task) }) {
+                            Icon(Icons.Outlined.Archive, contentDescription = "Archive task", tint = Color(0xFFFFD98A))
+                        }
                     }
                 }
             }
@@ -1908,16 +1951,31 @@ private fun TaskListScreen(
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
                                 shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        showArchive = false
-                                        onOpenTask(task)
-                                    },
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Column(Modifier.padding(12.dp)) {
-                                    Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
-                                    Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(
+                                        Modifier
+                                            .weight(1f)
+                                            .clickable {
+                                                showArchive = false
+                                                onOpenTask(task)
+                                            }
+                                            .padding(12.dp),
+                                    ) {
+                                        Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                        Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            onUnarchiveTask(task)
+                                        },
+                                    ) {
+                                        Icon(Icons.Outlined.Unarchive, contentDescription = "Restore task", tint = Color(0xFF9AE6B4))
+                                    }
                                 }
                             }
                         }
@@ -2283,7 +2341,7 @@ private fun CalendarScreen(
                     }
                 },
             state = timelineState,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp + 320.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (!calendarGranted) {
@@ -3745,13 +3803,17 @@ private fun NoteEditorSheet(
                                 audioUri = audioStored,
                                 tagsCsv = normalizeNoteTags(tagsCsv),
                                 ocrText = extractTextFromAttachment(context, serializedAttachments),
-                                archived = true,
+                                archived = !initial.archived,
                                 updatedAtMillis = System.currentTimeMillis(),
                             ),
                         )
                     },
                 ) {
-                    Icon(Icons.Outlined.Archive, contentDescription = "Archive", tint = Color(0xFFFFD98A))
+                    if (initial.archived) {
+                        Icon(Icons.Outlined.Unarchive, contentDescription = "Restore note", tint = Color(0xFF9AE6B4))
+                    } else {
+                        Icon(Icons.Outlined.Archive, contentDescription = "Archive note", tint = Color(0xFFFFD98A))
+                    }
                 }
             }
             if (onDelete != null) {
