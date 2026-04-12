@@ -4,7 +4,13 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Same motif as ic_notification_minimal: ring + center dot (scaled to adaptive-icon viewport). -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M54,54m-31.5,0a31.5,31.5 0 1,1 63,0a31.5,31.5 0 1,1 -63,0"
+        android:strokeColor="#F4F4F5"
+        android:strokeWidth="9" />
     <path
         android:fillColor="#F4F4F5"
-        android:pathData="M54,54m-8,0a8,8 0 1,1 0.01,0z" />
+        android:pathData="M54,54m-9,0a9,9 0 1,1 18,0a9,9 0 1,1 -18,0" />
 </vector>

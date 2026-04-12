@@ -80,6 +80,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.item
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -105,6 +106,7 @@ import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Unarchive
@@ -157,7 +159,13 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -215,6 +223,7 @@ private sealed class ItemSheet {
         val reminderAt: Long,
         val done: Boolean,
         val repeatEveryDays: Int,
+        val archived: Boolean = false,
     ) : ItemSheet()
 
     data class NoteSheet(
@@ -227,6 +236,8 @@ private sealed class ItemSheet {
         val audioUri: String?,
         val tagsCsv: String,
         val archived: Boolean = false,
+        val createdAtMillis: Long = 0L,
+        val updatedAtMillis: Long = 0L,
     ) : ItemSheet()
 
     data class HabitSheet(
@@ -312,6 +323,7 @@ private fun BoopApp() {
             reminderAt = task?.reminderAt ?: (System.currentTimeMillis() + 30 * 60_000),
             done = task?.done ?: false,
             repeatEveryDays = task?.repeatEveryDays ?: 0,
+            archived = task?.archived ?: false,
         )
         speedDialExpanded = false
     }
@@ -326,6 +338,8 @@ private fun BoopApp() {
             audioUri = note?.audioUri,
             tagsCsv = note?.tagsCsv.orEmpty(),
             archived = note?.archived ?: false,
+            createdAtMillis = note?.createdAtMillis ?: 0L,
+            updatedAtMillis = note?.updatedAtMillis ?: 0L,
         )
         speedDialExpanded = false
     }
@@ -489,11 +503,16 @@ private fun BoopApp() {
                             onEditEvent = { openEventSheetById(it) },
                             onEditNote = { openNoteSheet(it) },
                             onArchiveTask = { t ->
-                                repository.saveTask(t.copy(done = true))
-                                ReminderScheduler.schedule(AppContextHolder.context, t.copy(done = true))
+                                repository.saveTask(t.copy(archived = true))
+                                ReminderScheduler.schedule(AppContextHolder.context, t.copy(archived = true))
                                 refresh()
                             },
                             onUnarchiveTask = { t ->
+                                repository.saveTask(t.copy(archived = false))
+                                ReminderScheduler.schedule(AppContextHolder.context, t.copy(archived = false))
+                                refresh()
+                            },
+                            onRestoreCompletedTask = { t ->
                                 repository.saveTask(t.copy(done = false))
                                 ReminderScheduler.schedule(AppContextHolder.context, t.copy(done = false))
                                 refresh()
@@ -637,6 +656,7 @@ private fun BoopPagerPage(
     onEditNote: (BoopNote) -> Unit,
     onArchiveTask: (BoopTask) -> Unit,
     onUnarchiveTask: (BoopTask) -> Unit,
+    onRestoreCompletedTask: (BoopTask) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
     onOpenHabitCheckIn: () -> Unit,
 ) {
@@ -663,6 +683,7 @@ private fun BoopPagerPage(
                 onOpenTask = onEditTask,
                 onArchiveTask = onArchiveTask,
                 onUnarchiveTask = onUnarchiveTask,
+                onRestoreCompletedTask = onRestoreCompletedTask,
             )
             2 -> CalendarScreen(
                 tasks = tasks,
@@ -1070,9 +1091,10 @@ private fun DashboardScreen(
     val now = System.currentTimeMillis()
     val horizon = now + 86_400_000L
     val upcomingTasks = tasks
-        .filter { !it.done && it.reminderAt in now..horizon }
+        .filter { !it.done && !it.archived && it.reminderAt in now..horizon }
         .sortedBy { it.reminderAt }
     val recentNotes = notes
+        .filter { !it.archived }
         .sortedByDescending { it.updatedAtMillis }
         .take(4)
     val greetingSecond = run {
@@ -1324,6 +1346,13 @@ private fun DashboardNoteTile(note: BoopNote, modifier: Modifier = Modifier, onC
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
+            Text(
+                formatNoteCardTime(note),
+                color = Color(0xFF8E8E90),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -1396,6 +1425,8 @@ private fun noteEditApplySpan(editText: EditText?, span: Any) {
     text.setSpan(span, s, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 }
 
+private val bulletLeadPattern = Regex("^\\s*•\\s+")
+
 private fun noteEditInsertBulletLine(editText: EditText?) {
     val et = editText ?: return
     val text = et.text as? Editable ?: return
@@ -1404,8 +1435,15 @@ private fun noteEditInsertBulletLine(editText: EditText?) {
     val e = maxOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
     if (e > s) {
         val selected = text.substring(s, e)
-        val replaced = selected.split('\n').joinToString("\n") { line ->
-            if (line.trim().isBlank()) line else "• ${line.trimStart()}"
+        val lines = selected.split('\n')
+        val nonBlank = lines.filter { it.isNotBlank() }
+        val stripAll = nonBlank.isNotEmpty() && nonBlank.all { bulletLeadPattern.containsMatchIn(it) }
+        val replaced = lines.joinToString("\n") { line ->
+            when {
+                line.trim().isBlank() -> line
+                stripAll -> line.replaceFirst(bulletLeadPattern, "")
+                else -> "• ${line.trimStart()}"
+            }
         }
         text.replace(s, e, replaced)
         et.setSelection((s + replaced.length).coerceAtMost(text.length))
@@ -1417,6 +1455,8 @@ private fun noteEditInsertBulletLine(editText: EditText?) {
     }
 }
 
+private val numberedLeadPattern = Regex("^\\s*\\d+\\.\\s+")
+
 private fun noteEditInsertNumberedLine(editText: EditText?) {
     val et = editText ?: return
     val text = et.text as? Editable ?: return
@@ -1425,9 +1465,21 @@ private fun noteEditInsertNumberedLine(editText: EditText?) {
     val e = maxOf(et.selectionStart, et.selectionEnd).coerceIn(0, len)
     if (e > s) {
         val selected = text.substring(s, e)
-        var idx = 1
-        val replaced = selected.split('\n').joinToString("\n") { line ->
-            if (line.trim().isBlank()) line else "${idx++}. ${line.trimStart()}"
+        val lines = selected.split('\n')
+        val nonBlank = lines.filter { it.isNotBlank() }
+        val stripAll = nonBlank.isNotEmpty() && nonBlank.all { numberedLeadPattern.containsMatchIn(it) }
+        val replaced = if (stripAll) {
+            lines.joinToString("\n") { line ->
+                when {
+                    line.trim().isBlank() -> line
+                    else -> line.replaceFirst(numberedLeadPattern, "")
+                }
+            }
+        } else {
+            var idx = 1
+            lines.joinToString("\n") { line ->
+                if (line.trim().isBlank()) line else "${idx++}. ${line.trimStart()}"
+            }
         }
         text.replace(s, e, replaced)
         et.setSelection((s + replaced.length).coerceAtMost(text.length))
@@ -1851,10 +1903,13 @@ private fun TaskListScreen(
     onOpenTask: (BoopTask) -> Unit,
     onArchiveTask: (BoopTask) -> Unit,
     onUnarchiveTask: (BoopTask) -> Unit,
+    onRestoreCompletedTask: (BoopTask) -> Unit,
 ) {
-    val activeTasks = remember(tasks) { tasks.filter { !it.done } }
-    val archivedTasks = remember(tasks) { tasks.filter { it.done }.sortedByDescending { it.reminderAt } }
+    val activeTasks = tasks.filter { !it.done && !it.archived }
+    val archivedTasks = tasks.filter { it.archived }.sortedByDescending { it.reminderAt }
+    val completedTasks = tasks.filter { it.done && !it.archived }.sortedByDescending { it.reminderAt }
     var showArchive by rememberSaveable { mutableStateOf(false) }
+    var showCompleted by rememberSaveable { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxSize()
@@ -1867,12 +1922,23 @@ private fun TaskListScreen(
             verticalAlignment = Alignment.Top,
         ) {
             Text("Tasks", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
-            FloatingActionButton(
-                onClick = { showArchive = true },
-                containerColor = Color.White,
-                contentColor = Color.Black,
-            ) {
-                Icon(Icons.Outlined.Archive, contentDescription = "Archived tasks")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                FloatingActionButton(
+                    onClick = { showCompleted = true },
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                    modifier = Modifier.size(56.dp),
+                ) {
+                    Icon(Icons.Outlined.CheckCircle, contentDescription = "Completed tasks")
+                }
+                FloatingActionButton(
+                    onClick = { showArchive = true },
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                    modifier = Modifier.size(56.dp),
+                ) {
+                    Icon(Icons.Outlined.Archive, contentDescription = "Archived tasks")
+                }
             }
         }
         LazyColumn(
@@ -1884,7 +1950,7 @@ private fun TaskListScreen(
         ) {
             if (activeTasks.isEmpty()) {
                 item {
-                    Text("No active tasks. Completed ones are in archive.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
+                    Text("No active tasks.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
                 }
             }
             items(activeTasks, key = { it.id }) { task ->
@@ -1904,14 +1970,17 @@ private fun TaskListScreen(
                                 .padding(14.dp),
                         ) {
                             Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
-                            if (task.done) {
-                                Text(
-                                    "Completed",
-                                    color = Color(0xFFBFBFBF),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+                                if (task.repeatEveryDays > 0) {
+                                    Icon(
+                                        Icons.Outlined.Repeat,
+                                        contentDescription = "Repeating task",
+                                        tint = Color(0xFF9BC4FF),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
                             }
-                            Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
                         }
                         IconButton(onClick = { onArchiveTask(task) }) {
                             Icon(Icons.Outlined.Archive, contentDescription = "Archive task", tint = Color(0xFFFFD98A))
@@ -1984,6 +2053,67 @@ private fun TaskListScreen(
             }
         }
     }
+    if (showCompleted) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showCompleted = false },
+            sheetState = sheetState,
+            containerColor = Color(0xFF111113),
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.75f)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("Completed tasks", fontWeight = FontWeight.Bold, color = Color.White, style = MaterialTheme.typography.titleLarge)
+                if (completedTasks.isEmpty()) {
+                    Text("No completed tasks yet.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(completedTasks, key = { it.id }) { task ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(
+                                        Modifier
+                                            .weight(1f)
+                                            .clickable {
+                                                showCompleted = false
+                                                onOpenTask(task)
+                                            }
+                                            .padding(12.dp),
+                                    ) {
+                                        Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                        Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    IconButton(
+                                        onClick = { onRestoreCompletedTask(task) },
+                                    ) {
+                                        Icon(Icons.Outlined.Unarchive, contentDescription = "Mark not completed", tint = Color(0xFF9AE6B4))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -2037,7 +2167,7 @@ private fun CalendarScreen(
     }
     val nextDay = remember(selectedMillis) { (selectedDay.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 1) } }
     val dayTasks = remember(tasks, selectedDay.timeInMillis, nextDay.timeInMillis) {
-        tasks.filter { !it.done && it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }
+        tasks.filter { !it.done && !it.archived && it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }
             .sortedBy { it.reminderAt }
     }
     val headerLabel = remember(selectedMillis) { SimpleDateFormat("EEE, MMM dd", Locale.US).format(selectedMillis) }
@@ -2359,11 +2489,24 @@ private fun CalendarScreen(
                     val item = render.item
                     val isTask = item.isTask
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = if (isTask) Color(0xFF1C2533) else Color(0xFF151517)),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(uniformBlockHeight)
+                            .drawWithContent {
+                                drawContent()
+                                val strokePx = 2.dp.toPx()
+                                val c = 14.dp.toPx()
+                                val dash = if (isTask) null else PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
+                                drawRoundRect(
+                                    color = Color.White,
+                                    topLeft = Offset(strokePx / 2f, strokePx / 2f),
+                                    size = Size(size.width - strokePx, size.height - strokePx),
+                                    cornerRadius = CornerRadius((c - strokePx / 2f).coerceAtLeast(0f), (c - strokePx / 2f).coerceAtLeast(0f)),
+                                    style = Stroke(width = strokePx, pathEffect = dash),
+                                )
+                            }
                             .clickable {
                                 if (isTask) {
                                     val taskId = item.id.removePrefix("task_")
@@ -2484,6 +2627,13 @@ private fun NotesListScreen(
                     val hasAudio = !note.audioUri.isNullOrBlank()
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text(
+                            formatNoteCardTime(note),
+                            color = Color(0xFF8E8E90),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         val tags = parseNoteTags(note.tagsCsv)
                         if (tags.isNotEmpty()) {
                             Text(
@@ -2885,7 +3035,11 @@ private fun GlobalSearchResultsInline(
 ) {
     val q = query.trim().lowercase(Locale.getDefault())
     val matchTasks = remember(tasks, q) {
-        if (q.isEmpty()) emptyList() else tasks.filter { taskSearchHaystack(it).contains(q) }
+        if (q.isEmpty()) {
+            emptyList()
+        } else {
+            tasks.filter { !it.archived && taskSearchHaystack(it).contains(q) }
+        }
     }
     val matchNotes = remember(notes, q) {
         if (q.isEmpty()) emptyList() else notes.filter { noteSearchHaystack(it).contains(q) }
@@ -3697,13 +3851,21 @@ private fun TaskEditorSheet(
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
         if (title.isNotBlank()) {
+            val rep = repeatEveryDays.coerceAtLeast(0)
+            var outDone = done
+            var outRem = reminderAt
+            if (done && rep > 0) {
+                outRem = nextRepeatReminderMillis(reminderAt, rep)
+                outDone = false
+            }
             onSave(
                 BoopTask(
                     id = initial.id ?: UUID.randomUUID().toString(),
                     title = title.trim(),
-                    reminderAt = reminderAt,
-                    done = done,
-                    repeatEveryDays = repeatEveryDays.coerceAtLeast(0),
+                    reminderAt = outRem,
+                    done = outDone,
+                    repeatEveryDays = rep,
+                    archived = initial.archived,
                 ),
             )
         }
@@ -3804,6 +3966,7 @@ private fun NoteEditorSheet(
                                 tagsCsv = normalizeNoteTags(tagsCsv),
                                 ocrText = extractTextFromAttachment(context, serializedAttachments),
                                 archived = !initial.archived,
+                                createdAtMillis = initial.createdAtMillis,
                                 updatedAtMillis = System.currentTimeMillis(),
                             ),
                         )
@@ -3829,6 +3992,26 @@ private fun NoteEditorSheet(
         onValueChange = { title = it },
         label = { Text("Title") },
     )
+    if (initial.id != null) {
+        Spacer(Modifier.height(4.dp))
+        Text(
+            formatNoteCardTime(
+                BoopNote(
+                    id = initial.id,
+                    title = "",
+                    body = "",
+                    attachmentUri = null,
+                    tagsCsv = "",
+                    ocrText = "",
+                    archived = false,
+                    createdAtMillis = initial.createdAtMillis,
+                    updatedAtMillis = initial.updatedAtMillis,
+                ),
+            ),
+            color = Color(0xFF8E8E90),
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
     Spacer(Modifier.height(8.dp))
     BoopFilledTextField(
         value = tagsCsv,
@@ -3838,6 +4021,8 @@ private fun NoteEditorSheet(
     )
     Spacer(Modifier.height(8.dp))
     Text("Note", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
+    Spacer(Modifier.height(4.dp))
+    NoteRichTextToolbar(bodyEdit, context)
     Spacer(Modifier.height(4.dp))
     AndroidView(
         modifier = Modifier
@@ -3874,7 +4059,6 @@ private fun NoteEditorSheet(
             bodyEdit = et
         },
     )
-    NoteRichTextToolbar(bodyEdit, context)
     val currentBodyText = remember(bodyEdit?.text?.toString()) { bodyEdit?.text?.toString().orEmpty() }
     val linkRegex = remember { Regex("""https?://[^\s<>()]+""") }
     val typedLinks = remember(currentBodyText) { linkRegex.findAll(currentBodyText).map { it.value }.distinct().toList() }
@@ -4025,7 +4209,8 @@ private fun NoteEditorSheet(
                     audioUri = audioStored,
                     tagsCsv = normalizeNoteTags(tagsCsv),
                     ocrText = ocrText,
-                    archived = initial.id?.let { false } ?: false,
+                    archived = initial.archived,
+                    createdAtMillis = initial.createdAtMillis,
                     updatedAtMillis = System.currentTimeMillis(),
                 ),
             )
@@ -4151,6 +4336,8 @@ data class BoopTask(
     val reminderAt: Long,
     val done: Boolean,
     val repeatEveryDays: Int = 0,
+    /** Filed away from the main list (separate from [done]). */
+    val archived: Boolean = false,
 )
 data class BoopNote(
     val id: String,
@@ -4161,6 +4348,8 @@ data class BoopNote(
     val tagsCsv: String = "",
     val ocrText: String = "",
     val archived: Boolean = false,
+    /** First save time (local). */
+    val createdAtMillis: Long = 0L,
     /** Last save time (local), used for week strip & search ordering. */
     val updatedAtMillis: Long = 0L,
 )
@@ -4216,12 +4405,16 @@ private class BoopRepository(private val store: LocalStore) {
 
     fun readTasks(): List<BoopTask> {
         return parseArray(store.read("tasks")) { item ->
+            val hasArchivedKey = item.has("archived")
+            val archived = if (hasArchivedKey) item.optBoolean("archived", false) else false
+            val done = item.optBoolean("done", false)
             BoopTask(
                 id = item.getString("id"),
                 title = item.getString("title"),
                 reminderAt = item.getLong("reminderAt"),
-                done = item.getBoolean("done"),
+                done = done,
                 repeatEveryDays = item.optInt("repeatEveryDays", 0),
+                archived = archived,
             )
         }
     }
@@ -4238,17 +4431,20 @@ private class BoopRepository(private val store: LocalStore) {
             } else {
                 rawU
             }
+            val createdRaw = item.optLong("createdAt", 0L)
+            val createdAt = if (createdRaw > 0L) createdRaw else u
             out.add(
                 BoopNote(
-                    item.getString("id"),
-                    item.optString("title"),
-                    item.optString("body"),
-                    item.optString("attachmentUri").ifBlank { null },
-                    item.optString("audioUri").ifBlank { null },
-                    item.optString("tags"),
-                    item.optString("ocrText"),
-                    item.optBoolean("archived", false),
-                    u,
+                    id = item.getString("id"),
+                    title = item.optString("title"),
+                    body = item.optString("body"),
+                    attachmentUri = item.optString("attachmentUri").ifBlank { null },
+                    audioUri = item.optString("audioUri").ifBlank { null },
+                    tagsCsv = item.optString("tags"),
+                    ocrText = item.optString("ocrText"),
+                    archived = item.optBoolean("archived", false),
+                    createdAtMillis = createdAt,
+                    updatedAtMillis = u,
                 ),
             )
         }
@@ -4281,7 +4477,14 @@ private class BoopRepository(private val store: LocalStore) {
     }
 
     fun saveNote(note: BoopNote) {
-        val stamped = note.copy(updatedAtMillis = System.currentTimeMillis())
+        val existing = readNotes().firstOrNull { it.id == note.id }
+        val created = when {
+            note.createdAtMillis > 0L -> note.createdAtMillis
+            existing != null && existing.createdAtMillis > 0L -> existing.createdAtMillis
+            existing != null && existing.updatedAtMillis > 0L -> existing.updatedAtMillis
+            else -> System.currentTimeMillis()
+        }
+        val stamped = note.copy(createdAtMillis = created, updatedAtMillis = System.currentTimeMillis())
         val updated = readNotes().toMutableList().apply {
             removeAll { it.id == stamped.id }
             add(0, stamped)
@@ -4298,6 +4501,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("tags", it.tagsCsv)
                     .put("ocrText", it.ocrText)
                     .put("archived", it.archived)
+                    .put("createdAt", it.createdAtMillis)
                     .put("updatedAt", it.updatedAtMillis),
             )
         }
@@ -4319,6 +4523,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("tags", it.tagsCsv)
                     .put("ocrText", it.ocrText)
                     .put("archived", it.archived)
+                    .put("createdAt", it.createdAtMillis)
                     .put("updatedAt", it.updatedAtMillis),
             )
         }
@@ -4386,7 +4591,8 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("title", it.title)
                     .put("reminderAt", it.reminderAt)
                     .put("done", it.done)
-                    .put("repeatEveryDays", it.repeatEveryDays),
+                    .put("repeatEveryDays", it.repeatEveryDays)
+                    .put("archived", it.archived),
             )
         }
         store.save("tasks", arr.toString())
@@ -4412,6 +4618,24 @@ private fun formatTaskReminderLine(timeInMillis: Long): String {
     return "$day   $time"
 }
 
+private fun nextRepeatReminderMillis(currentReminderAt: Long, repeatEveryDays: Int): Long {
+    val step = repeatEveryDays * 24L * 60L * 60L * 1000L
+    var next = currentReminderAt + step
+    while (next <= System.currentTimeMillis()) next += step
+    return next
+}
+
+private fun formatNoteCardTime(note: BoopNote): String {
+    val fmt = SimpleDateFormat("MMM d · h:mm a", Locale.US)
+    val created = if (note.createdAtMillis > 0L) note.createdAtMillis else note.updatedAtMillis
+    val modified = note.updatedAtMillis
+    return if (modified > created + 60_000L) {
+        "Modified ${fmt.format(modified)}"
+    } else {
+        "Created ${fmt.format(modified)}"
+    }
+}
+
 object ReminderScheduler {
     fun schedule(context: Context, task: BoopTask) {
         val intent = Intent(context, TaskReminderReceiver::class.java).apply {
@@ -4426,7 +4650,7 @@ object ReminderScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        if (task.done) {
+        if (task.done || task.archived) {
             manager.cancel(pending)
             return
         }
@@ -4585,11 +4809,10 @@ private object TaskNotificationActions {
             val item = arr.getJSONObject(i)
             if (item.optString("id") == taskId) {
                 val repeatEveryDays = item.optInt("repeatEveryDays", 0)
+                val archived = item.optBoolean("archived", false)
                 if (repeatEveryDays > 0) {
-                    val step = repeatEveryDays * 24L * 60L * 60L * 1000L
                     val base = item.optLong("reminderAt", System.currentTimeMillis())
-                    var nextAt = base + step
-                    while (nextAt <= System.currentTimeMillis()) nextAt += step
+                    val nextAt = nextRepeatReminderMillis(base, repeatEveryDays)
                     item.put("reminderAt", nextAt)
                     item.put("done", false)
                     changed = true
@@ -4599,6 +4822,7 @@ private object TaskNotificationActions {
                         reminderAt = nextAt,
                         done = false,
                         repeatEveryDays = repeatEveryDays,
+                        archived = archived,
                     )
                 } else if (!item.optBoolean("done", false)) {
                     item.put("done", true)
