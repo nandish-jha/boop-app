@@ -48,6 +48,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -159,6 +161,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -829,6 +832,11 @@ private fun BoopSpeedDialFab(
                         contentColor = Color.Black,
                     ) { Icon(Icons.Outlined.Link, contentDescription = "Add external calendar") }
                 } else {
+                    SmallFloatingActionButton(
+                        onClick = { onOpenEvent(); onExpandedChange(false) },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.CalendarMonth, contentDescription = "Add event") }
                     SmallFloatingActionButton(
                         onClick = { onOpenNote(); onExpandedChange(false) },
                         containerColor = Color.White,
@@ -1904,11 +1912,15 @@ private fun TaskListScreen(
     onUnarchiveTask: (BoopTask) -> Unit,
     onRestoreCompletedTask: (BoopTask) -> Unit,
 ) {
+    val scope = rememberCoroutineScope()
     val activeTasks = tasks.filter { !it.done && !it.archived }
     val archivedTasks = tasks.filter { it.archived }.sortedByDescending { it.reminderAt }
     val completedTasks = tasks.filter { it.done && !it.archived }.sortedByDescending { it.reminderAt }
     var showArchive by rememberSaveable { mutableStateOf(false) }
     var showCompleted by rememberSaveable { mutableStateOf(false) }
+    var pendingArchiveTaskId by remember { mutableStateOf<String?>(null) }
+    var pendingUnarchiveTaskId by remember { mutableStateOf<String?>(null) }
+    var pendingRestoreTaskId by remember { mutableStateOf<String?>(null) }
     Column(
         Modifier
             .fillMaxSize()
@@ -1953,10 +1965,27 @@ private fun TaskListScreen(
                 }
             }
             items(activeTasks, key = { it.id }) { task ->
+                val isArchiving = pendingArchiveTaskId == task.id
+                val cardScale by animateFloatAsState(
+                    targetValue = if (isArchiving) 0.96f else 1f,
+                    animationSpec = tween(durationMillis = 180),
+                    label = "task_archive_scale",
+                )
+                val cardAlpha by animateFloatAsState(
+                    targetValue = if (isArchiving) 0.45f else 1f,
+                    animationSpec = tween(durationMillis = 180),
+                    label = "task_archive_alpha",
+                )
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            scaleX = cardScale
+                            scaleY = cardScale
+                            alpha = cardAlpha
+                        },
                 ) {
                     Row(
                         Modifier.fillMaxWidth(),
@@ -1981,7 +2010,18 @@ private fun TaskListScreen(
                                 }
                             }
                         }
-                        IconButton(onClick = { onArchiveTask(task) }) {
+                        IconButton(
+                            enabled = !isArchiving,
+                            onClick = {
+                                if (pendingArchiveTaskId != null) return@IconButton
+                                pendingArchiveTaskId = task.id
+                                scope.launch {
+                                    delay(180)
+                                    onArchiveTask(task)
+                                    pendingArchiveTaskId = null
+                                }
+                            },
+                        ) {
                             Icon(Icons.Outlined.Archive, contentDescription = "Archive task", tint = Color(0xFFFFD98A))
                         }
                     }
@@ -2016,10 +2056,27 @@ private fun TaskListScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(archivedTasks, key = { it.id }) { task ->
+                            val isRestoringArchive = pendingUnarchiveTaskId == task.id
+                            val rowScale by animateFloatAsState(
+                                targetValue = if (isRestoringArchive) 0.96f else 1f,
+                                animationSpec = tween(durationMillis = 180),
+                                label = "task_unarchive_scale",
+                            )
+                            val rowAlpha by animateFloatAsState(
+                                targetValue = if (isRestoringArchive) 0.45f else 1f,
+                                animationSpec = tween(durationMillis = 180),
+                                label = "task_unarchive_alpha",
+                            )
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
                                 shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        scaleX = rowScale
+                                        scaleY = rowScale
+                                        alpha = rowAlpha
+                                    },
                             ) {
                                 Row(
                                     Modifier.fillMaxWidth(),
@@ -2038,8 +2095,15 @@ private fun TaskListScreen(
                                         Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                     }
                                     IconButton(
+                                        enabled = !isRestoringArchive,
                                         onClick = {
-                                            onUnarchiveTask(task)
+                                            if (pendingUnarchiveTaskId != null) return@IconButton
+                                            pendingUnarchiveTaskId = task.id
+                                            scope.launch {
+                                                delay(180)
+                                                onUnarchiveTask(task)
+                                                pendingUnarchiveTaskId = null
+                                            }
                                         },
                                     ) {
                                         Icon(Icons.Outlined.Unarchive, contentDescription = "Restore task", tint = Color(0xFF9AE6B4))
@@ -2079,10 +2143,27 @@ private fun TaskListScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(completedTasks, key = { it.id }) { task ->
+                            val isRestoringDone = pendingRestoreTaskId == task.id
+                            val rowScale by animateFloatAsState(
+                                targetValue = if (isRestoringDone) 0.96f else 1f,
+                                animationSpec = tween(durationMillis = 180),
+                                label = "task_restore_scale",
+                            )
+                            val rowAlpha by animateFloatAsState(
+                                targetValue = if (isRestoringDone) 0.45f else 1f,
+                                animationSpec = tween(durationMillis = 180),
+                                label = "task_restore_alpha",
+                            )
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
                                 shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        scaleX = rowScale
+                                        scaleY = rowScale
+                                        alpha = rowAlpha
+                                    },
                             ) {
                                 Row(
                                     Modifier.fillMaxWidth(),
@@ -2101,7 +2182,16 @@ private fun TaskListScreen(
                                         Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                     }
                                     IconButton(
-                                        onClick = { onRestoreCompletedTask(task) },
+                                        enabled = !isRestoringDone,
+                                        onClick = {
+                                            if (pendingRestoreTaskId != null) return@IconButton
+                                            pendingRestoreTaskId = task.id
+                                            scope.launch {
+                                                delay(180)
+                                                onRestoreCompletedTask(task)
+                                                pendingRestoreTaskId = null
+                                            }
+                                        },
                                     ) {
                                         Icon(Icons.Outlined.Unarchive, contentDescription = "Mark not completed", tint = Color(0xFF9AE6B4))
                                     }
@@ -2499,7 +2589,7 @@ private fun CalendarScreen(
                                 val c = 14.dp.toPx()
                                 val dash = if (isTask) null else PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
                                 drawRoundRect(
-                                    color = Color.White,
+                                    color = Color(0xFFADADB3),
                                     topLeft = Offset(strokePx / 2f, strokePx / 2f),
                                     size = Size(size.width - strokePx, size.height - strokePx),
                                     cornerRadius = CornerRadius((c - strokePx / 2f).coerceAtLeast(0f), (c - strokePx / 2f).coerceAtLeast(0f)),
@@ -3722,6 +3812,32 @@ private fun TaskEditorSheet(
         )
     }
     var showReminderPicker by remember(sheetKey) { mutableStateOf(false) }
+    var hasExplicitSave by remember(sheetKey) { mutableStateOf(false) }
+    fun buildTaskForSaveOrNull(): BoopTask? {
+        if (title.isBlank()) return null
+        val rep = repeatEveryDays.coerceAtLeast(0)
+        var outDone = done
+        var outRem = reminderAt
+        if (done && rep > 0) {
+            outRem = nextRepeatReminderMillis(reminderAt, rep)
+            outDone = false
+        }
+        return BoopTask(
+            id = initial.id ?: UUID.randomUUID().toString(),
+            title = title.trim(),
+            reminderAt = outRem,
+            done = outDone,
+            repeatEveryDays = rep,
+            archived = initial.archived,
+        )
+    }
+    DisposableEffect(sheetKey) {
+        onDispose {
+            if (!hasExplicitSave) {
+                buildTaskForSaveOrNull()?.let(onSave)
+            }
+        }
+    }
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -3849,25 +3965,8 @@ private fun TaskEditorSheet(
     }
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
-        if (title.isNotBlank()) {
-            val rep = repeatEveryDays.coerceAtLeast(0)
-            var outDone = done
-            var outRem = reminderAt
-            if (done && rep > 0) {
-                outRem = nextRepeatReminderMillis(reminderAt, rep)
-                outDone = false
-            }
-            onSave(
-                BoopTask(
-                    id = initial.id ?: UUID.randomUUID().toString(),
-                    title = title.trim(),
-                    reminderAt = outRem,
-                    done = outDone,
-                    repeatEveryDays = rep,
-                    archived = initial.archived,
-                ),
-            )
-        }
+        hasExplicitSave = true
+        buildTaskForSaveOrNull()?.let(onSave)
     }
 }
 
@@ -3888,6 +3987,31 @@ private fun NoteEditorSheet(
     var recording by remember(session) { mutableStateOf(false) }
     var recordingStartedAt by remember(session) { mutableLongStateOf(0L) }
     var recorder by remember(session) { mutableStateOf<MediaRecorder?>(null) }
+    var hasExplicitSave by remember(session) { mutableStateOf(false) }
+    fun buildNoteForSaveOrNull(): BoopNote? {
+        val noteId = initial.id ?: UUID.randomUUID().toString()
+        val resolvedAttachment = serializeNoteAttachments(attachmentStored)
+        val editable = bodyEdit?.text
+        val bodyHtml = if (editable is Spanned) {
+            Html.toHtml(editable, 0x1 /* Html.TO_HTML_PARCEL_OUTPUT_MODE */).trim()
+        } else {
+            editable?.toString()?.trim().orEmpty()
+        }
+        if (title.isBlank() && bodyHtml.isBlank()) return null
+        val ocrText = extractTextFromAttachment(context, resolvedAttachment)
+        return BoopNote(
+            id = noteId,
+            title = title.trim(),
+            body = bodyHtml,
+            attachmentUri = resolvedAttachment,
+            audioUri = audioStored,
+            tagsCsv = normalizeNoteTags(tagsCsv),
+            ocrText = ocrText,
+            archived = initial.archived,
+            createdAtMillis = initial.createdAtMillis,
+            updatedAtMillis = System.currentTimeMillis(),
+        )
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         val existing = attachmentStored.toMutableList()
@@ -3923,6 +4047,9 @@ private fun NoteEditorSheet(
     }
     DisposableEffect(session) {
         onDispose {
+            if (!hasExplicitSave) {
+                buildNoteForSaveOrNull()?.let(onSave)
+            }
             try {
                 recorder?.stop()
             } catch (_: Throwable) {
@@ -3955,6 +4082,7 @@ private fun NoteEditorSheet(
                             editable?.toString()?.trim().orEmpty()
                         }
                         val serializedAttachments = serializeNoteAttachments(attachmentStored)
+                        hasExplicitSave = true
                         onSave(
                             BoopNote(
                                 id = initial.id,
@@ -4189,31 +4317,8 @@ private fun NoteEditorSheet(
     }
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
-        val noteId = initial.id ?: UUID.randomUUID().toString()
-        val resolvedAttachment = serializeNoteAttachments(attachmentStored)
-        val editable = bodyEdit?.text
-        val bodyHtml = if (editable is Spanned) {
-            Html.toHtml(editable, 0x1 /* Html.TO_HTML_PARCEL_OUTPUT_MODE */).trim()
-        } else {
-            editable?.toString()?.trim().orEmpty()
-        }
-        if (title.isNotBlank() || bodyHtml.isNotBlank()) {
-            val ocrText = extractTextFromAttachment(context, resolvedAttachment)
-            onSave(
-                BoopNote(
-                    id = noteId,
-                    title = title.trim(),
-                    body = bodyHtml,
-                    attachmentUri = resolvedAttachment,
-                    audioUri = audioStored,
-                    tagsCsv = normalizeNoteTags(tagsCsv),
-                    ocrText = ocrText,
-                    archived = initial.archived,
-                    createdAtMillis = initial.createdAtMillis,
-                    updatedAtMillis = System.currentTimeMillis(),
-                ),
-            )
-        }
+        hasExplicitSave = true
+        buildNoteForSaveOrNull()?.let(onSave)
     }
 }
 
