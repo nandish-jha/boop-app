@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProDash Home Samples</title>
+  <style>
+    :root { --bg:#0c0c0d; --card:#171719; --muted:#a2a2a8; --text:#fff; --accent:#6fa8ff; }
+    * { box-sizing: border-box; font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif; }
+    body { margin: 0; background: linear-gradient(180deg,#0b0b0c,#121216); color: var(--text); }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 18px 40px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p { margin: 0 0 20px; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 14px; }
+    a.card { background: var(--card); color: var(--text); text-decoration: none; border-radius: 14px; padding: 14px; border: 1px solid #232329; display:block; }
+    a.card:hover { border-color: #3a3a44; transform: translateY(-1px); }
+    .title { font-weight: 700; margin-bottom: 6px; }
+    .small { color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .footer { margin-top: 22px; font-size: 13px; color: var(--muted); }
+    code { color: #c8dcff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Home Dashboard Samples</h1>
+    <p>Open each option in your browser and choose what direction you want before the next push/release.</p>
+    <div class="grid">
+      <a class="card" href="./option-a-minimal-cards.html">
+        <div class="title">Option A · Minimal Cards</div>
+        <div class="small">Simple greeting + compact cards. Fast scan, low clutter.</div>
+      </a>
+      <a class="card" href="./option-b-agenda-first.html">
+        <div class="title">Option B · Agenda First</div>
+        <div class="small">Today timeline is primary. Notes and habits are secondary.</div>
+      </a>
+      <a class="card" href="./option-c-focus-mode.html">
+        <div class="title">Option C · Focus Mode</div>
+        <div class="small">One main focus block + essentials only for reduced distraction.</div>
+      </a>
+      <a class="card" href="./option-d-metrics-overview.html">
+        <div class="title">Option D · Metrics Overview</div>
+        <div class="small">Progress rings and quick stats first, content blocks after.</div>
+      </a>
+      <a class="card" href="./option-e-kanban-home.html">
+        <div class="title">Option E · Kanban Home</div>
+        <div class="small">Now/Next/Later task lanes on the dashboard.</div>
+      </a>
+      <a class="card" href="./option-f-widget-grid.html">
+        <div class="title">Option F · Widget Grid</div>
+        <div class="small">Balanced 2x2 widgets plus timeline summary.</div>
+      </a>
+      <a class="card" href="./option-g-week-strip-first.html">
+        <div class="title">Option G · Week Strip First</div>
+        <div class="small">Weekly navigation first, day details second.</div>
+      </a>
+      <a class="card" href="./option-h-search-centric.html">
+        <div class="title">Option H · Search Centric</div>
+        <div class="small">Global search and recents as primary entry points.</div>
+      </a>
+      <a class="card" href="./option-i-journal-home.html">
+        <div class="title">Option I · Journal Home</div>
+        <div class="small">Daily writing/checkpoint style dashboard.</div>
+      </a>
+      <a class="card" href="./option-j-large-typography.html">
+        <div class="title">Option J · Large Typography</div>
+        <div class="small">High-contrast hero greeting and bold key cards.</div>
+      </a>
+      <a class="card" href="./option-k-split-pane.html">
+        <div class="title">Option K · Split Pane</div>
+        <div class="small">Timeline on one side, stats/notes on the other.</div>
+      </a>
+      <a class="card" href="./option-l-compact-pro.html">
+        <div class="title">Option L · Compact Pro</div>
+        <div class="small">Dense information layout for power users.</div>
+      </a>
+    </div>
+    <div class="footer">
+      Tip: from repo root run <code>xdg-open dashboard-mockups/index.html</code> (Linux).
+    </div>
+  </div>
+</body>
+</html>

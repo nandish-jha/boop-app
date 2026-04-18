@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Option D - Metrics Overview</title>
+  <style>
+    :root { --bg:#0c0c0d; --card:#171719; --text:#fff; --muted:#9f9fa8; --line:#292932; }
+    * { box-sizing:border-box; font-family: Inter, system-ui, sans-serif; }
+    body { margin:0; background:var(--bg); color:var(--text); }
+    .phone { max-width:420px; margin:0 auto; min-height:100vh; padding:18px 14px 24px; }
+    .head { margin-bottom:10px; }
+    h1 { margin:0; font-size:32px; }
+    .sub { color:var(--muted); font-size:13px; margin-top:4px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px; margin-bottom:10px; }
+    .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .stat { text-align:center; border:1px solid #30303a; border-radius:12px; padding:10px 6px; }
+    .num { font-size:20px; font-weight:700; }
+    .lbl { font-size:12px; color:var(--muted); }
+    .bar { height:8px; border-radius:999px; background:#2a2a31; overflow:hidden; margin-top:6px; }
+    .fill { height:100%; background:#cfd6e4; width:68%; }
+    .list { margin:8px 0 0; padding-left:16px; color:#d6d6dd; }
+    .list li { margin:4px 0; }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <div class="head">
+      <h1>Overview</h1>
+      <div class="sub">Data-forward home dashboard</div>
+    </div>
+
+    <div class="card">
+      <div class="stats">
+        <div class="stat"><div class="num">7</div><div class="lbl">Active Tasks</div></div>
+        <div class="stat"><div class="num">3</div><div class="lbl">Due Today</div></div>
+        <div class="stat"><div class="num">82%</div><div class="lbl">Week Score</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>Habit Progress</strong>
+      <div class="sub">5 / 7 days complete</div>
+      <div class="bar"><div class="fill"></div></div>
+    </div>
+
+    <div class="card">
+      <strong>Recent Changes</strong>
+      <ul class="list">
+        <li>Note edited · 12m ago</li>
+        <li>Task archived · 1h ago</li>
+        <li>Calendar event synced · 2h ago</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

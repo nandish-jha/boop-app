@@ -1670,13 +1670,14 @@ private fun createNoteAudioFile(context: Context, baseName: String): File {
     return File(dir, "$baseName.m4a")
 }
 
-private data class CalendarEventUi(
+data class CalendarEventUi(
     val id: Long,
     val title: String,
     val beginMillis: Long,
     val endMillis: Long,
     val calendarDisplayName: String,
     val allDay: Boolean,
+    val repeatEveryDays: Int = 0,
 )
 
 private data class DeviceCalendarChoice(
@@ -1817,6 +1818,7 @@ private fun readGoogleCalendarEventsInRange(
         CalendarContract.Instances.TITLE,
         CalendarContract.Instances.BEGIN,
         CalendarContract.Instances.END,
+        CalendarContract.Events.RRULE,
         CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
         CalendarContract.Instances.CALENDAR_ID,
         CalendarContract.Instances.ALL_DAY,
@@ -1827,6 +1829,7 @@ private fun readGoogleCalendarEventsInRange(
         val titleIx = c.getColumnIndex(CalendarContract.Instances.TITLE)
         val beginIx = c.getColumnIndex(CalendarContract.Instances.BEGIN)
         val endIx = c.getColumnIndex(CalendarContract.Instances.END)
+        val rruleIx = c.getColumnIndex(CalendarContract.Events.RRULE)
         val calIx = c.getColumnIndex(CalendarContract.Instances.CALENDAR_DISPLAY_NAME)
         val allDayIx = c.getColumnIndex(CalendarContract.Instances.ALL_DAY)
         while (c.moveToNext()) {
@@ -1858,6 +1861,7 @@ private fun readGoogleCalendarEventsInRange(
                     endMillis = normalized.second,
                     calendarDisplayName = if (calIx >= 0) c.getString(calIx).orEmpty() else "",
                     allDay = isAllDay,
+                    repeatEveryDays = parseRepeatDaysFromRRule(if (rruleIx >= 0) c.getString(rruleIx).orEmpty() else ""),
                 ),
             )
         }
@@ -1868,6 +1872,7 @@ private fun readGoogleCalendarEventsInRange(
         CalendarContract.Events.TITLE,
         CalendarContract.Events.DTSTART,
         CalendarContract.Events.DTEND,
+        CalendarContract.Events.RRULE,
         CalendarContract.Events.CALENDAR_ID,
         CalendarContract.Events.ALL_DAY,
     )
@@ -1884,6 +1889,7 @@ private fun readGoogleCalendarEventsInRange(
         val titleIx = c.getColumnIndex(CalendarContract.Events.TITLE)
         val beginIx = c.getColumnIndex(CalendarContract.Events.DTSTART)
         val endIx = c.getColumnIndex(CalendarContract.Events.DTEND)
+        val rruleIx = c.getColumnIndex(CalendarContract.Events.RRULE)
         val allDayIx = c.getColumnIndex(CalendarContract.Events.ALL_DAY)
         while (c.moveToNext()) {
             val id = if (idIx >= 0) c.getLong(idIx) else 0L
@@ -1896,6 +1902,7 @@ private fun readGoogleCalendarEventsInRange(
                     endMillis = if (endIx >= 0) c.getLong(endIx) else endMillis,
                     calendarDisplayName = "",
                     allDay = allDayIx >= 0 && c.getInt(allDayIx) == 1,
+                    repeatEveryDays = parseRepeatDaysFromRRule(if (rruleIx >= 0) c.getString(rruleIx).orEmpty() else ""),
                 ),
             )
         }
@@ -2277,6 +2284,7 @@ private fun CalendarScreen(
             readGoogleCalendarEventsInRange(context, syncRangeStart, syncRangeEnd)
         }
         googleEventsCache = events
+        EventReminderScheduler.scheduleFromVisibleEvents(context, events)
         if (updateStatus) {
             lastSyncStatus = "Google Calendar synced: ${events.size} events loaded."
         }
@@ -2336,7 +2344,8 @@ private fun CalendarScreen(
         val startMillis: Long,
         val endMillis: Long,
         val title: String,
-        val detail: String,
+        val kindLabel: String,
+        val sourceLabel: String,
         val isTask: Boolean,
     )
     val timelineItems = remember(timedGoogleEvents, dayTasks, selectedDay.timeInMillis, nextDay.timeInMillis) {
@@ -2348,7 +2357,8 @@ private fun CalendarScreen(
                         startMillis = maxOf(event.beginMillis, selectedDay.timeInMillis),
                         endMillis = minOf(event.endMillis, nextDay.timeInMillis),
                         title = event.title,
-                        detail = if (event.calendarDisplayName.isNotBlank()) event.calendarDisplayName else "Google Calendar",
+                        kindLabel = if (event.repeatEveryDays > 0) "Repetitive event" else "One-time event",
+                        sourceLabel = if (event.calendarDisplayName.isNotBlank()) event.calendarDisplayName else "Google Calendar",
                         isTask = false,
                     ),
                 )
@@ -2361,7 +2371,8 @@ private fun CalendarScreen(
                         startMillis = task.reminderAt,
                         endMillis = maxOf(end, task.reminderAt + 5 * 60 * 1000L),
                         title = task.title,
-                        detail = "Boop task",
+                        kindLabel = if (task.repeatEveryDays > 0) "Repetitive task" else "One-time task",
+                        sourceLabel = "Boop task",
                         isTask = true,
                     ),
                 )
@@ -2626,8 +2637,8 @@ private fun CalendarScreen(
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 Text(item.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text(item.detail, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(if (isTask) "Boop task" else "Google Calendar", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+                                Text(item.kindLabel, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(item.sourceLabel, color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
@@ -3984,6 +3995,7 @@ private fun NoteEditorSheet(
     var attachmentStored by remember(session) { mutableStateOf(parseNoteAttachments(initial.attachmentUri)) }
     var audioStored by remember(session) { mutableStateOf(initial.audioUri) }
     var bodyEdit by remember(session) { mutableStateOf<EditText?>(null) }
+    var editorFocused by remember(session) { mutableStateOf(false) }
     var recording by remember(session) { mutableStateOf(false) }
     var recordingStartedAt by remember(session) { mutableLongStateOf(0L) }
     var recorder by remember(session) { mutableStateOf<MediaRecorder?>(null) }
@@ -4149,8 +4161,6 @@ private fun NoteEditorSheet(
     Spacer(Modifier.height(8.dp))
     Text("Note", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
     Spacer(Modifier.height(4.dp))
-    NoteRichTextToolbar(bodyEdit, context)
-    Spacer(Modifier.height(4.dp))
     AndroidView(
         modifier = Modifier
             .fillMaxWidth()
@@ -4172,6 +4182,9 @@ private fun NoteEditorSheet(
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
                 gravity = Gravity.TOP or Gravity.START
                 setPadding(16, 16, 16, 16)
+                onFocusChangeListener = android.view.View.OnFocusChangeListener { _, hasFocus ->
+                    editorFocused = hasFocus
+                }
                 setText(
                     HtmlCompat.fromHtml(
                         initial.body.ifBlank { "" },
@@ -4184,8 +4197,13 @@ private fun NoteEditorSheet(
         },
         update = { et ->
             bodyEdit = et
+            editorFocused = et.hasFocus()
         },
     )
+    if (editorFocused) {
+        Spacer(Modifier.height(6.dp))
+        NoteRichTextToolbar(bodyEdit, context)
+    }
     val currentBodyText = remember(bodyEdit?.text?.toString()) { bodyEdit?.text?.toString().orEmpty() }
     val linkRegex = remember { Regex("""https?://[^\s<>()]+""") }
     val typedLinks = remember(currentBodyText) { linkRegex.findAll(currentBodyText).map { it.value }.distinct().toList() }
@@ -4800,6 +4818,8 @@ object ReminderScheduler {
 }
 
 object EventReminderScheduler {
+    private const val DEFAULT_BEFORE_MILLIS = 30L * 60L * 1000L
+
     fun schedule(
         context: Context,
         eventId: Long,
@@ -4842,6 +4862,39 @@ object EventReminderScheduler {
             }
         }
     }
+
+    /** Schedule one lightweight reminder for each visible calendar event (Boop + Google). */
+    fun scheduleFromVisibleEvents(context: Context, events: List<CalendarEventUi>) {
+        val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val now = System.currentTimeMillis()
+        events.forEach { event ->
+            val at = event.beginMillis - DEFAULT_BEFORE_MILLIS
+            if (at <= now) return@forEach
+            val requestCode = (((event.id and 0x7FFFFFFF) * 37L) + (event.beginMillis / 60_000L)).toInt()
+            val source = if (event.calendarDisplayName.isNotBlank()) event.calendarDisplayName else "Calendar"
+            val intent = Intent(context, TaskReminderReceiver::class.java).apply {
+                putExtra("title", "Event: ${event.title}")
+                putExtra("subtitle", source)
+                putExtra("id", requestCode)
+                putExtra("taskId", "")
+            }
+            val pending = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
+                } else {
+                    @Suppress("DEPRECATION")
+                    manager.setExact(AlarmManager.RTC_WAKEUP, at, pending)
+                }
+            } catch (_: Throwable) {
+            }
+        }
+    }
 }
 
 class TaskReminderReceiver : BroadcastReceiver() {
@@ -4858,7 +4911,8 @@ class TaskReminderReceiver : BroadcastReceiver() {
         val title = intent.getStringExtra("title") ?: "Task due"
         val id = intent.getIntExtra("id", 1)
         val taskId = intent.getStringExtra("taskId").orEmpty()
-        ReminderNotifier.show(context, id, title, taskId)
+        val subtitle = intent.getStringExtra("subtitle").orEmpty()
+        ReminderNotifier.show(context, id, title, taskId, subtitle)
     }
 }
 
@@ -4876,7 +4930,7 @@ object ReminderNotifier {
         LocalStore.init(context)
     }
 
-    fun show(context: Context, id: Int, title: String, taskId: String) {
+    fun show(context: Context, id: Int, title: String, taskId: String, subtitle: String = "") {
         val completeIntent = Intent(context, TaskReminderReceiver::class.java).apply {
             action = ACTION_COMPLETE_TASK
             putExtra("id", id)
@@ -4894,6 +4948,9 @@ object ReminderNotifier {
             .setContentText(title)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+        if (subtitle.isNotBlank()) {
+            builder.setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText("$title\n$subtitle"))
+        }
         if (taskId.isNotBlank()) {
             builder.addAction(0, "Mark as completed", completePending)
         }

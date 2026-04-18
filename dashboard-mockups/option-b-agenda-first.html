@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Option B - Agenda First</title>
+  <style>
+    :root { --bg:#0c0c0d; --card:#171719; --text:#fff; --muted:#9999a2; --line:#28282f; --accent:#9fc2ff; }
+    * { box-sizing:border-box; font-family: Inter, system-ui, sans-serif; }
+    body { margin:0; background:var(--bg); color:var(--text); }
+    .phone { max-width:420px; margin:0 auto; min-height:100vh; padding:18px 14px 24px; }
+    .head { display:flex; justify-content:space-between; align-items:end; margin-bottom:12px; }
+    h1 { margin:0; font-size:30px; }
+    .date { color:var(--muted); font-size:13px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px; margin-bottom:10px; }
+    .timeline { position:relative; padding-left:18px; }
+    .timeline:before { content:""; position:absolute; left:5px; top:0; bottom:0; width:2px; background:#2d2d35; border-radius:2px; }
+    .it { position:relative; margin:0 0 12px; }
+    .it:before { content:""; position:absolute; left:-17px; top:6px; width:8px; height:8px; border-radius:50%; background:#a7b7d6; }
+    .time { color:#b7b7be; font-size:12px; }
+    .title { font-weight:600; }
+    .mini { color:var(--muted); font-size:13px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <div class="head">
+      <h1>Agenda</h1>
+      <div class="date">Thu, Apr 23</div>
+    </div>
+
+    <div class="card">
+      <div class="timeline">
+        <div class="it"><div class="time">10:00</div><div class="title">Daily Standup</div></div>
+        <div class="it"><div class="time">13:30</div><div class="title">Boop UI Review</div></div>
+        <div class="it"><div class="time">18:00</div><div class="title">Repeat Task: Bills</div></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <strong>Tasks</strong>
+        <div class="mini">2 overdue · 5 active</div>
+      </div>
+      <div class="card">
+        <strong>Notes</strong>
+        <div class="mini">Modified 15m ago</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>Habit Snapshot</strong>
+      <div class="mini">Workout 4/7 · Read 5/7 · Journal 3/7</div>
+    </div>
+  </div>
+</body>
+</html>
