@@ -896,7 +896,10 @@ views.supplements = root => {
   const total = state.supplements.length;
   const taken = Object.values(log).filter(Boolean).length;
   root.innerHTML = `
-    <button class="btn small mb-12" id="back">← Back</button>
+    <div class="row-between mb-12">
+      <button class="btn small" id="back">← Back</button>
+      <button class="btn small" id="mgSupp">Manage</button>
+    </div>
     <div class="card row-between"><div><div class="card-h" style="margin:0">Today · ${t}</div><div>${taken}/${total} taken</div></div>
       <button class="btn primary" id="logAll">Log</button></div>
     ${groups.map(g => `
@@ -911,6 +914,7 @@ views.supplements = root => {
     `).join('')}
   `;
   root.querySelector('#back').addEventListener('click', () => { moreSub = null; render(); });
+  root.querySelector('#mgSupp').addEventListener('click', manageSupplements);
   root.querySelector('#logAll').addEventListener('click', logSupplementsToday);
   root.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', () => {
     if (!state.supplementLogs[t]) state.supplementLogs[t] = {};
@@ -945,13 +949,86 @@ function logSupplementsToday() {
 }
 
 // ===================================================================
+// SUPPLEMENTS · CRUD
+// ===================================================================
+function manageSupplements() {
+  const groups = ['morning','workout','night'];
+  const renderList = () => groups.map(g => `
+    <div class="section-h">${g}</div>
+    <div class="col">
+      ${state.supplements.filter(s => s.time === g).map(s => `
+        <div class="manage-row" data-ms="${s.id}">
+          <div><div>${escapeHTML(s.name)}</div><div class="xs dim">${escapeHTML(s.dose||'')}</div></div>
+          <div class="row" style="gap:6px;">
+            <button class="btn small" data-edit="${s.id}">Edit</button>
+            <button class="btn small danger" data-del="${s.id}">Delete</button>
+          </div>
+        </div>`).join('') || '<div class="xs dim" style="padding:6px 0;">—</div>'}
+    </div>`).join('');
+  openSheet(`
+    <h2>Manage supplements</h2>
+    <div id="sList">${renderList()}</div>
+    <button class="btn primary btn-block mt-8" id="addS">+ Add supplement</button>
+  `, root => {
+    const bind = () => {
+      root.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => { closeSheet(); editSupplement(b.dataset.edit); }));
+      root.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+        if (!confirm('Delete this supplement?')) return;
+        state.supplements = state.supplements.filter(s => s.id !== b.dataset.del);
+        save(); root.querySelector('#sList').innerHTML = renderList(); bind(); render();
+      }));
+    };
+    bind();
+    root.querySelector('#addS').addEventListener('click', () => { closeSheet(); editSupplement(); });
+  });
+}
+
+function editSupplement(id) {
+  const s = id ? state.supplements.find(x => x.id === id) : { id: 's_'+uid(), name:'', dose:'', time:'morning' };
+  openSheet(`
+    <h2>${id ? 'Edit supplement' : 'New supplement'}</h2>
+    <div class="field"><label>Name</label><input class="input" id="sn" value="${escapeAttr(s.name)}" placeholder="e.g. Magnesium"></div>
+    <div class="field"><label>Dose / notes</label><input class="input" id="sd" value="${escapeAttr(s.dose||'')}" placeholder="e.g. 400 mg (with food)"></div>
+    <div class="field"><label>When</label>
+      <select class="select" id="st">
+        <option value="morning" ${s.time==='morning'?'selected':''}>Morning</option>
+        <option value="workout" ${s.time==='workout'?'selected':''}>Pre / post workout</option>
+        <option value="night" ${s.time==='night'?'selected':''}>Night</option>
+      </select>
+    </div>
+    <div class="row" style="gap:10px;">
+      <button class="btn primary flex-1" id="save">Save</button>
+      ${id ? '<button class="btn danger" id="del">Delete</button>' : ''}
+    </div>
+  `, root => {
+    root.querySelector('#save').addEventListener('click', () => {
+      const name = root.querySelector('#sn').value.trim();
+      if (!name) { toast('Enter a name'); return; }
+      s.name = name;
+      s.dose = root.querySelector('#sd').value.trim();
+      s.time = root.querySelector('#st').value;
+      if (!id) state.supplements.push(s);
+      save(); closeSheet(); render(); toast(id ? 'Updated' : 'Added');
+    });
+    root.querySelector('#del')?.addEventListener('click', () => {
+      if (!confirm('Delete?')) return;
+      state.supplements = state.supplements.filter(x => x.id !== id);
+      save(); closeSheet(); render(); toast('Deleted');
+    });
+  });
+}
+
+// ===================================================================
 // SKINCARE
 // ===================================================================
 views.skincare = root => {
   const t = todayISO();
   const log = state.skincareLogs[t] || {};
   root.innerHTML = `
-    <button class="btn small mb-12" id="back">← Back</button>
+    <div class="row-between mb-12">
+      <button class="btn small" id="back">← Back</button>
+      <button class="btn small" id="mgSk">Manage</button>
+    </div>
     ${['morning','night'].map(g => `
       <div class="section-h">${g}</div>
       <div class="card" style="padding:10px">
@@ -963,6 +1040,7 @@ views.skincare = root => {
       </div>`).join('')}
   `;
   root.querySelector('#back').addEventListener('click', () => { moreSub = null; render(); });
+  root.querySelector('#mgSk').addEventListener('click', manageSkincare);
   root.querySelectorAll('[data-sk]').forEach(b => b.addEventListener('click', () => {
     if (!state.skincareLogs[t]) state.skincareLogs[t] = {};
     state.skincareLogs[t][b.dataset.sk] = !state.skincareLogs[t][b.dataset.sk];
@@ -975,6 +1053,70 @@ function logSkincareToday() {
   if (!state.skincareLogs[t]) state.skincareLogs[t] = {};
   state.skincare.forEach(s => state.skincareLogs[t][s.id] = true);
   save(); render(); toast('All checked');
+}
+
+// Skincare · CRUD
+function manageSkincare() {
+  const groups = ['morning','night'];
+  const renderList = () => groups.map(g => `
+    <div class="section-h">${g}</div>
+    <div class="col">
+      ${state.skincare.filter(s => s.time === g).map(s => `
+        <div class="manage-row">
+          <div>${escapeHTML(s.name)}</div>
+          <div class="row" style="gap:6px;">
+            <button class="btn small" data-edit="${s.id}">Edit</button>
+            <button class="btn small danger" data-del="${s.id}">Delete</button>
+          </div>
+        </div>`).join('') || '<div class="xs dim" style="padding:6px 0;">—</div>'}
+    </div>`).join('');
+  openSheet(`
+    <h2>Manage skincare steps</h2>
+    <div id="skList">${renderList()}</div>
+    <button class="btn primary btn-block mt-8" id="addSk">+ Add step</button>
+  `, root => {
+    const bind = () => {
+      root.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => { closeSheet(); editSkincare(b.dataset.edit); }));
+      root.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+        if (!confirm('Delete this step?')) return;
+        state.skincare = state.skincare.filter(s => s.id !== b.dataset.del);
+        save(); root.querySelector('#skList').innerHTML = renderList(); bind(); render();
+      }));
+    };
+    bind();
+    root.querySelector('#addSk').addEventListener('click', () => { closeSheet(); editSkincare(); });
+  });
+}
+
+function editSkincare(id) {
+  const s = id ? state.skincare.find(x => x.id === id) : { id: 'sk_'+uid(), name:'', time:'morning' };
+  openSheet(`
+    <h2>${id ? 'Edit step' : 'New step'}</h2>
+    <div class="field"><label>Name</label><input class="input" id="sn" value="${escapeAttr(s.name)}" placeholder="e.g. Vitamin C serum"></div>
+    <div class="field"><label>When</label>
+      <select class="select" id="st">
+        <option value="morning" ${s.time==='morning'?'selected':''}>Morning</option>
+        <option value="night" ${s.time==='night'?'selected':''}>Night</option>
+      </select>
+    </div>
+    <div class="row" style="gap:10px;">
+      <button class="btn primary flex-1" id="save">Save</button>
+      ${id ? '<button class="btn danger" id="del">Delete</button>' : ''}
+    </div>
+  `, root => {
+    root.querySelector('#save').addEventListener('click', () => {
+      const name = root.querySelector('#sn').value.trim();
+      if (!name) { toast('Enter a name'); return; }
+      s.name = name; s.time = root.querySelector('#st').value;
+      if (!id) state.skincare.push(s);
+      save(); closeSheet(); render(); toast(id ? 'Updated' : 'Added');
+    });
+    root.querySelector('#del')?.addEventListener('click', () => {
+      if (!confirm('Delete?')) return;
+      state.skincare = state.skincare.filter(x => x.id !== id);
+      save(); closeSheet(); render(); toast('Deleted');
+    });
+  });
 }
 
 // ===================================================================
