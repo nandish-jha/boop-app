@@ -1,4 +1,4 @@
-const CACHE = 'prodash-v103';
+const CACHE = 'prodash-v104';
 const ASSETS = [
   './',
   './index.html',
