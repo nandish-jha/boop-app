@@ -5,7 +5,8 @@ A personal productivity dashboard — local-only PWA, also packaged as an Androi
 ## Download the APK
 
 - **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk)
-- **v1.0.1** (current): [releases/prodash-v1.0.1.apk](releases/prodash-v1.0.1.apk) — rebrand to ProDash, minimal themed icon, Material 3 nav
+- **v1.0.2** (current): [releases/prodash-v1.0.2.apk](releases/prodash-v1.0.2.apk) — greeting + quote in the top bar
+- **v1.0.1**: [releases/prodash-v1.0.1.apk](releases/prodash-v1.0.1.apk) — ProDash rebrand, minimal themed icon, Material 3 nav
 - **v1.0.0**: [releases/nandish-productivity-v1.0.0.apk](releases/nandish-productivity-v1.0.0.apk) — initial release
 
 All versioned builds live under [`releases/`](releases/) and are also tagged on the [Releases page](../../releases).
