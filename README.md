@@ -1,6 +1,17 @@
 # Nandish Productivity
 
-Local-only PWA for tracking tasks, habits, budget, supplements, skincare, workouts, notes, and goals.
+Local-only PWA (also packaged as an Android APK) for tracking tasks, habits, budget, supplements, skincare, workouts, notes, and goals.
+
+## Download the APK
+
+**Latest:** [releases/nandish-productivity-latest.apk](releases/nandish-productivity-latest.apk)
+
+Versioned releases live under [`releases/`](releases/) and are also tagged on the [Releases page](../../releases).
+
+### Install on Android
+1. Download the `.apk` on your phone
+2. Open it — allow "Install from unknown sources" if prompted
+3. Launch "Productivity"
 
 ## Features
 - Pure-black AMOLED Material 3 design, bottom navigation
@@ -13,13 +24,10 @@ Local-only PWA for tracking tasks, habits, budget, supplements, skincare, workou
 - **Notes** — tag-based filtering
 - **Goals** — progress tracking
 - **Data** — localStorage only; JSON export/import, CSV export of transactions
-- **PWA** — installable, offline-capable
+- **PWA** — installable in a browser, offline-capable
 
-## Run locally
+## Run the web version locally
 ```bash
 python3 -m http.server 8000
+# open http://localhost:8000
 ```
-Open http://localhost:8000.
-
-## Install as app
-Open in Chrome on Android/Desktop → menu → "Install app" / "Add to Home screen".
