@@ -742,8 +742,131 @@ function renderAccounts(c) {
           <div class="txn-amt">${fmtMoney(a.balance||0)}</div></div>
       `).join('')}
     </div>
-  `).join('') + `<div class="spacer"></div><button class="btn btn-block" id="editAccts">Edit balances</button>`;
+  `).join('') + `<div class="spacer"></div>
+    <div class="grid-2">
+      <button class="btn btn-block" id="editAccts">Edit balances</button>
+      <button class="btn btn-block" id="mgAccts">Manage accounts</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-block" id="mgCats">Manage categories</button>`;
   c.querySelector('#editAccts')?.addEventListener('click', editAccountBalances);
+  c.querySelector('#mgAccts')?.addEventListener('click', manageAccounts);
+  c.querySelector('#mgCats')?.addEventListener('click', manageCategories);
+}
+
+// Accounts · CRUD
+function manageAccounts() {
+  const renderList = () => state.accounts.map(a => `
+    <div class="manage-row">
+      <div><div>${escapeHTML(a.name)}</div><div class="xs dim">${escapeHTML(a.bank||'')} · ${a.type}</div></div>
+      <div class="row" style="gap:6px;">
+        <button class="btn small" data-edit="${a.id}">Edit</button>
+        <button class="btn small danger" data-del="${a.id}">Delete</button>
+      </div>
+    </div>`).join('');
+  openSheet(`
+    <h2>Manage accounts</h2>
+    <div id="aList" class="col">${renderList()}</div>
+    <button class="btn primary btn-block mt-8" id="addA">+ Add account</button>
+  `, root => {
+    const bind = () => {
+      root.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => { closeSheet(); editAccount(b.dataset.edit); }));
+      root.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+        const id = b.dataset.del;
+        const inUse = state.transactions.some(t => t.accountId === id);
+        if (inUse && !confirm('Transactions reference this account. Delete anyway? (They will remain but show no account.)')) return;
+        if (!inUse && !confirm('Delete this account?')) return;
+        state.accounts = state.accounts.filter(a => a.id !== id);
+        save(); root.querySelector('#aList').innerHTML = renderList(); bind(); render();
+      }));
+    };
+    bind();
+    root.querySelector('#addA').addEventListener('click', () => { closeSheet(); editAccount(); });
+  });
+}
+
+function editAccount(id) {
+  const a = id ? state.accounts.find(x => x.id === id) : { id: 'a_'+uid(), name:'', type:'chequing', bank:'', balance:0 };
+  openSheet(`
+    <h2>${id ? 'Edit account' : 'New account'}</h2>
+    <div class="field"><label>Name</label><input class="input" id="an" value="${escapeAttr(a.name)}" placeholder="e.g. Scotiabank Chequing"></div>
+    <div class="grid-2">
+      <div class="field"><label>Bank / Issuer</label><input class="input" id="ab" value="${escapeAttr(a.bank||'')}" placeholder="Scotiabank"></div>
+      <div class="field"><label>Type</label>
+        <select class="select" id="at">
+          ${['chequing','savings','tfsa','rrsp','credit','equity','loan','cash','other'].map(t => `<option ${a.type===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Balance</label><input class="input" type="number" step="0.01" id="abal" value="${a.balance||0}"></div>
+    <div class="row" style="gap:10px;">
+      <button class="btn primary flex-1" id="save">Save</button>
+      ${id ? '<button class="btn danger" id="del">Delete</button>' : ''}
+    </div>
+  `, root => {
+    root.querySelector('#save').addEventListener('click', () => {
+      const name = root.querySelector('#an').value.trim();
+      if (!name) { toast('Enter a name'); return; }
+      a.name = name;
+      a.bank = root.querySelector('#ab').value.trim();
+      a.type = root.querySelector('#at').value;
+      a.balance = parseFloat(root.querySelector('#abal').value) || 0;
+      if (!id) state.accounts.push(a);
+      save(); closeSheet(); render(); toast(id ? 'Updated' : 'Added');
+    });
+    root.querySelector('#del')?.addEventListener('click', () => {
+      if (!confirm('Delete this account?')) return;
+      state.accounts = state.accounts.filter(x => x.id !== id);
+      save(); closeSheet(); render(); toast('Deleted');
+    });
+  });
+}
+
+// Categories · CRUD
+function manageCategories() {
+  const renderList = () => state.categories.map((c,i) => `
+    <div class="manage-row">
+      <div>${escapeHTML(c)}</div>
+      <div class="row" style="gap:6px;">
+        <button class="btn small" data-edit="${i}">Rename</button>
+        <button class="btn small danger" data-del="${i}">Delete</button>
+      </div>
+    </div>`).join('');
+  openSheet(`
+    <h2>Manage categories</h2>
+    <div id="cList" class="col">${renderList()}</div>
+    <div class="field mt-8"><label>Add category</label>
+      <div class="row" style="gap:8px;"><input class="input" id="newC" placeholder="e.g. Subscriptions"><button class="btn" id="addC">Add</button></div>
+    </div>
+  `, root => {
+    const refresh = () => { root.querySelector('#cList').innerHTML = renderList(); bind(); };
+    const bind = () => {
+      root.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => {
+        const i = +b.dataset.edit; const old = state.categories[i];
+        const nv = prompt('Rename category', old);
+        if (!nv || nv === old) return;
+        state.categories[i] = nv;
+        state.transactions.forEach(t => { if (t.category === old) t.category = nv; });
+        save(); refresh(); render();
+      }));
+      root.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+        const i = +b.dataset.del; const name = state.categories[i];
+        const n = state.transactions.filter(t => t.category === name).length;
+        if (!confirm(n ? `${n} transactions use "${name}". Delete the category anyway?` : `Delete "${name}"?`)) return;
+        state.categories.splice(i, 1);
+        save(); refresh(); render();
+      }));
+    };
+    bind();
+    root.querySelector('#addC').addEventListener('click', () => {
+      const v = root.querySelector('#newC').value.trim();
+      if (!v) return;
+      if (state.categories.includes(v)) { toast('Already exists'); return; }
+      state.categories.push(v); save();
+      root.querySelector('#newC').value = '';
+      refresh();
+    });
+  });
 }
 
 function accountName(id) { return state.accounts.find(a => a.id === id)?.name; }
