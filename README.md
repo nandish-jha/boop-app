@@ -1,20 +1,25 @@
-# Nandish Productivity
+# ProDash
 
-Local-only PWA (also packaged as an Android APK) for tracking tasks, habits, budget, supplements, skincare, workouts, notes, and goals.
+A personal productivity dashboard — local-only PWA, also packaged as an Android APK. Tracks tasks, habits, budget, supplements, skincare, workouts, notes, and goals.
 
 ## Download the APK
 
-**Latest:** [releases/nandish-productivity-latest.apk](releases/nandish-productivity-latest.apk)
+- **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk)
+- **v1.0.1** (current): [releases/prodash-v1.0.1.apk](releases/prodash-v1.0.1.apk) — rebrand to ProDash, minimal themed icon, Material 3 nav
+- **v1.0.0**: [releases/nandish-productivity-v1.0.0.apk](releases/nandish-productivity-v1.0.0.apk) — initial release
 
-Versioned releases live under [`releases/`](releases/) and are also tagged on the [Releases page](../../releases).
+All versioned builds live under [`releases/`](releases/) and are also tagged on the [Releases page](../../releases).
 
 ### Install on Android
 1. Download the `.apk` on your phone
 2. Open it — allow "Install from unknown sources" if prompted
-3. Launch "Productivity"
+3. Launch **ProDash**
+
+On Android 13+ with a themed icon wallpaper, the launcher icon adopts your system theme (Material You).
 
 ## Features
-- Pure-black AMOLED Material 3 design, bottom navigation
+- Pure-black AMOLED Material 3 design, rounded bottom navigation with active pill indicator
+- Home greeting with a time-of-day message and a daily rotating motivational quote
 - **Tasks** — priority, type, due dates, recurrence
 - **Habits** — quantified + checkbox, streaks + 90-day heatmap (9 habits pre-seeded)
 - **Budget** — 15 accounts across Scotia/TD/Affinity/Wealthsimple/Loblaw/Loan, pie + bar charts, monthly savings goal
