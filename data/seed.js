@@ -1,11 +1,11 @@
 /* Seed data: workouts from Notion, supplements, skincare, budget categories, habits */
 window.SEED = {
   habits: [
-    { id: 'h_sleep', name: 'Sleep consistency', unit: 'hrs', target: 8, type: 'quant' },
-    { id: 'h_water', name: 'Water intake', unit: 'cups', target: 8, type: 'quant' },
+    { id: 'h_sleep', name: 'Sleep consistency', unit: 'hrs', type: 'timerange', healthyMin: 7, healthyMax: 9 },
+    { id: 'h_water', name: 'Water intake',    unit: 'ml',  target: 2000, type: 'quant' },
     { id: 'h_read',  name: 'Reading',         unit: 'min', target: 30, type: 'quant' },
-    { id: 'h_medit', name: 'Meditation',      unit: 'min', target: 10, type: 'quant' },
-    { id: 'h_pray',  name: 'Pray to god',     unit: 'times', target: 1, type: 'quant' },
+    { id: 'h_medit', name: 'Meditation',      unit: '',    target: 1, type: 'check' },
+    { id: 'h_pray',  name: 'Pray to god',     unit: '',    target: 1, type: 'check' },
     { id: 'h_food',  name: 'No outside food', unit: '',    target: 1, type: 'check' },
     { id: 'h_gym',   name: 'Gym',             unit: '',    target: 1, type: 'check' },
     { id: 'h_wake',  name: '4am wake up',     unit: '',    target: 1, type: 'check' },
