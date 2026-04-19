@@ -976,10 +976,14 @@ views.more = root => {
 // ===================================================================
 views.workouts = root => {
   root.innerHTML = `
-    <button class="btn small mb-12" id="back">← Back</button>
+    <div class="row-between mb-12">
+      <button class="btn small" id="back">← Back</button>
+      <button class="btn small" id="mgW">Manage</button>
+    </div>
     <div class="col" id="wList"></div>
   `;
   root.querySelector('#back').addEventListener('click', () => { moreSub = null; render(); });
+  root.querySelector('#mgW').addEventListener('click', manageWorkouts);
   const list = root.querySelector('#wList');
   list.innerHTML = state.workouts.map(w => `
     <button class="more-item" data-w="${w.id}">
@@ -990,6 +994,73 @@ views.workouts = root => {
   `).join('');
   list.querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', () => showWorkout(b.dataset.w)));
 };
+
+// Workouts · CRUD
+function manageWorkouts() {
+  const renderList = () => state.workouts.map(w => `
+    <div class="manage-row">
+      <div><div>${escapeHTML(w.name)}</div><div class="xs dim">${w.days.length} day${w.days.length>1?'s':''}</div></div>
+      <div class="row" style="gap:6px;">
+        <button class="btn small" data-edit="${w.id}">Edit</button>
+        <button class="btn small danger" data-del="${w.id}">Delete</button>
+      </div>
+    </div>`).join('');
+  openSheet(`
+    <h2>Manage workouts</h2>
+    <div id="wMg" class="col">${renderList()}</div>
+    <button class="btn primary btn-block mt-8" id="addW">+ Add workout</button>
+  `, root => {
+    const bind = () => {
+      root.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => { closeSheet(); editWorkout(b.dataset.edit); }));
+      root.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+        if (!confirm('Delete this workout template?')) return;
+        state.workouts = state.workouts.filter(x => x.id !== b.dataset.del);
+        save(); root.querySelector('#wMg').innerHTML = renderList(); bind(); render();
+      }));
+    };
+    bind();
+    root.querySelector('#addW').addEventListener('click', () => { closeSheet(); editWorkout(); });
+  });
+}
+
+function editWorkout(id) {
+  const w = id ? state.workouts.find(x => x.id === id) : { id: 'w_'+uid(), name:'', note:'', days: [{ day:'Day 1', exercises: [] }] };
+  const daysText = w.days.map(d => `# ${d.day}\n${d.exercises.join('\n')}`).join('\n\n');
+  openSheet(`
+    <h2>${id ? 'Edit workout' : 'New workout'}</h2>
+    <div class="field"><label>Name</label><input class="input" id="wn" value="${escapeAttr(w.name)}"></div>
+    <div class="field"><label>Note (optional)</label><input class="input" id="wnote" value="${escapeAttr(w.note||'')}"></div>
+    <div class="field"><label>Days &amp; exercises</label>
+      <div class="xs dim mb-4">Each day starts with <code># Day name</code>, then one exercise per line.</div>
+      <textarea class="textarea" id="wd" style="min-height:200px;">${escapeHTML(daysText)}</textarea>
+    </div>
+    <div class="row" style="gap:10px;">
+      <button class="btn primary flex-1" id="save">Save</button>
+      ${id ? '<button class="btn danger" id="del">Delete</button>' : ''}
+    </div>
+  `, root => {
+    root.querySelector('#save').addEventListener('click', () => {
+      const name = root.querySelector('#wn').value.trim();
+      if (!name) { toast('Enter a name'); return; }
+      const raw = root.querySelector('#wd').value;
+      const days = [];
+      let cur = null;
+      raw.split(/\r?\n/).forEach(line => {
+        if (line.startsWith('#')) { cur = { day: line.replace(/^#\s*/, '').trim() || 'Day', exercises: [] }; days.push(cur); }
+        else if (line.trim() && cur) cur.exercises.push(line.trim());
+      });
+      if (days.length === 0) { toast('Add at least one day (# line)'); return; }
+      w.name = name; w.note = root.querySelector('#wnote').value.trim(); w.days = days;
+      if (!id) state.workouts.push(w);
+      save(); closeSheet(); render(); toast(id ? 'Updated' : 'Added');
+    });
+    root.querySelector('#del')?.addEventListener('click', () => {
+      if (!confirm('Delete?')) return;
+      state.workouts = state.workouts.filter(x => x.id !== id);
+      save(); closeSheet(); render(); toast('Deleted');
+    });
+  });
+}
 
 function showWorkout(id) {
   const w = state.workouts.find(x => x.id === id);
