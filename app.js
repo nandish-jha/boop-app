@@ -257,18 +257,32 @@ function renderTaskItem(t) {
   const typeChip = t.type ? `<span class="chip">${t.type}</span>` : '';
   const dueChip = t.due ? `<span class="chip">${t.due}</span>` : '';
   const recChip = t.recurrence && t.recurrence !== 'none' ? `<span class="chip">↻ ${t.recurrence}</span>` : '';
+  const remChip = t.remindAt && !t.done ? `<span class="chip">${ICON_BELL_INLINE} ${fmtRemind(t.remindAt)}</span>` : '';
   return `
     <div class="item" data-id="${t.id}">
       <button class="check ${t.done?'done':''}" data-check></button>
       <div class="item-body">
         <div class="item-title ${t.done?'done':''}">${escapeHTML(t.title)}</div>
-        <div class="item-meta">${prChip}${typeChip}${dueChip}${recChip}</div>
+        <div class="item-meta">${prChip}${typeChip}${dueChip}${recChip}${remChip}</div>
       </div>
       <div class="item-actions">
-        <button data-edit>✎</button>
-        <button data-del>✕</button>
+        <button data-edit aria-label="Edit">${ICON_EDIT}</button>
+        <button data-del aria-label="Delete">${ICON_CLOSE}</button>
       </div>
     </div>`;
+}
+
+const ICON_EDIT = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg>';
+const ICON_CLOSE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>';
+const ICON_BELL_INLINE = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>';
+
+function fmtRemind(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const same = d.toDateString() === new Date().toDateString();
+  const hm = d.toTimeString().slice(0,5);
+  return same ? hm : `${d.toISOString().slice(5,10)} ${hm}`;
 }
 
 function bindTaskItems(root) {
@@ -302,7 +316,7 @@ function delTask(id) {
 }
 
 function editTask(id) {
-  const t = id ? state.tasks.find(x => x.id === id) : { id: uid(), title: '', priority: 'medium', type: 'personal', due: '', recurrence: 'none', done: false };
+  const t = id ? state.tasks.find(x => x.id === id) : { id: uid(), title: '', priority: 'medium', type: 'personal', due: '', recurrence: 'none', remindAt: '', done: false };
   openSheet(`
     <h2>${id ? 'Edit task' : 'New task'}</h2>
     <div class="field"><label>Title</label><input class="input" id="tt" value="${escapeAttr(t.title)}" placeholder="e.g. Finish assignment"></div>
@@ -330,6 +344,10 @@ function editTask(id) {
           <option value="monthly" ${t.recurrence==='monthly'?'selected':''}>Monthly</option>
         </select></div>
     </div>
+    <div class="field"><label>Reminder (date &amp; time)</label>
+      <input class="input" id="trem" type="datetime-local" value="${t.remindAt ? t.remindAt.slice(0,16) : ''}">
+      <div class="xs dim mt-4">Leave blank for no reminder. Enable notifications in Settings to receive them.</div>
+    </div>
     <div class="row" style="gap:10px; margin-top:8px;">
       <button class="btn primary flex-1" id="save">Save</button>
       ${id ? '<button class="btn danger" id="del">Delete</button>' : ''}
@@ -343,8 +361,11 @@ function editTask(id) {
       t.type = root.querySelector('#ty').value;
       t.due = root.querySelector('#td').value;
       t.recurrence = root.querySelector('#tr').value;
+      const remVal = root.querySelector('#trem').value;
+      t.remindAt = remVal ? new Date(remVal).toISOString() : '';
+      t.remindFired = false;
       if (!id) state.tasks.push(t);
-      save(); closeSheet(); render(); toast(id ? 'Updated' : 'Added');
+      save(); closeSheet(); render(); scheduleTaskReminders(); toast(id ? 'Updated' : 'Added');
     });
     root.querySelector('#del')?.addEventListener('click', () => { closeSheet(); delTask(id); });
   });
@@ -1471,9 +1492,22 @@ views.settings = root => {
     save(); toast('Saved'); scheduleReminder();
   });
   root.querySelector('#notif').addEventListener('click', async () => {
-    if (!('Notification' in window)) { toast('Not supported'); return; }
-    const p = await Notification.requestPermission();
-    toast(p === 'granted' ? 'Enabled' : 'Denied');
+    if (window.AndroidNotifier && typeof AndroidNotifier.requestPermission === 'function') {
+      if (AndroidNotifier.hasPermission()) { toast('Already enabled'); return; }
+      AndroidNotifier.requestPermission();
+      setTimeout(() => {
+        const ok = AndroidNotifier.hasPermission();
+        toast(ok ? 'Enabled' : 'Tap Allow to enable');
+        if (ok) { scheduleReminder(); scheduleTaskReminders(); }
+      }, 400);
+      return;
+    }
+    if (!('Notification' in window)) { toast('Not supported on this device'); return; }
+    try {
+      const p = await Notification.requestPermission();
+      toast(p === 'granted' ? 'Enabled' : 'Denied');
+      if (p === 'granted') { scheduleReminder(); scheduleTaskReminders(); }
+    } catch { toast('Not supported on this device'); }
   });
   root.querySelector('#bSave').addEventListener('click', () => {
     state.budget.monthlySavingsGoal = parseFloat(root.querySelector('#mSav').value) || 0;
@@ -1530,17 +1564,63 @@ function downloadBlob(blob, name) {
 let reminderTimer;
 function scheduleReminder() {
   clearTimeout(reminderTimer);
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const hasNative = !!(window.AndroidNotifier && AndroidNotifier.hasPermission && AndroidNotifier.hasPermission());
+  const hasWeb = ('Notification' in window) && Notification.permission === 'granted';
+  if (!hasNative && !hasWeb) return;
   const [h, m] = (state.settings.reminderTime || '21:00').split(':').map(Number);
   const now = new Date();
   const next = new Date(); next.setHours(h, m, 0, 0);
   if (next <= now) next.setDate(next.getDate()+1);
   reminderTimer = setTimeout(() => {
-    try { new Notification('Productivity', { body: 'Time to check in on habits, supplements & tasks.' }); } catch {}
+    const title = 'ProDash';
+    const body = 'Time to check in on habits, supplements & tasks.';
+    try {
+      if (window.AndroidNotifier && AndroidNotifier.hasPermission && AndroidNotifier.hasPermission()) AndroidNotifier.notify(title, body);
+      else if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body });
+    } catch {}
     scheduleReminder();
   }, next - now);
 }
 scheduleReminder();
+
+// Task reminders (per-task exact time, while app is open)
+let taskTimers = [];
+function canNotify() {
+  return !!(window.AndroidNotifier && AndroidNotifier.hasPermission && AndroidNotifier.hasPermission())
+    || (('Notification' in window) && Notification.permission === 'granted');
+}
+function fireNotify(title, body) {
+  try {
+    if (window.AndroidNotifier && AndroidNotifier.hasPermission && AndroidNotifier.hasPermission()) AndroidNotifier.notify(title, body);
+    else if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body });
+  } catch {}
+}
+function scheduleTaskReminders() {
+  taskTimers.forEach(id => clearTimeout(id));
+  taskTimers = [];
+  if (!canNotify()) return;
+  const now = Date.now();
+  state.tasks.forEach(t => {
+    if (!t.remindAt || t.done || t.remindFired) return;
+    const when = new Date(t.remindAt).getTime();
+    if (isNaN(when)) return;
+    const delay = when - now;
+    if (delay <= 0) {
+      if (now - when < 24*60*60*1000) fireNotify('Task reminder', t.title);
+      t.remindFired = true; save();
+      return;
+    }
+    if (delay > 24*60*60*1000) return;
+    const tid = setTimeout(() => {
+      fireNotify('Task reminder', t.title);
+      t.remindFired = true; save();
+      scheduleTaskReminders();
+    }, delay);
+    taskTimers.push(tid);
+  });
+}
+scheduleTaskReminders();
+setInterval(scheduleTaskReminders, 60*60*1000);
 
 // ---------- Helpers ----------
 function escapeHTML(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }

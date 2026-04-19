@@ -52,6 +52,9 @@ public class MainActivity extends AppCompatActivity {
         s.setAllowContentAccess(false);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setTextZoom(100);
+
+        // Native notification bridge
+        webView.addJavascriptInterface(new AndroidNotifier(this), "AndroidNotifier");
         // Enable localStorage to persist
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
 
