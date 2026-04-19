@@ -995,6 +995,10 @@ views.settings = root => {
       <label class="btn btn-block mb-8" style="display:block; text-align:center; cursor:pointer;">Import JSON
         <input type="file" accept="application/json" id="imp" style="display:none">
       </label>
+      <label class="btn btn-block mb-8" style="display:block; text-align:center; cursor:pointer;">Import Cashew CSV
+        <input type="file" accept=".csv,text/csv" id="impCsh" style="display:none">
+      </label>
+      <div class="xs dim mb-8">Cashew transactions are appended (duplicates skipped). Unknown accounts are auto-created.</div>
       <button class="btn btn-block danger" id="reset">Reset all data</button>
     </div>
 
@@ -1022,6 +1026,7 @@ views.settings = root => {
   root.querySelector('#exp').addEventListener('click', exportJSON);
   root.querySelector('#expCsv').addEventListener('click', exportCSV);
   root.querySelector('#imp').addEventListener('change', importJSON);
+  root.querySelector('#impCsh').addEventListener('change', importCashew);
   root.querySelector('#reset').addEventListener('click', () => {
     if (!confirm('Erase ALL data? This cannot be undone.')) return;
     localStorage.removeItem(STORAGE_KEY);
@@ -1063,6 +1068,22 @@ function importJSON(e) {
       state = { ...defaultState(), ...obj };
       save(); render(); toast('Imported');
     } catch { toast('Invalid file'); }
+  };
+  r.readAsText(f);
+}
+function importCashew(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      if (!window.Cashew) { toast('Importer not loaded'); return; }
+      const { txns, skipped } = window.Cashew.parseCashew(r.result, state);
+      if (!txns.length) { toast('No valid rows'); return; }
+      if (!confirm(`Append ${txns.length} transactions from Cashew? (${skipped} skipped)`)) return;
+      const { added, dup } = window.Cashew.apply(state, txns);
+      save(); render();
+      toast(`Imported ${added} · ${dup} duplicates skipped`);
+    } catch (err) { toast(err.message || 'Import failed'); }
   };
   r.readAsText(f);
 }
