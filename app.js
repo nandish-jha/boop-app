@@ -179,11 +179,7 @@ views.home = root => {
   const saved = income - expense;
 
   const habitsLog = state.habitLogs[t] || {};
-  const habitsDone = state.habits.filter(h => {
-    const v = habitsLog[h.id];
-    if (h.type === 'check') return !!v;
-    return typeof v === 'number' && v >= h.target;
-  }).length;
+  const habitsDone = state.habits.filter(h => habitIsHit(h, habitsLog[h.id])).length;
 
   const supps = state.supplementLogs[t] || {};
   const suppsDone = Object.values(supps).filter(Boolean).length;
@@ -394,6 +390,19 @@ function habitRow(h, val, streak) {
       <button class="check ${done?'done':''}" data-hcheck="${h.id}"></button>
     </div>`;
   }
+  if (h.type === 'timerange') {
+    const hrs = timerangeHours(val);
+    const stats = sleepStats(h);
+    const label = hrs != null
+      ? `${hrs.toFixed(1)} hrs (${val.start} → ${val.end})`
+      : 'Not logged';
+    const avgPct = stats.logged ? Math.min(100, (stats.avg / (h.healthyMax || 9)) * 100) : 0;
+    return `<div style="padding:6px 0;">
+      <div class="row-between mb-8"><div><div>${h.name}</div><div class="xs dim">${label} · 🔥 ${streak}</div></div></div>
+      <div class="progress"><span style="width:${avgPct}%"></span></div>
+      <div class="xs dim" style="margin-top:4px;">Avg ${stats.logged ? stats.avg.toFixed(1)+' hrs' : '—'} · Consistency ${stats.logged ? stats.consistency+'%' : '—'} ${stats.logged ? (stats.consistency >= 80 ? '✓' : '· goal 80%') : ''}</div>
+    </div>`;
+  }
   const cur = val || 0;
   const pct = Math.min(100, (cur / h.target) * 100);
   return `<div style="padding:6px 0;">
@@ -402,15 +411,55 @@ function habitRow(h, val, streak) {
   </div>`;
 }
 
+// Convert {start:'HH:MM', end:'HH:MM'} to hours (handles overnight)
+function timerangeHours(v) {
+  if (!v || typeof v !== 'object' || !v.start || !v.end) return null;
+  const [sh, sm] = v.start.split(':').map(Number);
+  const [eh, em] = v.end.split(':').map(Number);
+  if ([sh, sm, eh, em].some(n => isNaN(n))) return null;
+  let start = sh * 60 + sm;
+  let end = eh * 60 + em;
+  if (end <= start) end += 24 * 60; // overnight
+  return (end - start) / 60;
+}
+
+// Is a habit "hit" for a given day?
+function habitIsHit(h, v) {
+  if (h.type === 'check') return !!v;
+  if (h.type === 'timerange') {
+    const hrs = timerangeHours(v);
+    if (hrs == null) return false;
+    const lo = h.healthyMin ?? 7, hi = h.healthyMax ?? 9;
+    return hrs >= lo && hrs <= hi;
+  }
+  return typeof v === 'number' && v >= h.target;
+}
+
+// Sleep average + consistency over all logged days (never a "target" — user-requested)
+function sleepStats(h) {
+  const hours = [];
+  let within = 0;
+  const lo = h.healthyMin ?? 7, hi = h.healthyMax ?? 9;
+  for (const day of Object.keys(state.habitLogs)) {
+    const hrs = timerangeHours(state.habitLogs[day][h.id]);
+    if (hrs != null) {
+      hours.push(hrs);
+      if (hrs >= lo && hrs <= hi) within++;
+    }
+  }
+  const logged = hours.length;
+  const avg = logged ? hours.reduce((a,b)=>a+b,0) / logged : 0;
+  const consistency = logged ? Math.round((within / logged) * 100) : 0;
+  return { logged, avg, consistency };
+}
+
 function currentStreak(h) {
   let s = 0;
   const d = new Date();
   for (let i = 0; i < 366; i++) {
     const key = todayISO(d);
     const log = state.habitLogs[key] || {};
-    const v = log[h.id];
-    const hit = h.type === 'check' ? !!v : (typeof v === 'number' && v >= h.target);
-    if (hit) s++; else break;
+    if (habitIsHit(h, log[h.id])) s++; else break;
     d.setDate(d.getDate() - 1);
   }
   return s;
@@ -425,10 +474,7 @@ function heatmapHTML() {
     const d = new Date(start); d.setDate(start.getDate() + i);
     const key = todayISO(d);
     const log = state.habitLogs[key] || {};
-    const hits = state.habits.filter(h => {
-      const v = log[h.id];
-      return h.type === 'check' ? !!v : (typeof v === 'number' && v >= h.target);
-    }).length;
+    const hits = state.habits.filter(h => habitIsHit(h, log[h.id])).length;
     const r = state.habits.length ? hits / state.habits.length : 0;
     const lvl = r === 0 ? '' : r < .34 ? 'l1' : r < .67 ? 'l2' : r < 1 ? 'l3' : 'l4';
     cells.push(`<div class="cell ${lvl}" title="${key}: ${hits}/${state.habits.length}"></div>`);
@@ -448,8 +494,19 @@ function markHabitsToday() {
           return `<div class="row-between" style="padding:8px 0;"><span>${h.name}</span>
             <button class="check ${log[h.id]?'done':''}" data-hc="${h.id}"></button></div>`;
         }
+        if (h.type === 'timerange') {
+          const v = log[h.id] || {};
+          const hrs = timerangeHours(v);
+          return `<div class="field"><label>${h.name}${hrs!=null?` · ${hrs.toFixed(1)} hrs`:''}</label>
+            <div class="row" style="display:flex; gap:8px;">
+              <div style="flex:1;"><div class="xs dim mb-4">Start (bedtime)</div>
+                <input type="time" class="input" data-htr="${h.id}" data-part="start" value="${v.start || ''}"></div>
+              <div style="flex:1;"><div class="xs dim mb-4">End (wake)</div>
+                <input type="time" class="input" data-htr="${h.id}" data-part="end" value="${v.end || ''}"></div>
+            </div></div>`;
+        }
         return `<div class="field"><label>${h.name} (${h.unit}, target ${h.target})</label>
-          <input type="number" step="0.1" min="0" class="input" data-hq="${h.id}" value="${log[h.id] ?? ''}"></div>`;
+          <input type="number" step="${h.unit==='ml'?'50':'1'}" min="0" class="input" data-hq="${h.id}" value="${log[h.id] ?? ''}"></div>`;
       }).join('')}
     </div>
     <button class="btn primary btn-block" id="saveH">Save</button>
@@ -461,6 +518,16 @@ function markHabitsToday() {
       const newLog = {};
       root.querySelectorAll('[data-hc]').forEach(b => { newLog[b.dataset.hc] = b.classList.contains('done'); });
       root.querySelectorAll('[data-hq]').forEach(i => { const v = parseFloat(i.value); if (!isNaN(v)) newLog[i.dataset.hq] = v; });
+      // Time-range habits: collect start/end pairs per habit id
+      const trMap = {};
+      root.querySelectorAll('[data-htr]').forEach(i => {
+        const id = i.dataset.htr;
+        trMap[id] = trMap[id] || {};
+        if (i.value) trMap[id][i.dataset.part] = i.value;
+      });
+      Object.keys(trMap).forEach(id => {
+        if (trMap[id].start && trMap[id].end) newLog[id] = trMap[id];
+      });
       state.habitLogs[t] = newLog;
       save(); closeSheet(); render(); toast('Saved');
     });
