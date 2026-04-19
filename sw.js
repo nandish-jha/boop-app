@@ -1,4 +1,4 @@
-const CACHE = 'prodash-v1';
+const CACHE = 'prodash-v103';
 const ASSETS = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const ASSETS = [
   './app.js',
   './data/seed.js',
   './data/quotes.js',
+  './data/cashew-import.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png'
