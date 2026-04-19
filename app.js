@@ -360,7 +360,12 @@ views.habits = root => {
   state.habits.forEach(h => streakMap[h.id] = currentStreak(h));
   root.innerHTML = `
     <div class="card">
-      <div class="row-between mb-8"><div class="card-h" style="margin:0">Today · ${t}</div><button class="btn ghost small" id="logAll">Edit</button></div>
+      <div class="row-between mb-8"><div class="card-h" style="margin:0">Today · ${t}</div>
+        <div class="row" style="gap:6px;">
+          <button class="btn ghost small" id="mgHab">Manage</button>
+          <button class="btn ghost small" id="logAll">Edit</button>
+        </div>
+      </div>
       <div class="col">
         ${state.habits.map(h => habitRow(h, log[h.id], streakMap[h.id])).join('')}
       </div>
@@ -373,6 +378,7 @@ views.habits = root => {
     </div>
   `;
   root.querySelector('#logAll').addEventListener('click', markHabitsToday);
+  root.querySelector('#mgHab').addEventListener('click', manageHabits);
   root.querySelectorAll('[data-hcheck]').forEach(b => b.addEventListener('click', () => {
     const id = b.dataset.hcheck;
     const day = todayISO();
@@ -530,6 +536,98 @@ function markHabitsToday() {
       });
       state.habitLogs[t] = newLog;
       save(); closeSheet(); render(); toast('Saved');
+    });
+  });
+}
+
+// ===================================================================
+// HABITS · CRUD (manage list)
+// ===================================================================
+function manageHabits() {
+  const renderList = () => state.habits.map(h => `
+    <div class="manage-row" data-mh="${h.id}">
+      <div><div>${escapeHTML(h.name)}</div><div class="xs dim">${h.type}${h.unit?' · '+h.unit:''}${h.target?' · target '+h.target:''}${h.type==='timerange'?` · ${h.healthyMin}–${h.healthyMax} hrs`:''}</div></div>
+      <div class="row" style="gap:6px;">
+        <button class="btn small" data-edit="${h.id}">Edit</button>
+        <button class="btn small danger" data-del="${h.id}">Delete</button>
+      </div>
+    </div>`).join('');
+  openSheet(`
+    <h2>Manage habits</h2>
+    <div id="hList" class="col">${renderList()}</div>
+    <button class="btn primary btn-block mt-8" id="addH">+ Add habit</button>
+  `, root => {
+    const refresh = () => { root.querySelector('#hList').innerHTML = renderList(); bind(); };
+    const bind = () => {
+      root.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => { closeSheet(); editHabit(b.dataset.edit); }));
+      root.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+        if (!confirm('Delete this habit? Its logs will be kept but orphaned.')) return;
+        state.habits = state.habits.filter(h => h.id !== b.dataset.del);
+        save(); refresh(); render();
+      }));
+    };
+    bind();
+    root.querySelector('#addH').addEventListener('click', () => { closeSheet(); editHabit(); });
+  });
+}
+
+function editHabit(id) {
+  const h = id ? state.habits.find(x => x.id === id) : { id: 'h_'+uid(), name:'', type:'check', unit:'', target:1, healthyMin:7, healthyMax:9 };
+  openSheet(`
+    <h2>${id ? 'Edit habit' : 'New habit'}</h2>
+    <div class="field"><label>Name</label><input class="input" id="hn" value="${escapeAttr(h.name)}" placeholder="e.g. Read 30 min"></div>
+    <div class="field"><label>Type</label>
+      <select class="select" id="ht">
+        <option value="check" ${h.type==='check'?'selected':''}>Check (yes/no)</option>
+        <option value="quant" ${h.type==='quant'?'selected':''}>Quantity (e.g. ml, min)</option>
+        <option value="timerange" ${h.type==='timerange'?'selected':''}>Time range (start→end)</option>
+      </select>
+    </div>
+    <div id="quantFields" style="display:${h.type==='quant'?'block':'none'};">
+      <div class="grid-2">
+        <div class="field"><label>Unit</label><input class="input" id="hu" value="${escapeAttr(h.unit||'')}" placeholder="ml / min / pages"></div>
+        <div class="field"><label>Target</label><input class="input" type="number" id="hT" value="${h.target||0}"></div>
+      </div>
+    </div>
+    <div id="trFields" style="display:${h.type==='timerange'?'block':'none'};">
+      <div class="grid-2">
+        <div class="field"><label>Healthy min (hrs)</label><input class="input" type="number" step="0.5" id="hmin" value="${h.healthyMin??7}"></div>
+        <div class="field"><label>Healthy max (hrs)</label><input class="input" type="number" step="0.5" id="hmax" value="${h.healthyMax??9}"></div>
+      </div>
+    </div>
+    <div class="row" style="gap:10px; margin-top:8px;">
+      <button class="btn primary flex-1" id="save">Save</button>
+      ${id ? '<button class="btn danger" id="del">Delete</button>' : ''}
+    </div>
+  `, root => {
+    const tSel = root.querySelector('#ht');
+    tSel.addEventListener('change', () => {
+      root.querySelector('#quantFields').style.display = tSel.value === 'quant' ? 'block' : 'none';
+      root.querySelector('#trFields').style.display = tSel.value === 'timerange' ? 'block' : 'none';
+    });
+    root.querySelector('#save').addEventListener('click', () => {
+      const name = root.querySelector('#hn').value.trim();
+      if (!name) { toast('Enter a name'); return; }
+      h.name = name; h.type = tSel.value;
+      if (h.type === 'quant') {
+        h.unit = root.querySelector('#hu').value.trim();
+        h.target = parseFloat(root.querySelector('#hT').value) || 1;
+        delete h.healthyMin; delete h.healthyMax;
+      } else if (h.type === 'timerange') {
+        h.healthyMin = parseFloat(root.querySelector('#hmin').value) || 7;
+        h.healthyMax = parseFloat(root.querySelector('#hmax').value) || 9;
+        h.unit = 'hrs'; h.target = 1;
+      } else {
+        h.unit = ''; h.target = 1;
+        delete h.healthyMin; delete h.healthyMax;
+      }
+      if (!id) state.habits.push(h);
+      save(); closeSheet(); render(); toast(id ? 'Updated' : 'Added');
+    });
+    root.querySelector('#del')?.addEventListener('click', () => {
+      if (!confirm('Delete this habit?')) return;
+      state.habits = state.habits.filter(x => x.id !== id);
+      save(); closeSheet(); render(); toast('Deleted');
     });
   });
 }
