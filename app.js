@@ -44,12 +44,30 @@ const views = {};
 let currentTab = 'home';
 let moreSub = null; // 'workouts', 'supplements', 'skincare', 'notes', 'goals', 'settings'
 
-function setTitle(t) { document.getElementById('pageTitle').textContent = t; }
+function setTitle(t, sub) {
+  const titleEl = document.getElementById('pageTitle');
+  const subEl = document.getElementById('pageSubtitle');
+  const topbar = document.getElementById('topbar');
+  titleEl.textContent = t;
+  if (sub) {
+    subEl.innerHTML = sub;
+    topbar.classList.add('has-subtitle');
+  } else {
+    subEl.innerHTML = '';
+    topbar.classList.remove('has-subtitle');
+  }
+}
 
 function render() {
   const v = document.getElementById('view');
   v.innerHTML = '';
-  if (currentTab === 'home') { setTitle('Home'); views.home(v); }
+  if (currentTab === 'home') {
+    const g = (typeof getGreeting === 'function') ? getGreeting() : 'Hello';
+    const q = (typeof getDailyQuote === 'function') ? getDailyQuote() : null;
+    const sub = q ? `“${q.q}” <span class="who">— ${q.a}</span>` : '';
+    setTitle(`${g}, how are you doing?`, sub);
+    views.home(v);
+  }
   else if (currentTab === 'tasks') { setTitle('Tasks'); views.tasks(v); }
   else if (currentTab === 'habits') { setTitle('Habits'); views.habits(v); }
   else if (currentTab === 'budget') { setTitle('Budget'); views.budget(v); }
@@ -171,15 +189,7 @@ views.home = root => {
   const suppsDone = Object.values(supps).filter(Boolean).length;
   const suppsTotal = state.supplements.length;
 
-  const quote = (typeof getDailyQuote === 'function') ? getDailyQuote() : null;
-  const greet = (typeof getGreeting === 'function') ? getGreeting() : 'Hello';
-
   root.innerHTML = `
-    <div class="greeting">
-      <div class="hi">${greet}, how are you doing?</div>
-      ${quote ? `<div class="quote">“${quote.q}” <span class="who">— ${quote.a}</span></div>` : ''}
-    </div>
-
     <div class="grid-2 mb-12">
       <div class="kpi"><div class="k">Tasks today</div><div class="v">${todayTasks.length}</div><div class="d">due or overdue</div></div>
       <div class="kpi"><div class="k">Habits</div><div class="v">${habitsDone}/${state.habits.length}</div><div class="d">hit target</div></div>
