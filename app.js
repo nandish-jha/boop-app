@@ -2,6 +2,7 @@
 // Local-only storage (localStorage). Export / import JSON supported.
 
 const STORAGE_KEY = 'nandish.productivity.v1';
+const APP_VERSION = '1.0.7';
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const todayISO = (d = new Date()) => d.toISOString().slice(0, 10);
 const fmtMoney = n => (n < 0 ? '-' : '') + '$' + Math.abs(n).toFixed(2);
@@ -22,7 +23,7 @@ const defaultState = () => ({
   budget: { monthlySavingsGoal: 500, monthlyBudget: 0 },
   notes: [],
   workouts: SEED.workouts.map(w => ({ ...w })), // static templates
-  settings: { reminderTime: '21:00' }
+  settings: { reminderTime: '21:00', lastBackupAt: '' }
 });
 
 let state = load();
@@ -32,12 +33,19 @@ function load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
-    // Fill any missing keys with defaults (for upgrades)
-    const base = defaultState();
-    return { ...base, ...parsed, settings: { ...base.settings, ...(parsed.settings || {}) } };
+    return normalizeState(parsed);
   } catch { return defaultState(); }
 }
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function normalizeState(obj) {
+  const base = defaultState();
+  return { ...base, ...(obj || {}), settings: { ...base.settings, ...((obj && obj.settings) || {}) } };
+}
+function getBackupPayload(parsed) {
+  if (parsed && parsed.prodashBackup === true && parsed.data && typeof parsed.data === 'object') return parsed.data;
+  if (parsed && typeof parsed === 'object') return parsed;
+  throw new Error('Invalid backup structure');
+}
 
 // ---------- Router ----------
 const views = {};
@@ -507,7 +515,7 @@ function heatmapHTML() {
     cells.push(`<div class="cell ${lvl}" title="${key}: ${hits}/${state.habits.length}"></div>`);
   }
   return `<div class="heatmap">${cells.join('')}</div>
-    <div class="legend"><span class="lg"><span class="dot" style="background:#2a2a2a"></span>low</span><span class="lg"><span class="dot" style="background:#9a9a9a"></span>mid</span><span class="lg"><span class="dot" style="background:#e8e8e8"></span>full</span></div>`;
+    <div class="legend"><span class="lg"><span class="dot" style="background:#2A3458"></span>low</span><span class="lg"><span class="dot" style="background:#596B9F"></span>mid</span><span class="lg"><span class="dot" style="background:#88A4F5"></span>full</span></div>`;
 }
 
 function markHabitsToday() {
@@ -688,7 +696,7 @@ function renderBudgetOverview(c) {
   });
   const cats = Object.entries(byCat).sort((a,b) => b[1]-a[1]);
   const totalE = cats.reduce((a,b)=>a+b[1],0);
-  const palette = ['#e8e8e8','#9a9a9a','#6e6e6e','#4a4a4a','#d0d0d0','#7ee787','#f0b72f','#ff9c9c','#9ed8ff'];
+  const palette = ['#7C90FF','#5FD4BF','#F6B26B','#F08CB4','#A6D67A','#9AC5F4','#D4A5FF','#B8C0CC','#FF8E72'];
   let cum = 0;
   const pieStops = cats.map(([k,v],i) => {
     const from = (cum/totalE)*360; cum += v;
@@ -1441,13 +1449,26 @@ function editGoal(id) {
 // SETTINGS
 // ===================================================================
 views.settings = root => {
+  const lastBackup = state.settings.lastBackupAt
+    ? new Date(state.settings.lastBackupAt).toLocaleString()
+    : 'No backup exported yet';
   root.innerHTML = `
     <button class="btn small mb-12" id="back">← Back</button>
     <div class="card">
+      <div class="card-h">Safe update checklist</div>
+      <div class="small muted mb-8">Current app version: v${APP_VERSION}</div>
+      <ol class="safe-list">
+        <li>Tap <b>Export backup JSON</b> and keep the file.</li>
+        <li>Install the new APK over the current app (do not uninstall first).</li>
+        <li>If data is missing, use <b>Import backup JSON</b> and restore it.</li>
+      </ol>
+      <div class="xs dim">Last backup: ${escapeHTML(lastBackup)}</div>
+    </div>
+    <div class="card">
       <div class="card-h">Data</div>
-      <button class="btn btn-block mb-8" id="exp">Export JSON</button>
+      <button class="btn btn-block mb-8" id="exp">Export backup JSON</button>
       <button class="btn btn-block mb-8" id="expCsv">Export transactions CSV</button>
-      <label class="btn btn-block mb-8" style="display:block; text-align:center; cursor:pointer;">Import JSON
+      <label class="btn btn-block mb-8" style="display:block; text-align:center; cursor:pointer;">Import backup JSON
         <input type="file" accept="application/json" id="imp" style="display:none">
       </label>
       <label class="btn btn-block mb-8" style="display:block; text-align:center; cursor:pointer;">Import Cashew CSV
@@ -1517,8 +1538,19 @@ views.settings = root => {
 };
 
 function exportJSON() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-  downloadBlob(blob, `productivity-backup-${todayISO()}.json`);
+  state.settings.lastBackupAt = new Date().toISOString();
+  save();
+  const backup = {
+    prodashBackup: true,
+    schemaVersion: 2,
+    appVersion: APP_VERSION,
+    exportedAt: state.settings.lastBackupAt,
+    storageKey: STORAGE_KEY,
+    data: state
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, `prodash-backup-v${APP_VERSION}-${todayISO()}.json`);
+  render();
 }
 function exportCSV() {
   const rows = [['date','type','amount','category','account','note']];
@@ -1531,9 +1563,10 @@ function importJSON(e) {
   const r = new FileReader();
   r.onload = () => {
     try {
-      const obj = JSON.parse(r.result);
+      const parsed = JSON.parse(r.result);
+      const obj = getBackupPayload(parsed);
       if (!confirm('Replace current data with imported file?')) return;
-      state = { ...defaultState(), ...obj };
+      state = normalizeState(obj);
       save(); render(); toast('Imported');
     } catch { toast('Invalid file'); }
   };
