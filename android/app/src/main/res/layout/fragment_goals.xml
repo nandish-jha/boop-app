@@ -26,29 +26,55 @@
                 android:padding="20dp">
 
                 <TextView
+                    style="@style/TextAppearance.SilentOrder.Kicker"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Current momentum" />
+
+                <TextView
                     android:id="@+id/text_streak"
                     style="@style/TextAppearance.Material3.DisplaySmall"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="42 day streak"
+                    android:layout_marginTop="8dp"
+                    android:text="42 DAY STREAK"
+                    android:textAllCaps="true"
                     android:textColor="@color/primary"
                     android:textStyle="bold" />
 
-                <TextView
-                    android:id="@+id/text_pass_rate"
-                    style="@style/TextAppearance.Material3.BodyMedium"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="84% weekly pass rate"
-                    android:textColor="@color/on_surface_variant" />
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.progressindicator.LinearProgressIndicator
+                        android:id="@+id/progress_weekly"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        app:indicatorColor="@color/primary"
+                        app:trackColor="@color/surface_variant"
+                        app:trackCornerRadius="2dp" />
+
+                    <TextView
+                        android:id="@+id/text_pass_rate"
+                        style="@style/TextAppearance.Material3.LabelMedium"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:letterSpacing="0.06"
+                        android:textAllCaps="true"
+                        android:textColor="@color/primary" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/text_active_habits"
                     style="@style/TextAppearance.Material3.BodySmall"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_marginTop="12dp"
                     android:textColor="@color/outline" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -76,8 +102,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
+                    android:fontFamily="serif"
                     android:text="The quality of your life is determined by the quality of your habits, not the magnitude of your goals."
-                    android:textColor="@color/on_background" />
+                    android:textColor="@color/on_background"
+                    android:textStyle="italic" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

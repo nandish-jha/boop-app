@@ -115,6 +115,12 @@ object SeedData {
                     updated = System.currentTimeMillis() - 2 * 24 * 60 * 60 * 1000L
                 )
             ),
+            transactions = arrayListOf(
+                Transaction(uid(), "expense", 1299.0, "Electronics", "a1", t, "Apple Store Infinite Loop"),
+                Transaction(uid(), "expense", 84.5, "Food", "a1", t, "Whole Foods Market"),
+                Transaction(uid(), "expense", 42.0, "Lifestyle", "a1", t, "Blue Bottle Coffee"),
+                Transaction(uid(), "income", 3200.0, "Transfer", "a1", t, "Payroll deposit")
+            ),
             budget = Budget(monthlySavingsGoal = 500.0, monthlyBudget = 3500.0),
             settings = Settings()
         )

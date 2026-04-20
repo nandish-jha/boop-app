@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
+    android:paddingBottom="96dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="8dp">
+
+        <TextView
+            style="@style/TextAppearance.Material3.HeadlineMedium"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Settings"
+            android:textColor="@color/primary"
+            android:textStyle="bold" />
+
+        <TextView
+            style="@style/TextAppearance.Material3.BodyMedium"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Curate your digital sanctuary and refine the silence of your environment."
+            android:textColor="@color/on_surface_variant" />
+
+        <TextView
+            style="@style/TextAppearance.SilentOrder.Kicker"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:text="Profile &amp; account" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.SilentOrder.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    style="@style/TextAppearance.Material3.TitleMedium"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Julian Thorne"
+                    android:textColor="@color/primary"
+                    android:textStyle="bold" />
+
+                <TextView
+                    style="@style/TextAppearance.Material3.BodySmall"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="j.thorne@monastery.io"
+                    android:textColor="@color/outline" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            style="@style/TextAppearance.SilentOrder.Kicker"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="App experience" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.SilentOrder.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/TextAppearance.Material3.BodyLarge"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Obsidian mode"
+                            android:textColor="@color/primary" />
+
+                        <TextView
+                            style="@style/TextAppearance.Material3.BodySmall"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Deep monochromatic dark interface."
+                            android:textColor="@color/outline" />
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            style="@style/TextAppearance.Material3.LabelSmall"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="32dp"
+            android:gravity="center"
+            android:letterSpacing="0.08"
+            android:text="VERSION 4.2.0-ALPHA · BUILT IN SILENCE"
+            android:textAllCaps="true"
+            android:textColor="@color/outline" />
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

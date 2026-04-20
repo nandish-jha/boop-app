@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="background">#131313</color>
-    <color name="surface_lowest">#0e0e0e</color>
-    <color name="surface_low">#1c1b1b</color>
-    <color name="surface_container">#201f1f</color>
-    <color name="surface_high">#2a2a2a</color>
-    <color name="surface_variant">#353534</color>
-    <color name="outline_variant">#474747</color>
-    <color name="outline">#919191</color>
-    <color name="on_background">#e5e2e1</color>
-    <color name="on_surface_variant">#c6c6c6</color>
-    <color name="primary">#ffffff</color>
-    <color name="on_primary">#1a1c1c</color>
-    <color name="error">#ffb4ab</color>
+    <!-- Stitch / Silent Order: true black canvas, charcoal surfaces, muted chrome -->
+    <color name="background">#000000</color>
+    <color name="surface_lowest">#0D0D0D</color>
+    <color name="surface_low">#1A1A1A</color>
+    <color name="surface_container">#1C1C1C</color>
+    <color name="surface_high">#2A2A2A</color>
+    <color name="surface_variant">#333333</color>
+    <color name="outline_variant">#3A3A3A</color>
+    <color name="outline">#888888</color>
+    <color name="on_background">#FFFFFF</color>
+    <color name="on_surface_variant">#B0B0B0</color>
+    <color name="primary">#FFFFFF</color>
+    <color name="on_primary">#000000</color>
+    <color name="error">#FF6B5B</color>
+    <color name="accent_alert">#E85D4C</color>
 </resources>

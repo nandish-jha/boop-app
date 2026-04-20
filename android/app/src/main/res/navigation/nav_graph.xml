@@ -28,4 +28,9 @@
         android:id="@+id/logsFragment"
         android:name="com.nandish.productivity.LogsFragment"
         android:label="Logs" />
+
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.nandish.productivity.SettingsFragment"
+        android:label="Settings" />
 </navigation>

@@ -44,10 +44,14 @@ class HomeFragment : Fragment() {
         binding.textDate.text = formatDayHeader(today)
         binding.textWelcome.text = "Welcome,\n${greetingName()}."
         val total = state.accounts.sumOf { it.balance }
-        val parts = formatMoney(total).removePrefix("-").split(".")
-        val whole = parts.getOrElse(0) { "$0" }
+        val formatted = formatMoney(total)
+        val neg = formatted.startsWith("-")
+        val body = formatted.removePrefix("-").removePrefix("$")
+        val parts = body.split(".")
+        val whole = parts.getOrElse(0) { "0" }
         val cents = parts.getOrElse(1) { "00" }
-        binding.textVaultAmount.text = if (total < 0) "-$whole.$cents" else "$whole.$cents"
+        binding.textVaultWhole.text = (if (neg) "-$" else "$") + whole
+        binding.textVaultCents.text = ".$cents"
         binding.textVaultTrend.text = "↑ +12.4% vs month"
 
         val done = state.tasks.count { it.done }

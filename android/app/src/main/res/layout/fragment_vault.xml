@@ -3,6 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:clipToPadding="false"
     android:fillViewport="true"
     android:paddingStart="20dp"
     android:paddingEnd="20dp"
@@ -20,27 +21,80 @@
             android:layout_height="wrap_content"
             android:text="Consolidated assets" />
 
-        <TextView
-            android:id="@+id/text_net_worth"
-            style="@style/TextAppearance.Material3.DisplaySmall"
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:textColor="@color/primary"
-            android:textStyle="bold" />
+            android:gravity="bottom"
+            android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/text_delta"
-            style="@style/TextAppearance.Material3.BodySmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="@color/on_surface_variant" />
+            <TextView
+                android:id="@+id/text_net_whole"
+                style="@style/TextAppearance.Material3.DisplaySmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/primary"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/text_net_cents"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingBottom="4dp"
+                android:textColor="@color/outline"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="↑"
+                android:textColor="@color/primary"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/text_monthly_trend"
+                style="@style/TextAppearance.Material3.LabelMedium"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:letterSpacing="0.08"
+                android:textAllCaps="true"
+                android:textColor="@color/primary" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/text_updated"
+            style="@style/TextAppearance.Material3.BodySmall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/outline"
+            android:textStyle="italic" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/button_add_account"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
+            android:text="+ ADD NEW ACCOUNT"
+            android:textColor="@color/on_primary"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="4dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
             android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
@@ -51,7 +105,8 @@
                 android:layout_weight="1"
                 android:text="DEPOSIT"
                 android:textColor="@color/on_primary"
-                app:backgroundTint="@color/primary" />
+                app:backgroundTint="@color/primary"
+                app:cornerRadius="4dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/button_invest"
@@ -62,6 +117,7 @@
                 android:layout_weight="1"
                 android:text="INVEST"
                 android:textColor="@color/on_background"
+                app:cornerRadius="4dp"
                 app:strokeColor="@color/outline_variant" />
         </LinearLayout>
 
@@ -69,7 +125,7 @@
             style="@style/TextAppearance.SilentOrder.Kicker"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="20dp"
             android:text="Accounts" />
 
         <LinearLayout
@@ -87,18 +143,23 @@
             android:orientation="horizontal">
 
             <TextView
-                style="@style/TextAppearance.SilentOrder.Kicker"
+                style="@style/TextAppearance.Material3.TitleMedium"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Recent activity" />
+                android:text="Recent activity"
+                android:textAllCaps="true"
+                android:textColor="@color/primary"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/link_ledger"
                 style="@style/TextAppearance.Material3.LabelMedium"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:letterSpacing="0.08"
                 android:text="VIEW LEDGER"
+                android:textAllCaps="true"
                 android:textColor="@color/outline" />
         </LinearLayout>
 
@@ -106,7 +167,151 @@
             android:id="@+id/txn_list"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:orientation="vertical" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.SilentOrder.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    style="@style/TextAppearance.SilentOrder.Kicker"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Quick transaction" />
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/toggle_expense_income"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    app:checkedButton="@+id/btn_expense"
+                    app:selectionRequired="true"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_expense"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="EXPENSE"
+                        android:textColor="@color/on_background"
+                        app:strokeColor="@color/outline_variant" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_income"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="INCOME"
+                        android:textColor="@color/outline"
+                        app:strokeColor="@color/outline_variant" />
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.Material3.TextInputLayout.FilledBox.Dense"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="Amount (USD)"
+                    app:boxBackgroundColor="@color/surface_lowest">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/input_quick_amount"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="0.00"
+                        android:inputType="numberDecimal"
+                        android:textColor="@color/primary" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/button_log_transaction"
+                    style="@style/Widget.Material3.Button"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="LOG TRANSACTION"
+                    android:textColor="@color/on_primary"
+                    app:backgroundTint="@color/primary" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="24dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/TextAppearance.SilentOrder.Kicker"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Market sentiment" />
+
+                <TextView
+                    style="@style/TextAppearance.Material3.TitleMedium"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Quietly Bullish"
+                    android:textColor="@color/primary"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="bottom"
+                android:orientation="horizontal">
+
+                <View
+                    android:layout_width="8dp"
+                    android:layout_height="16dp"
+                    android:background="@color/outline" />
+
+                <View
+                    android:layout_width="8dp"
+                    android:layout_height="20dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@color/outline" />
+
+                <View
+                    android:layout_width="8dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@color/outline" />
+
+                <View
+                    android:layout_width="8dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@color/primary" />
+
+                <View
+                    android:layout_width="8dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@color/primary" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

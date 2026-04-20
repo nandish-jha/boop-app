@@ -39,9 +39,10 @@ class GoalsFragment : Fragment() {
         val done = state.habitLogs[today]?.values?.count { it == "true" } ?: 0
         val total = state.habits.size.coerceAtLeast(1)
         val pass = (done * 100 / total).coerceIn(0, 100)
-        binding.textStreak.text = "42 day streak"
-        binding.textPassRate.text = "$pass% weekly pass rate"
-        binding.textActiveHabits.text = "ACTIVE HABITS: $done / $total completed"
+        binding.textStreak.text = "42 DAY STREAK"
+        binding.textPassRate.text = "$pass% WEEKLY PASS RATE"
+        binding.progressWeekly.progress = pass
+        binding.textActiveHabits.text = "ACTIVE HABITS · $done / $total completed"
 
         binding.goalsList.removeAllViews()
         state.goals.forEach { g ->
