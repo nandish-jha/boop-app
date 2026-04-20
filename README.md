@@ -5,7 +5,7 @@ A personal productivity dashboard — local-only PWA, also packaged as an Androi
 ## Download the APK
 
 - **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk)
-- **v1.0.7** (current): [releases/prodash-v1.0.7.apk](releases/prodash-v1.0.7.apk) — aesthetic refresh + safe update backup flow (export before install, import if needed)
+- **v1.0.8** (current): [releases/prodash-v1.0.8.apk](releases/prodash-v1.0.8.apk) — aesthetic refresh + safe update backup flow (export before install, import if needed)
 - **v1.0.6**: [releases/prodash-v1.0.6.apk](releases/prodash-v1.0.6.apk) — lightweight soft-card UI (removed heavy glass blurs for smooth scrolling)
 - **v1.0.5**: [releases/prodash-v1.0.5.apk](releases/prodash-v1.0.5.apk) — native Android notification bridge, per-task reminders with date+time, SVG edit/close icons
 - **v1.0.4**: [releases/prodash-v1.0.4.apk](releases/prodash-v1.0.4.apk) — full CRUD on habits, supplements, skincare, workouts, accounts, categories + iOS liquid-glass UI
