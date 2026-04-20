@@ -2,7 +2,7 @@
 // Local-only storage (localStorage). Export / import JSON supported.
 
 const STORAGE_KEY = 'nandish.productivity.v1';
-const APP_VERSION = '1.0.10';
+const APP_VERSION = '1.0.11';
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const todayISO = (d = new Date()) => d.toISOString().slice(0, 10);
 const fmtMoney = n => (n < 0 ? '-' : '') + '$' + Math.abs(n).toFixed(2);
@@ -23,7 +23,7 @@ const defaultState = () => ({
   budget: { monthlySavingsGoal: 500, monthlyBudget: 0 },
   notes: [],
   workouts: SEED.workouts.map(w => ({ ...w })), // static templates
-  settings: { reminderTime: '21:00', lastBackupAt: '' }
+  settings: { reminderTime: '21:00', lastBackupAt: '', theme: 'light' }
 });
 
 let state = load();
@@ -45,6 +45,16 @@ function getBackupPayload(parsed) {
   if (parsed && parsed.prodashBackup === true && parsed.data && typeof parsed.data === 'object') return parsed.data;
   if (parsed && typeof parsed === 'object') return parsed;
   throw new Error('Invalid backup structure');
+}
+function resolveTheme(pref) {
+  if (pref === 'dark') return 'dark';
+  if (pref === 'system') return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  return 'light';
+}
+function applyTheme() {
+  const pref = (state.settings && state.settings.theme) || 'light';
+  const active = resolveTheme(pref);
+  document.body.setAttribute('data-theme', active);
 }
 
 // ---------- Router ----------
@@ -1486,6 +1496,19 @@ views.settings = root => {
     </div>
 
     <div class="card">
+      <div class="card-h">Appearance</div>
+      <div class="field">
+        <label>Theme</label>
+        <select class="select" id="appTheme">
+          <option value="light" ${state.settings.theme==='light'?'selected':''}>Light</option>
+          <option value="dark" ${state.settings.theme==='dark'?'selected':''}>Dark</option>
+          <option value="system" ${state.settings.theme==='system'?'selected':''}>System</option>
+        </select>
+      </div>
+      <button class="btn btn-block" id="themeSave">Apply theme</button>
+    </div>
+
+    <div class="card">
       <div class="card-h">Reminder</div>
       <div class="field"><label>Daily habit reminder time</label><input class="input" type="time" id="remT" value="${state.settings.reminderTime}"></div>
       <button class="btn btn-block" id="remSave">Save</button>
@@ -1506,6 +1529,12 @@ views.settings = root => {
     </div>
   `;
   root.querySelector('#back').addEventListener('click', () => { moreSub = null; render(); });
+  root.querySelector('#themeSave').addEventListener('click', () => {
+    state.settings.theme = root.querySelector('#appTheme').value;
+    save();
+    applyTheme();
+    toast('Theme updated');
+  });
   root.querySelector('#exp').addEventListener('click', exportJSON);
   root.querySelector('#expCsv').addEventListener('click', exportCSV);
   root.querySelector('#imp').addEventListener('change', importJSON);
@@ -1667,4 +1696,5 @@ function escapeHTML(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'
 function escapeAttr(s) { return escapeHTML(s); }
 
 // Initial render
+applyTheme();
 render();
