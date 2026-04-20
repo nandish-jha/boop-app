@@ -1,6 +1,7 @@
 package com.nandish.productivity
 
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -14,12 +15,14 @@ import android.webkit.WebViewClient
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.gson.Gson
 import com.nandish.productivity.databinding.FragmentStitchBinding
 import org.json.JSONObject
+import java.nio.charset.StandardCharsets
 
 class StitchWebFragment : Fragment(), ProDashBridge.Host {
 
@@ -33,6 +36,49 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
             ?: error("Missing assetHtml argument")
 
     private var backCallback: OnBackPressedCallback? = null
+
+    private val exportBackupLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri == null || !isAdded) return@registerForActivityResult
+        try {
+            requireContext().contentResolver.openOutputStream(uri)?.use { os ->
+                os.write(StateRepository.exportJson().toByteArray(StandardCharsets.UTF_8))
+            } ?: throw IllegalStateException("Could not open file")
+            Toast.makeText(requireContext(), "Backup saved", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(requireContext(), "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val importBackupLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null || !isAdded) return@registerForActivityResult
+        val text = try {
+            requireContext().contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        } catch (_: Exception) {
+            null
+        }
+        if (text.isNullOrBlank()) {
+            Toast.makeText(requireContext(), "Could not read file", Toast.LENGTH_SHORT).show()
+            return@registerForActivityResult
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Import backup")
+            .setMessage("Replace all data on this device with this backup? This cannot be undone.")
+            .setPositiveButton("Replace") { _, _ ->
+                val ok = StateRepository.importReplace(text)
+                if (ok) {
+                    refreshWeb()
+                    Toast.makeText(requireContext(), "Backup restored", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(requireContext(), "Invalid backup file", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
 
     private fun refreshWeb() {
         _binding?.webView?.let { injectHydration(it) }
@@ -118,13 +164,22 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Menu")
             .setItems(
-                arrayOf("Add…", "Settings", "Refresh this screen", "About")
+                arrayOf(
+                    "Add…",
+                    "Export backup…",
+                    "Import backup…",
+                    "Settings",
+                    "Refresh this screen",
+                    "About"
+                )
             ) { _, which ->
                 when (which) {
                     0 -> ItemEditors.showAddPicker(this) { refreshWeb() }
-                    1 -> onNavigate("settings")
-                    2 -> injectHydration(wv)
-                    3 -> showAbout()
+                    1 -> exportBackupLauncher.launch("prodash-backup.json")
+                    2 -> importBackupLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                    3 -> onNavigate("settings")
+                    4 -> injectHydration(wv)
+                    5 -> showAbout()
                 }
             }
             .show()
@@ -233,7 +288,10 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
         val vn = readVersionName()
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("About")
-            .setMessage("Silent Order (ProDash)\nVersion $vn\n\nOffline-first productivity. Data stays on this device.")
+            .setMessage(
+                "Silent Order (ProDash)\nVersion $vn\n\n" +
+                    "Offline-first: data stays on this device. Use Menu → Export / Import backup to move JSON between installs."
+            )
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }

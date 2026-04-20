@@ -44,6 +44,22 @@ object StateRepository {
         }
     }
 
+    fun exportJson(): String = lock.read { gson.toJson(state) }
+
+    /**
+     * Replaces local state with parsed JSON. Returns false if JSON is invalid.
+     */
+    fun importReplace(json: String): Boolean = lock.write {
+        try {
+            val p = gson.fromJson(json, AppState::class.java) ?: return@write false
+            state = p
+            persistLocked()
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun persistLocked() {
         val sp = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         sp.edit().putString(KEY_JSON, gson.toJson(state)).apply()
