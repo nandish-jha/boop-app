@@ -2,7 +2,7 @@
 // Local-only storage (localStorage). Export / import JSON supported.
 
 const STORAGE_KEY = 'nandish.productivity.v1';
-const APP_VERSION = '1.0.12';
+const APP_VERSION = '1.0.13';
 const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 const GOOGLE_BACKUP_FILENAME = 'prodash-backup.json';
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -28,7 +28,7 @@ const defaultState = () => ({
   settings: {
     reminderTime: '21:00',
     lastBackupAt: '',
-    theme: 'light',
+    theme: 'dark',
     googleDrive: {
       clientId: '',
       enabled: false,
@@ -228,6 +228,7 @@ function setTitle(t, sub) {
 function render() {
   const v = document.getElementById('view');
   v.innerHTML = '';
+  let viewKey = currentTab;
   if (currentTab === 'home') {
     const g = (typeof getGreeting === 'function') ? getGreeting() : 'Hello';
     const q = (typeof getDailyQuote === 'function') ? getDailyQuote() : null;
@@ -246,7 +247,10 @@ function render() {
     else if (moreSub === 'notes') { setTitle('Notes'); views.notes(v); }
     else if (moreSub === 'goals') { setTitle('Goals'); views.goals(v); }
     else if (moreSub === 'settings') { setTitle('Settings'); views.settings(v); }
+    viewKey = moreSub ? `more-${moreSub}` : 'more';
   }
+  v.setAttribute('data-view', viewKey);
+  document.getElementById('topbar')?.setAttribute('data-view', viewKey);
   v.scrollTop = 0;
   window.scrollTo(0, 0);
 }
@@ -353,25 +357,42 @@ views.home = root => {
   const suppsTotal = state.supplements.length;
   const topTask = todayTasks[0];
 
-  root.innerHTML = `
-    <div class="focus-strip mb-12">
-      <div class="focus-label">Today focus</div>
-      <div class="focus-title">${topTask ? escapeHTML(topTask.title) : 'No urgent task pending'}</div>
-      <div class="focus-meta">${topTask ? `Due ${topTask.due || 'today'} · ${escapeHTML(topTask.type || 'task')}` : 'Use quick actions to plan your day.'}</div>
-    </div>
+  const completionBanner = todayTasks.length === 0
+    ? `
+      <section class="task-complete mb-12">
+        <div class="task-complete-kicker">Process optimized</div>
+        <div class="task-complete-title">Task complete</div>
+        <div class="task-complete-sub">Everything due today is done. Keep your focus undisturbed.</div>
+      </section>
+    `
+    : '';
 
-    <div class="grid-2 mb-12">
+  root.innerHTML = `
+    <section class="hero-block mb-12">
+      <div class="hero-label">Today focus</div>
+      <div class="hero-title">${topTask ? escapeHTML(topTask.title) : 'No urgent task pending'}</div>
+      <div class="hero-meta">${topTask ? `Due ${topTask.due || 'today'} · ${escapeHTML(topTask.type || 'task')}` : 'Use quick actions to design your day.'}</div>
+      <div class="hero-actions">
+        <button class="btn primary small" id="qaTask">Capture task</button>
+        <button class="btn small" id="qaHabit">Log habits</button>
+      </div>
+    </section>
+    ${completionBanner}
+
+    <section class="bento mb-12">
+      <div class="kpi kpi-hero">
+        <div class="k">Saved this month</div>
+        <div class="v">${fmtMoney(saved)}</div>
+        <div class="d">goal ${fmtMoney(state.budget.monthlySavingsGoal)}</div>
+      </div>
       <div class="kpi"><div class="k">Tasks today</div><div class="v">${todayTasks.length}</div><div class="d">due or overdue</div></div>
       <div class="kpi"><div class="k">Habits</div><div class="v">${habitsDone}/${state.habits.length}</div><div class="d">hit target</div></div>
       <div class="kpi"><div class="k">Supplements</div><div class="v">${suppsDone}/${suppsTotal}</div><div class="d">taken today</div></div>
-      <div class="kpi"><div class="k">Saved this month</div><div class="v">${fmtMoney(saved)}</div><div class="d">goal ${fmtMoney(state.budget.monthlySavingsGoal)}</div></div>
-    </div>
+    </section>
 
     <div class="section-h">Jump in</div>
     <div class="qa-row mb-12">
-      <button class="qa" id="qaTask"><span>New task</span><small>Add to tracker</small></button>
       <button class="qa" id="qaTxn"><span>Add expense</span><small>Log transaction</small></button>
-      <button class="qa" id="qaHabit"><span>Check habits</span><small>Today</small></button>
       <button class="qa" id="qaSupp"><span>Supplements</span><small>Morning / night</small></button>
     </div>
 
@@ -401,12 +422,22 @@ function emptyHTML(msg, ico = '—') {
 // ===================================================================
 let taskFilter = 'all'; // all | today | work | personal | errand
 views.tasks = root => {
+  const total = state.tasks.length;
+  const open = state.tasks.filter(t => !t.done).length;
+  const high = state.tasks.filter(t => !t.done && t.priority === 'high').length;
   root.innerHTML = `
+    <section class="tasks-hero mb-12">
+      <div class="tasks-kicker">Active stream</div>
+      <div class="tasks-title">Execution queue</div>
+      <div class="tasks-meta">${open} open · ${high} high priority · ${total} total</div>
+      <button class="btn primary small mt-8" id="newTaskBtn">Create new</button>
+    </section>
     <div class="seg mb-12">
       ${['all','today','work','personal','errand'].map(f => `<button class="${f===taskFilter?'active':''}" data-f="${f}">${f[0].toUpperCase()+f.slice(1)}</button>`).join('')}
     </div>
     <div id="taskList"></div>
   `;
+  root.querySelector('#newTaskBtn').addEventListener('click', () => editTask());
   root.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => { taskFilter = b.dataset.f; views.tasks(root); }));
   renderTaskList(root.querySelector('#taskList'));
 };
@@ -877,6 +908,16 @@ function renderBudgetOverview(c) {
   const maxD = Math.max(1, ...daily);
 
   c.innerHTML = `
+    <section class="finance-hero card mb-12">
+      <div class="card-h">Current liquidity</div>
+      <div class="finance-total">${fmtMoney(income - expense + state.accounts.reduce((a,b)=>a+(b.balance||0),0))}</div>
+      <div class="finance-sub">Monthly delta ${saved >= 0 ? '+' : ''}${fmtMoney(saved)}</div>
+      <div class="grid-2 mt-8">
+        <button class="btn primary btn-block" id="quickIncome">Add income</button>
+        <button class="btn btn-block" id="quickExpense">Add expense</button>
+      </div>
+    </section>
+
     <div class="grid-2 mb-12">
       <div class="kpi"><div class="k">Income (mo)</div><div class="v">${fmtMoney(income)}</div></div>
       <div class="kpi"><div class="k">Expense (mo)</div><div class="v">${fmtMoney(expense)}</div></div>
@@ -901,6 +942,8 @@ function renderBudgetOverview(c) {
       <div class="row-between xs muted"><span>Total</span><span>${fmtMoney(daily.reduce((a,b)=>a+b,0))}</span></div>
     </div>
   `;
+  c.querySelector('#quickIncome')?.addEventListener('click', () => editTxn());
+  c.querySelector('#quickExpense')?.addEventListener('click', () => editTxn());
 }
 
 function renderTxns(c) {
@@ -1622,6 +1665,13 @@ views.settings = root => {
   const cloudStatus = gd.enabled ? `Connected · last sync ${formatDateTime(gd.lastSyncAt)}` : 'Not connected';
   root.innerHTML = `
     <button class="btn small mb-12" id="back">← Back</button>
+    <section class="settings-hero mb-12">
+      <div class="settings-title">Settings</div>
+      <div class="settings-sub">Curate your digital sanctuary and refine your workflow environment.</div>
+      <div class="settings-version">Version ${APP_VERSION}</div>
+    </section>
+
+    <div class="section-h">Data safety</div>
     <div class="card">
       <div class="card-h">Safe update checklist</div>
       <div class="small muted mb-8">Current app version: v${APP_VERSION}</div>
@@ -1632,6 +1682,7 @@ views.settings = root => {
       </ol>
       <div class="xs dim">Last backup: ${escapeHTML(lastBackup)}</div>
     </div>
+    <div class="section-h">Backup and import</div>
     <div class="card">
       <div class="card-h">Data</div>
       <button class="btn btn-block mb-8" id="exp">Export backup JSON</button>
@@ -1646,6 +1697,7 @@ views.settings = root => {
       <button class="btn btn-block danger" id="reset">Reset all data</button>
     </div>
 
+    <div class="section-h">Cloud sync</div>
     <div class="card">
       <div class="card-h">Google Drive Sync (beta)</div>
       <div class="field">
@@ -1665,6 +1717,7 @@ views.settings = root => {
       <div class="xs dim mt-8">Create a Google Web OAuth Client, add your app origin (including appassets domain for APK), then paste the Client ID here.</div>
     </div>
 
+    <div class="section-h">App experience</div>
     <div class="card">
       <div class="card-h">Appearance</div>
       <div class="field">
@@ -1686,6 +1739,7 @@ views.settings = root => {
       <button class="btn btn-block mt-8" id="notif">Enable notifications</button>
     </div>
 
+    <div class="section-h">Finance defaults</div>
     <div class="card">
       <div class="card-h">Budget</div>
       <div class="field"><label>Monthly savings goal</label><input class="input" type="number" id="mSav" value="${state.budget.monthlySavingsGoal}"></div>
@@ -1693,8 +1747,9 @@ views.settings = root => {
       <button class="btn btn-block" id="bSave">Save</button>
     </div>
 
+    <div class="section-h">About</div>
     <div class="card">
-      <div class="card-h">About</div>
+      <div class="card-h">Silent order</div>
       <div class="small muted">All data is stored locally on this device. Install this app from your browser menu (“Add to home screen” / “Install app”) for a native feel and offline use.</div>
     </div>
   `;
