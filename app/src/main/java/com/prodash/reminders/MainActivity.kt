@@ -1072,6 +1072,56 @@ private fun DashboardSectionLabel(title: String) {
 }
 
 @Composable
+private fun DashboardCompactSection(
+    title: String,
+    summary: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF161619)),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(title, color = Color.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                    Text(summary, color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowForward,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    tint = Color(0xFFBFBFBF),
+                    modifier = Modifier.graphicsLayer { rotationZ = if (expanded) 90f else 0f },
+                )
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    content()
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun DashboardScreen(
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
@@ -1104,6 +1154,10 @@ private fun DashboardScreen(
         .filter { !it.archived }
         .sortedByDescending { it.updatedAtMillis }
         .take(4)
+    val activeHabits = habits.take(6)
+    var habitsExpanded by rememberSaveable { mutableStateOf(false) }
+    var upcomingExpanded by rememberSaveable { mutableStateOf(false) }
+    var notesExpanded by rememberSaveable { mutableStateOf(false) }
     val greetingSecond = run {
         val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         when {
@@ -1145,20 +1199,35 @@ private fun DashboardScreen(
                         Icon(Icons.Outlined.Search, contentDescription = "Search")
                     }
                 }
-                Spacer(Modifier.height(4.dp))
-                DashboardHabitsSectionHeader(onOpenWeekView = onOpenHabitCheckIn)
-                if (habits.isEmpty()) {
-                    Text("No habits yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    habits.forEach { habit ->
-                        DashboardHabitCompactCard(habit = habit, onOpenHabit = onOpenHabit)
+                Spacer(Modifier.height(2.dp))
+                DashboardCompactSection(
+                    title = "Your habits",
+                    summary = if (habits.isEmpty()) "No habits yet" else "${habits.size} habits · tap to expand",
+                    expanded = habitsExpanded,
+                    onToggle = { habitsExpanded = !habitsExpanded },
+                ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = onOpenHabitCheckIn) {
+                            Text("Open week view", color = Color.White)
+                        }
+                    }
+                    if (activeHabits.isEmpty()) {
+                        Text("No habits yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        activeHabits.forEach { habit ->
+                            DashboardHabitCompactCard(habit = habit, onOpenHabit = onOpenHabit)
+                        }
                     }
                 }
-                DashboardSectionLabel("Next 24 hours")
-                if (upcomingTasks.isEmpty()) {
-                    Text("Nothing scheduled in the next day.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DashboardCompactSection(
+                    title = "Next 24 hours",
+                    summary = if (upcomingTasks.isEmpty()) "Nothing scheduled" else "${upcomingTasks.size} tasks scheduled",
+                    expanded = upcomingExpanded,
+                    onToggle = { upcomingExpanded = !upcomingExpanded },
+                ) {
+                    if (upcomingTasks.isEmpty()) {
+                        Text("Nothing scheduled in the next day.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                    } else {
                         upcomingTasks.forEach { task ->
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
@@ -1180,16 +1249,22 @@ private fun DashboardScreen(
                         }
                     }
                 }
-                DashboardSectionLabel("Fresh notes")
-                if (recentNotes.isEmpty()) {
-                    Text("No notes yet.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    recentNotes.chunked(2).forEach { rowNotes ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            rowNotes.forEach { note ->
-                                DashboardNoteTile(note = note, modifier = Modifier.weight(1f), onClick = { onOpenNote(note) })
+                DashboardCompactSection(
+                    title = "Fresh notes",
+                    summary = if (recentNotes.isEmpty()) "No recent notes" else "${recentNotes.size} recent notes",
+                    expanded = notesExpanded,
+                    onToggle = { notesExpanded = !notesExpanded },
+                ) {
+                    if (recentNotes.isEmpty()) {
+                        Text("No notes yet.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        recentNotes.chunked(2).forEach { rowNotes ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                rowNotes.forEach { note ->
+                                    DashboardNoteTile(note = note, modifier = Modifier.weight(1f), onClick = { onOpenNote(note) })
+                                }
+                                if (rowNotes.size == 1) Spacer(Modifier.weight(1f))
                             }
-                            if (rowNotes.size == 1) Spacer(Modifier.weight(1f))
                         }
                     }
                 }
