@@ -5,7 +5,8 @@ A personal productivity dashboard — local-only PWA, also packaged as an Androi
 ## Download the APK
 
 - **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk)
-- **v1.0.11** (current): [releases/prodash-v1.0.11.apk](releases/prodash-v1.0.11.apk) — Zenith-inspired visual system + persistent light/dark/system theme modes
+- **v1.0.12** (current): [releases/prodash-v1.0.12.apk](releases/prodash-v1.0.12.apk) — Google Drive cloud sync (beta) + obsidian dark theme refinement
+- **v1.0.11**: [releases/prodash-v1.0.11.apk](releases/prodash-v1.0.11.apk) — Zenith-inspired visual system + persistent light/dark/system theme modes
 - **v1.0.10**: [releases/prodash-v1.0.10.apk](releases/prodash-v1.0.10.apk) — full flat redesign (no glass UI) with improved information hierarchy and auto-sync Android web assets
 - **v1.0.9**: [releases/prodash-v1.0.9.apk](releases/prodash-v1.0.9.apk) — migration build with install-safe app ID + aesthetic refresh and backup restore flow
 - **v1.0.8**: [releases/prodash-v1.0.8.apk](releases/prodash-v1.0.8.apk) — aesthetic refresh + safe update backup flow (export before install, import if needed)

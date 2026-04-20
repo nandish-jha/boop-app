@@ -2,7 +2,9 @@
 // Local-only storage (localStorage). Export / import JSON supported.
 
 const STORAGE_KEY = 'nandish.productivity.v1';
-const APP_VERSION = '1.0.11';
+const APP_VERSION = '1.0.12';
+const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const GOOGLE_BACKUP_FILENAME = 'prodash-backup.json';
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const todayISO = (d = new Date()) => d.toISOString().slice(0, 10);
 const fmtMoney = n => (n < 0 ? '-' : '') + '$' + Math.abs(n).toFixed(2);
@@ -23,7 +25,18 @@ const defaultState = () => ({
   budget: { monthlySavingsGoal: 500, monthlyBudget: 0 },
   notes: [],
   workouts: SEED.workouts.map(w => ({ ...w })), // static templates
-  settings: { reminderTime: '21:00', lastBackupAt: '', theme: 'light' }
+  settings: {
+    reminderTime: '21:00',
+    lastBackupAt: '',
+    theme: 'light',
+    googleDrive: {
+      clientId: '',
+      enabled: false,
+      autoSync: true,
+      lastSyncAt: '',
+      fileId: ''
+    }
+  }
 });
 
 let state = load();
@@ -36,10 +49,27 @@ function load() {
     return normalizeState(parsed);
   } catch { return defaultState(); }
 }
-function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+let suppressCloudSync = false;
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!suppressCloudSync) scheduleAutoDriveSync();
+}
 function normalizeState(obj) {
   const base = defaultState();
-  return { ...base, ...(obj || {}), settings: { ...base.settings, ...((obj && obj.settings) || {}) } };
+  const parsed = obj || {};
+  const parsedSettings = parsed.settings || {};
+  return {
+    ...base,
+    ...parsed,
+    settings: {
+      ...base.settings,
+      ...parsedSettings,
+      googleDrive: {
+        ...base.settings.googleDrive,
+        ...(parsedSettings.googleDrive || {})
+      }
+    }
+  };
 }
 function getBackupPayload(parsed) {
   if (parsed && parsed.prodashBackup === true && parsed.data && typeof parsed.data === 'object') return parsed.data;
@@ -55,6 +85,125 @@ function applyTheme() {
   const pref = (state.settings && state.settings.theme) || 'light';
   const active = resolveTheme(pref);
   document.body.setAttribute('data-theme', active);
+}
+let googleAccessToken = '';
+let googleTokenExpiry = 0;
+let googleTokenClient = null;
+let cloudSyncTimer = null;
+
+function googleDriveEnabled() {
+  return !!(state.settings.googleDrive && state.settings.googleDrive.enabled);
+}
+function hasGoogleClientId() {
+  return !!(state.settings.googleDrive && state.settings.googleDrive.clientId && state.settings.googleDrive.clientId.trim());
+}
+function buildBackupPayload() {
+  return {
+    prodashBackup: true,
+    schemaVersion: 2,
+    appVersion: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    storageKey: STORAGE_KEY,
+    data: state
+  };
+}
+function formatDateTime(iso) {
+  if (!iso) return 'Never';
+  const d = new Date(iso);
+  return isNaN(d) ? 'Never' : d.toLocaleString();
+}
+function initGoogleTokenClient() {
+  const clientId = (state.settings.googleDrive.clientId || '').trim();
+  if (!clientId) throw new Error('Set Google Client ID first');
+  if (!window.google || !google.accounts || !google.accounts.oauth2) throw new Error('Google auth script not loaded');
+  googleTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: GOOGLE_DRIVE_SCOPE,
+    callback: () => {}
+  });
+}
+function requestDriveToken(interactive = false) {
+  return new Promise((resolve, reject) => {
+    if (!hasGoogleClientId()) { reject(new Error('Set Google Client ID first')); return; }
+    const now = Date.now();
+    if (googleAccessToken && now < googleTokenExpiry - 10000) {
+      resolve(googleAccessToken);
+      return;
+    }
+    try {
+      if (!googleTokenClient) initGoogleTokenClient();
+      googleTokenClient.callback = (resp) => {
+        if (resp && resp.access_token) {
+          googleAccessToken = resp.access_token;
+          googleTokenExpiry = Date.now() + ((resp.expires_in || 3600) * 1000);
+          resolve(googleAccessToken);
+        } else reject(new Error('Authorization failed'));
+      };
+      googleTokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+    } catch (err) { reject(err); }
+  });
+}
+async function driveApi(path, init = {}, interactive = false) {
+  const token = await requestDriveToken(interactive);
+  const headers = new Headers(init.headers || {});
+  headers.set('Authorization', `Bearer ${token}`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/${path}`, { ...init, headers });
+  if (!res.ok) throw new Error(`Drive API error (${res.status})`);
+  return res;
+}
+async function getDriveBackupFile(interactive = false) {
+  const q = encodeURIComponent(`name='${GOOGLE_BACKUP_FILENAME}' and trashed=false`);
+  const res = await driveApi(`files?q=${q}&spaces=appDataFolder&fields=files(id,name,modifiedTime)&pageSize=1&orderBy=modifiedTime desc`, {}, interactive);
+  const json = await res.json();
+  return (json.files && json.files[0]) || null;
+}
+async function uploadBackupToDrive({ interactive = false, silent = false } = {}) {
+  const backup = buildBackupPayload();
+  const payload = JSON.stringify(backup, null, 2);
+  const existing = state.settings.googleDrive.fileId ? { id: state.settings.googleDrive.fileId } : await getDriveBackupFile(interactive);
+  const metadata = existing ? {} : { name: GOOGLE_BACKUP_FILENAME, parents: ['appDataFolder'] };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', new Blob([payload], { type: 'application/json' }));
+  const token = await requestDriveToken(interactive);
+  const method = existing ? 'PATCH' : 'POST';
+  const endpoint = existing
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=multipart`
+    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+  const res = await fetch(endpoint, { method, headers: { Authorization: `Bearer ${token}` }, body: form });
+  if (!res.ok) throw new Error(`Drive upload failed (${res.status})`);
+  const uploaded = await res.json();
+  state.settings.googleDrive.enabled = true;
+  state.settings.googleDrive.fileId = uploaded.id || existing?.id || '';
+  state.settings.googleDrive.lastSyncAt = new Date().toISOString();
+  save();
+  if (!silent) toast('Synced to Google Drive');
+}
+async function restoreBackupFromDrive() {
+  const file = await getDriveBackupFile(true);
+  if (!file) { toast('No cloud backup found'); return; }
+  const res = await driveApi(`files/${file.id}?alt=media`, {}, true);
+  const parsed = await res.json();
+  const obj = getBackupPayload(parsed);
+  if (!confirm('Replace current data with latest cloud backup?')) return;
+  suppressCloudSync = true;
+  state = normalizeState(obj);
+  suppressCloudSync = false;
+  state.settings.googleDrive.enabled = true;
+  state.settings.googleDrive.fileId = file.id;
+  state.settings.googleDrive.lastSyncAt = new Date().toISOString();
+  save();
+  applyTheme();
+  render();
+  toast('Restored from cloud');
+}
+function scheduleAutoDriveSync() {
+  const gd = state.settings.googleDrive || {};
+  if (!gd.enabled || !gd.autoSync || !hasGoogleClientId()) return;
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(() => {
+    uploadBackupToDrive({ interactive: false, silent: true }).catch(() => {});
+  }, 3500);
 }
 
 // ---------- Router ----------
@@ -1469,6 +1618,8 @@ views.settings = root => {
   const lastBackup = state.settings.lastBackupAt
     ? new Date(state.settings.lastBackupAt).toLocaleString()
     : 'No backup exported yet';
+  const gd = state.settings.googleDrive || {};
+  const cloudStatus = gd.enabled ? `Connected · last sync ${formatDateTime(gd.lastSyncAt)}` : 'Not connected';
   root.innerHTML = `
     <button class="btn small mb-12" id="back">← Back</button>
     <div class="card">
@@ -1493,6 +1644,25 @@ views.settings = root => {
       </label>
       <div class="xs dim mb-8">Cashew transactions are appended (duplicates skipped). Unknown accounts are auto-created.</div>
       <button class="btn btn-block danger" id="reset">Reset all data</button>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Google Drive Sync (beta)</div>
+      <div class="field">
+        <label>Google OAuth Client ID</label>
+        <input class="input" id="gClientId" value="${escapeAttr(gd.clientId || '')}" placeholder="xxxxxx.apps.googleusercontent.com">
+      </div>
+      <div class="xs dim mb-8">${escapeHTML(cloudStatus)}</div>
+      <div class="field">
+        <label><input type="checkbox" id="gAuto" ${gd.autoSync ? 'checked' : ''}> Auto sync after changes</label>
+      </div>
+      <div class="grid-2">
+        <button class="btn btn-block" id="gConnect">Connect & Sync</button>
+        <button class="btn btn-block" id="gRestore">Restore from cloud</button>
+      </div>
+      <button class="btn btn-block mt-8" id="gSyncNow">Sync now</button>
+      <button class="btn btn-block mt-8 ${gd.enabled ? 'danger' : 'ghost'}" id="gDisconnect">Disconnect</button>
+      <div class="xs dim mt-8">Create a Google Web OAuth Client, add your app origin (including appassets domain for APK), then paste the Client ID here.</div>
     </div>
 
     <div class="card">
@@ -1529,6 +1699,43 @@ views.settings = root => {
     </div>
   `;
   root.querySelector('#back').addEventListener('click', () => { moreSub = null; render(); });
+  const persistDrivePrefs = () => {
+    state.settings.googleDrive.clientId = root.querySelector('#gClientId').value.trim();
+    state.settings.googleDrive.autoSync = root.querySelector('#gAuto').checked;
+    save();
+  };
+  root.querySelector('#gConnect').addEventListener('click', async () => {
+    try {
+      persistDrivePrefs();
+      await uploadBackupToDrive({ interactive: true, silent: false });
+      render();
+    } catch (err) { toast(err.message || 'Google sync failed'); }
+  });
+  root.querySelector('#gSyncNow').addEventListener('click', async () => {
+    try {
+      persistDrivePrefs();
+      await uploadBackupToDrive({ interactive: true, silent: false });
+      render();
+    } catch (err) { toast(err.message || 'Google sync failed'); }
+  });
+  root.querySelector('#gRestore').addEventListener('click', async () => {
+    try {
+      persistDrivePrefs();
+      await restoreBackupFromDrive();
+    } catch (err) { toast(err.message || 'Cloud restore failed'); }
+  });
+  root.querySelector('#gDisconnect').addEventListener('click', () => {
+    state.settings.googleDrive.enabled = false;
+    state.settings.googleDrive.fileId = '';
+    if (window.google && google.accounts && google.accounts.oauth2 && googleAccessToken) {
+      try { google.accounts.oauth2.revoke(googleAccessToken, () => {}); } catch {}
+    }
+    googleAccessToken = '';
+    googleTokenExpiry = 0;
+    save();
+    render();
+    toast('Disconnected');
+  });
   root.querySelector('#themeSave').addEventListener('click', () => {
     state.settings.theme = root.querySelector('#appTheme').value;
     save();
@@ -1574,16 +1781,9 @@ views.settings = root => {
 };
 
 function exportJSON() {
-  state.settings.lastBackupAt = new Date().toISOString();
+  const backup = buildBackupPayload();
+  state.settings.lastBackupAt = backup.exportedAt;
   save();
-  const backup = {
-    prodashBackup: true,
-    schemaVersion: 2,
-    appVersion: APP_VERSION,
-    exportedAt: state.settings.lastBackupAt,
-    storageKey: STORAGE_KEY,
-    data: state
-  };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   downloadBlob(blob, `prodash-backup-v${APP_VERSION}-${todayISO()}.json`);
   render();
