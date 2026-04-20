@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ProDash</string>
+    <string name="app_name">Silent Order</string>
+    <string name="brand">SILENT ORDER</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_hub">Hub</string>
+    <string name="nav_goals">Goals</string>
+    <string name="nav_vault">Vault</string>
+    <string name="nav_logs">Logs</string>
 </resources>

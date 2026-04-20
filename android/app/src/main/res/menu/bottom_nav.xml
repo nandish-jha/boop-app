@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/homeFragment"
+        android:icon="@drawable/ic_nav_home"
+        android:title="@string/nav_home" />
+    <item
+        android:id="@+id/hubFragment"
+        android:icon="@drawable/ic_nav_grid"
+        android:title="@string/nav_hub" />
+    <item
+        android:id="@+id/goalsFragment"
+        android:icon="@drawable/ic_nav_target"
+        android:title="@string/nav_goals" />
+    <item
+        android:id="@+id/vaultFragment"
+        android:icon="@drawable/ic_nav_wallet"
+        android:title="@string/nav_vault" />
+    <item
+        android:id="@+id/logsFragment"
+        android:icon="@drawable/ic_nav_list"
+        android:title="@string/nav_logs" />
+</menu>

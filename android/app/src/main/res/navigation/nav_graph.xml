@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/homeFragment">
+
+    <fragment
+        android:id="@+id/homeFragment"
+        android:name="com.nandish.productivity.HomeFragment"
+        android:label="Home" />
+
+    <fragment
+        android:id="@+id/hubFragment"
+        android:name="com.nandish.productivity.HubFragment"
+        android:label="Hub" />
+
+    <fragment
+        android:id="@+id/goalsFragment"
+        android:name="com.nandish.productivity.GoalsFragment"
+        android:label="Goals" />
+
+    <fragment
+        android:id="@+id/vaultFragment"
+        android:name="com.nandish.productivity.VaultFragment"
+        android:label="Vault" />
+
+    <fragment
+        android:id="@+id/logsFragment"
+        android:name="com.nandish.productivity.LogsFragment"
+        android:label="Logs" />
+</navigation>
