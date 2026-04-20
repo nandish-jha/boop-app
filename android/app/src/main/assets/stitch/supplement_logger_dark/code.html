@@ -99,16 +99,17 @@
 <!-- Top Navigation -->
 <nav class="fixed top-0 w-full z-50 bg-[#131313]/60 backdrop-blur-xl flex justify-between items-center h-16 px-6">
 <div class="flex items-center gap-4">
-<span class="material-symbols-outlined text-white cursor-pointer">menu</span>
+<span id="prodash-btn-menu" class="material-symbols-outlined text-white cursor-pointer">menu</span>
 <span class="font-headline tracking-widest text-lg font-bold text-white">SILENT ORDER</span>
 </div>
 <div class="flex items-center gap-4">
+<span id="prodash-btn-search" class="material-symbols-outlined text-white cursor-pointer p-2 rounded-lg hover:bg-surface-container-low">search</span>
 <div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant/20">
 <img alt="User Profile" class="w-full h-full object-cover" data-alt="Abstract geometric avatar for a user profile in high contrast black and white" src="../../vendor/img/i63e3f7a0944a26fa.png"/>
 </div>
 </div>
 </nav>
-<main class="pt-24 pb-32 px-6 max-w-7xl mx-auto">
+<main class="pt-24 pb-28 px-6 max-w-7xl mx-auto">
 <!-- Hero: Progression & Stats -->
 <header class="mb-12 grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
 <div class="md:col-span-8">
@@ -205,9 +206,10 @@
 <div class="md:col-span-2 space-y-12">
 <!-- Morning Protocol -->
 <div>
-<div class="flex items-center gap-4 mb-8">
+<div class="flex flex-wrap items-center gap-4 mb-8">
 <h2 class="font-headline text-2xl font-extrabold tracking-tight uppercase">01 Morning Protocol</h2>
-<div class="h-[1px] flex-grow bg-outline-variant/30"></div>
+<button type="button" id="prodash-btn-add-supplement-log" class="text-xs font-bold uppercase tracking-widest text-primary border border-primary/40 px-3 py-1.5 rounded-lg">Add supplement</button>
+<div class="h-[1px] flex-grow bg-outline-variant/30 min-w-[40px]"></div>
 <span class="font-label text-[11px] text-outline uppercase tracking-widest">07:00 — 10:00</span>
 </div>
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="prodash-morning-grid">
@@ -283,32 +285,9 @@
 </div>
 </div>
 </main>
-<!-- Bottom Navigation Bar -->
-<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-20 pb-4 px-2 bg-[#131313]/60 backdrop-blur-xl z-50">
-<div class="flex flex-col items-center justify-center text-outline px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined mb-1">home</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Home</span>
-</div>
-<div class="flex flex-col items-center justify-center text-outline px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined mb-1">grid_view</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Hub</span>
-</div>
-<div class="flex flex-col items-center justify-center text-outline px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined mb-1">target</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Goals</span>
-</div>
-<div class="flex flex-col items-center justify-center text-outline px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined mb-1">account_balance_wallet</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Vault</span>
-</div>
-<div class="flex flex-col items-center justify-center bg-surface-variant text-white rounded-lg px-3 py-1.5 cursor-pointer scale-95 duration-150">
-<span class="material-symbols-outlined mb-1">list_alt</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Logs</span>
-</div>
-</nav>
 <!-- Floating Action Button -->
-<div class="fixed bottom-24 right-6 z-40">
-<button class="w-14 h-14 bg-primary text-on-primary flex items-center justify-center rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-transform">
+<div id="prodash-logs-fab" class="fixed bottom-24 right-6 z-40 cursor-pointer">
+<button type="button" class="w-14 h-14 bg-primary text-on-primary flex items-center justify-center rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-transform">
 <span class="material-symbols-outlined">add</span>
 </button>
 </div>

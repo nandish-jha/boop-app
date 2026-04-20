@@ -100,12 +100,14 @@
 <!-- TopAppBar -->
 <header class="fixed top-0 w-full z-50 bg-[#131313]/60 backdrop-blur-xl flex justify-between items-center h-16 px-6">
 <div class="flex items-center gap-4">
-<span class="material-symbols-outlined text-white cursor-pointer">menu</span>
+<span id="prodash-btn-menu" class="material-symbols-outlined text-white cursor-pointer">menu</span>
 </div>
 <h1 class="text-lg font-bold tracking-widest text-white font-headline uppercase">SILENT ORDER</h1>
-<div class="w-6"></div> <!-- Spacer for balance -->
+<div class="flex items-center gap-2">
+<span id="prodash-btn-search" class="material-symbols-outlined text-white cursor-pointer p-2 rounded-lg hover:bg-surface-container-low">search</span>
+</div>
 </header>
-<main class="pt-24 px-6 max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8">
+<main class="pt-24 pb-10 px-6 max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8">
 <!-- Hero Section: Stats & Streaks -->
 <section class="md:col-span-12 lg:col-span-8 flex flex-col gap-6">
 <div class="bg-surface-container-low p-8 rounded-lg flex flex-col md:flex-row justify-between items-end gap-8 relative overflow-hidden">
@@ -201,8 +203,11 @@
 </div>
 </div>
 </div>
-<button class="w-full py-4 text-label-sm font-bold border border-outline-variant/30 hover:bg-white hover:text-black transition-colors uppercase tracking-widest">
+<button type="button" id="prodash-btn-add-goal" class="w-full py-4 text-label-sm font-bold border border-outline-variant/30 hover:bg-white hover:text-black transition-colors uppercase tracking-widest">
                 Initiate New Quest
+            </button>
+<button type="button" id="prodash-btn-add-habit" class="w-full py-3 mt-2 text-label-sm font-bold border border-outline-variant/20 text-outline hover:text-white transition-colors uppercase tracking-widest">
+                New habit
             </button>
 </aside>
 <!-- Full Width: Detailed Habit Calendar -->
@@ -218,6 +223,7 @@
 <button class="px-4 py-2 bg-white text-black text-xs font-bold uppercase tracking-widest">Month</button>
 </div>
 </div>
+<div id="prodash-habits-list" class="space-y-2 mb-8"></div>
 <!-- Calendar Grid (Minimalist) -->
 <div class="grid grid-cols-7 gap-1">
 <!-- Days Labels -->
@@ -302,34 +308,11 @@
                         True mastery is achieved in the silent hours. The vault of your potential only opens to the key of consistency. Review your logs, analyze the failures, and return to the grid with renewed purpose.
                     </p>
 <div class="flex gap-4">
-<button class="px-8 py-3 bg-white text-black text-label-sm font-bold hover:bg-primary-container transition-all">View Logs</button>
-<button class="px-8 py-3 border border-outline-variant text-label-sm font-bold text-white hover:bg-surface-container-low transition-all">Settings</button>
+<button type="button" id="prodash-btn-view-logs" class="px-8 py-3 bg-white text-black text-label-sm font-bold hover:bg-primary-container transition-all">View Logs</button>
+<button type="button" id="prodash-btn-goal-settings" class="px-8 py-3 border border-outline-variant text-label-sm font-bold text-white hover:bg-surface-container-low transition-all">Settings</button>
 </div>
 </div>
 </div>
 </section>
 </main>
-<!-- BottomNavBar -->
-<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-20 pb-4 px-2 bg-[#131313]/60 backdrop-blur-xl z-50">
-<a class="flex flex-col items-center justify-center bg-[#353534] text-white rounded-lg px-3 py-1.5 transition-all scale-95 duration-150" href="#">
-<span class="material-symbols-outlined mb-1">home</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Home</span>
-</a>
-<a class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all" href="#">
-<span class="material-symbols-outlined mb-1">grid_view</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Hub</span>
-</a>
-<a class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all" href="#">
-<span class="material-symbols-outlined mb-1">target</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Goals</span>
-</a>
-<a class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all" href="#">
-<span class="material-symbols-outlined mb-1">account_balance_wallet</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Vault</span>
-</a>
-<a class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all" href="#">
-<span class="material-symbols-outlined mb-1">list_alt</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Logs</span>
-</a>
-</nav>
 </body></html>

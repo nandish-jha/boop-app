@@ -26,7 +26,9 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNav.setupWithNavController(navController)
 
         binding.fabSettings.setOnClickListener {
-            navController.navigate(R.id.settingsFragment)
+            val cur = navHost.childFragmentManager.primaryNavigationFragment
+            if (cur is StitchWebFragment) cur.showQuickAddMenu()
+            else navController.navigate(R.id.settingsFragment)
         }
 
         navController.addOnDestinationChangedListener { _, destination, _ ->

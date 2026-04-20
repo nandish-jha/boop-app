@@ -1,5 +1,6 @@
 package com.nandish.productivity
 
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -10,13 +11,17 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.EditText
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.Fragment
+import androidx.navigation.fragment.findNavController
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.gson.Gson
 import com.nandish.productivity.databinding.FragmentStitchBinding
 import org.json.JSONObject
 
-class StitchWebFragment : Fragment() {
+class StitchWebFragment : Fragment(), ProDashBridge.Host {
 
     private var _binding: FragmentStitchBinding? = null
     private val binding get() = _binding!!
@@ -28,6 +33,10 @@ class StitchWebFragment : Fragment() {
             ?: error("Missing assetHtml argument")
 
     private var backCallback: OnBackPressedCallback? = null
+
+    private fun refreshWeb() {
+        _binding?.webView?.let { injectHydration(it) }
+    }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentStitchBinding.inflate(inflater, container, false)
@@ -54,12 +63,8 @@ class StitchWebFragment : Fragment() {
         }
 
         wv.webChromeClient = WebChromeClient()
-        wv.addJavascriptInterface(
-            ProDashBridge {
-                requireActivity().runOnUiThread { injectHydration(wv) }
-            },
-            "ProDash"
-        )
+        wv.removeJavascriptInterface("ProDash")
+        wv.addJavascriptInterface(ProDashBridge(this), "ProDash")
 
         backCallback = object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
@@ -94,21 +99,183 @@ class StitchWebFragment : Fragment() {
         wv.loadUrl("file:///android_asset/$assetHtml")
     }
 
+    fun showQuickAddMenu() {
+        if (!isAdded) return
+        ItemEditors.showAddPicker(this) { refreshWeb() }
+    }
+
+    override fun onToggleTask(id: String) {
+        StateRepository.update {
+            val t = tasks.find { it.id == id } ?: return@update
+            t.done = !t.done
+        }
+        refreshWeb()
+    }
+
+    override fun onOpenMenu() {
+        if (!isAdded) return
+        val wv = _binding?.webView ?: return
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Menu")
+            .setItems(
+                arrayOf("Add…", "Settings", "Refresh this screen", "About")
+            ) { _, which ->
+                when (which) {
+                    0 -> ItemEditors.showAddPicker(this) { refreshWeb() }
+                    1 -> onNavigate("settings")
+                    2 -> injectHydration(wv)
+                    3 -> showAbout()
+                }
+            }
+            .show()
+    }
+
+    override fun onOpenSearch() {
+        if (!isAdded) return
+        val wv = _binding?.webView ?: return
+        val input = EditText(requireContext()).apply {
+            hint = "Filter items on this screen…"
+            setSingleLine()
+        }
+        val pad = (resources.displayMetrics.density * 24).toInt()
+        input.setPadding(pad, pad / 2, pad, pad / 2)
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Search")
+            .setView(input)
+            .setPositiveButton("Filter") { _, _ ->
+                val q = input.text?.toString() ?: ""
+                val quoted = JSONObject.quote(q)
+                wv.evaluateJavascript(
+                    "(function(){ if(window.ProDashFilter) ProDashFilter($quoted); })();",
+                    null
+                )
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    override fun onNavigate(tab: String) {
+        if (!isAdded) return
+        val dest = when (tab.lowercase()) {
+            "home" -> R.id.homeFragment
+            "hub" -> R.id.hubFragment
+            "goals" -> R.id.goalsFragment
+            "vault" -> R.id.vaultFragment
+            "logs" -> R.id.logsFragment
+            "settings" -> R.id.settingsFragment
+            else -> return
+        }
+        try {
+            findNavController().navigate(dest)
+        } catch (_: IllegalArgumentException) {
+        } catch (_: IllegalStateException) {
+        }
+    }
+
+    override fun onToast(message: String) {
+        if (!isAdded) return
+        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onOpenEditor(kind: String, id: String) {
+        if (!isAdded) return
+        val idOrNull = id.ifBlank { null }
+        when (kind.lowercase()) {
+            "task" -> ItemEditors.showTaskEditor(this, idOrNull) { refreshWeb() }
+            "note" -> ItemEditors.showNoteEditor(this, idOrNull) { refreshWeb() }
+            "goal" -> ItemEditors.showGoalEditor(this, idOrNull) { refreshWeb() }
+            "habit" -> ItemEditors.showHabitEditor(this, idOrNull) { refreshWeb() }
+            "supplement" -> ItemEditors.showSupplementEditor(this, idOrNull) { refreshWeb() }
+            "account" -> ItemEditors.showAccountEditor(this, idOrNull) { refreshWeb() }
+            "transaction" -> ItemEditors.showTransactionEditor(this, idOrNull) { refreshWeb() }
+            "reminder" -> ItemEditors.showReminderEditor(this) { refreshWeb() }
+            else -> Toast.makeText(requireContext(), "Unknown: $kind", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onToggleHabitToday(id: String) {
+        if (!isAdded) return
+        StateRepository.update {
+            val day = SeedData.today()
+            val inner = habitLogs.getOrPut(day) { HashMap() }
+            val done = inner[id] == "true"
+            inner[id] = if (done) "false" else "true"
+        }
+        refreshWeb()
+    }
+
+    override fun onToggleSupplementLog(id: String) {
+        if (!isAdded) return
+        StateRepository.update {
+            val day = SeedData.today()
+            val inner = supplementLogs.getOrPut(day) { HashMap() }
+            val cur = inner[id] == true
+            inner[id] = !cur
+        }
+        refreshWeb()
+    }
+
+    override fun onStreamCreate() {
+        if (!isAdded) return
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Create")
+            .setItems(arrayOf("New task", "New note")) { _, which ->
+                when (which) {
+                    0 -> ItemEditors.showTaskEditor(this, null) { refreshWeb() }
+                    1 -> ItemEditors.showNoteEditor(this, null) { refreshWeb() }
+                }
+            }
+            .show()
+    }
+
+    private fun showAbout() {
+        if (!isAdded) return
+        val vn = readVersionName()
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("About")
+            .setMessage("Silent Order (ProDash)\nVersion $vn\n\nOffline-first productivity. Data stays on this device.")
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    private fun readVersionName(): String = try {
+        val ctx = requireContext()
+        val pm = ctx.packageManager
+        val pn = ctx.packageName
+        @Suppress("DEPRECATION")
+        val pi = if (Build.VERSION.SDK_INT >= 33) {
+            pm.getPackageInfo(pn, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            pm.getPackageInfo(pn, 0)
+        }
+        pi.versionName ?: ""
+    } catch (_: Exception) {
+        ""
+    }
+
     private fun injectHydration(wv: WebView) {
-        val hydrateSrc = requireContext().assets.open("vendor/prodash-hydrate.js").bufferedReader().use { it.readText() }
-        wv.evaluateJavascript("eval(" + JSONObject.quote(hydrateSrc) + ");", null)
+        fun evalAsset(path: String) {
+            val src = requireContext().assets.open(path).bufferedReader().use { it.readText() }
+            wv.evaluateJavascript("eval(" + JSONObject.quote(src) + ");", null)
+        }
+        evalAsset("vendor/prodash-hydrate.js")
+        evalAsset("vendor/prodash-chrome.js")
         val json = PageSnapshots.jsonForAsset(assetHtml, gson)
         wv.evaluateJavascript(
             "(function(){ if(window.ProDashHydrate) ProDashHydrate(" + json + "); })();",
             null
         )
+        wv.evaluateJavascript(
+            "(function(){ if(window.ProDashWireChrome) ProDashWireChrome(); })();",
+            null
+        )
     }
 
     override fun onDestroyView() {
-        binding.webView.apply {
+        _binding?.webView?.apply {
             stopLoading()
             loadUrl("about:blank")
-            destroy()
+            removeJavascriptInterface("ProDash")
         }
         backCallback?.remove()
         backCallback = null

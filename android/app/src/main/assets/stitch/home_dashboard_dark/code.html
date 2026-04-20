@@ -109,17 +109,17 @@
 <!-- TopAppBar -->
 <nav class="fixed top-0 w-full z-50 bg-[#131313]/60 backdrop-blur-xl flex justify-between items-center h-16 px-6">
 <div class="flex items-center gap-4">
-<span class="material-symbols-outlined text-white cursor-pointer hover:bg-[#1c1b1b] transition-colors p-2 rounded-lg">menu</span>
+<span id="prodash-btn-menu" class="material-symbols-outlined text-white cursor-pointer hover:bg-[#1c1b1b] transition-colors p-2 rounded-lg">menu</span>
 <span class="text-editorial text-lg font-bold tracking-widest text-white">SILENT ORDER</span>
 </div>
 <div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-white cursor-pointer p-2 rounded-lg hover:bg-[#1c1b1b]">search</span>
-<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant/20">
+<span id="prodash-btn-search" class="material-symbols-outlined text-white cursor-pointer p-2 rounded-lg hover:bg-[#1c1b1b]">search</span>
+<div id="prodash-btn-profile" class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant/20 cursor-pointer">
 <img class="w-full h-full object-cover" data-alt="Portrait of a modern professional man with dark hair and thoughtful expression in dramatic studio lighting" src="../../vendor/img/i540a402ebc17fa46.png"/>
 </div>
 </div>
 </nav>
-<main class="pt-24 pb-28 px-6 max-w-5xl mx-auto space-y-12">
+<main class="pt-24 pb-10 px-6 max-w-5xl mx-auto space-y-12">
 <!-- Header Greeting -->
 <header class="space-y-1">
 <p class="font-label text-[10px] tracking-[0.1em] uppercase text-outline" id="prodash-date">Tuesday, 14 November</p>
@@ -136,8 +136,8 @@
 </div>
 <div class="relative z-10 flex justify-between items-end">
 <div class="flex gap-4">
-<button class="bg-primary text-on-primary px-6 py-2.5 font-label text-xs uppercase tracking-widest font-bold hover:opacity-90 transition-opacity">Deposit</button>
-<button class="bg-surface-container-high text-white px-6 py-2.5 font-label text-xs uppercase tracking-widest font-bold hover:bg-surface-bright transition-all">Details</button>
+<button type="button" id="prodash-btn-deposit" class="bg-primary text-on-primary px-6 py-2.5 font-label text-xs uppercase tracking-widest font-bold hover:opacity-90 transition-opacity">Deposit</button>
+<button type="button" id="prodash-btn-details" class="bg-surface-container-high text-white px-6 py-2.5 font-label text-xs uppercase tracking-widest font-bold hover:bg-surface-bright transition-all">Details</button>
 </div>
 <div class="text-right">
 <span class="material-symbols-outlined text-primary mb-1">trending_up</span>
@@ -256,28 +256,4 @@
 </div>
 </section>
 </main>
-<!-- BottomNavBar -->
-<nav class="fixed bottom-0 left-0 w-full z-50 bg-[#131313]/60 backdrop-blur-xl flex justify-around items-center h-20 pb-4 px-2">
-<!-- Active Home -->
-<div class="flex flex-col items-center justify-center bg-[#353534] text-white rounded-lg px-3 py-1.5 transition-all scale-95 duration-150 cursor-pointer">
-<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Home</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined">grid_view</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Hub</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined">target</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Goals</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined">account_balance_wallet</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Vault</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined">list_alt</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Logs</span>
-</div>
-</nav>
 </body></html>

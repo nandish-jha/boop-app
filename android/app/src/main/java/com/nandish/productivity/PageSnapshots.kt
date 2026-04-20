@@ -62,7 +62,7 @@ object PageSnapshots {
                 )
             },
             "supplements" to s.supplements.filter { it.time == "morning" }.take(4).map { x ->
-                mapOf("name" to x.name, "dose" to x.dose.uppercase(Locale.US))
+                mapOf("id" to x.id, "name" to x.name, "dose" to x.dose.uppercase(Locale.US))
             }
         )
     }
@@ -96,10 +96,19 @@ object PageSnapshots {
         val done = s.habitLogs[today]?.values?.count { it == "true" } ?: 0
         val total = s.habits.size.coerceAtLeast(1)
         val pass = (done * 100 / total).coerceIn(0, 100)
+        val logToday = s.habitLogs[today] ?: HashMap()
+        val habitsJson = s.habits.map { h ->
+            mapOf(
+                "id" to h.id,
+                "name" to h.name,
+                "doneToday" to (logToday[h.id] == "true")
+            )
+        }
         return mapOf(
             "page" to "goals",
             "habitsMeta" to "$done/${s.habits.size} completed",
             "passPct" to pass,
+            "habits" to habitsJson,
             "goals" to s.goals.map { g ->
                 mapOf(
                     "id" to g.id,
@@ -127,6 +136,7 @@ object PageSnapshots {
         val tx = s.transactions.sortedByDescending { it.date }.take(8).map { t ->
             val title = t.note.ifBlank { t.category }
             mapOf(
+                "id" to t.id,
                 "title" to title,
                 "meta" to "${t.category.uppercase(Locale.US)} · ${t.date}",
                 "amount" to formatMoney(if (t.type == "expense") -kotlin.math.abs(t.amount) else t.amount),
@@ -161,10 +171,19 @@ object PageSnapshots {
         }
 
     private fun logs(s: AppState): Map<String, Any?> {
-        val morning = s.supplements.filter { it.time == "morning" }.take(6).map { x ->
-            mapOf("id" to x.id, "name" to x.name, "detail" to x.dose)
+        val today = SeedData.today()
+        val slog = s.supplementLogs[today] ?: HashMap()
+        val morningList = s.supplements.filter { it.time == "morning" }.take(6)
+        val morning = morningList.map { x ->
+            mapOf(
+                "id" to x.id,
+                "name" to x.name,
+                "detail" to x.dose,
+                "taken" to (slog[x.id] == true)
+            )
         }
-        val pct = if (morning.isEmpty()) 84 else 72
+        val takenN = morningList.count { slog[it.id] == true }
+        val pct = if (morningList.isEmpty()) 0 else (takenN * 100 / morningList.size)
         return mapOf("page" to "logs", "completionPct" to pct, "morning" to morning)
     }
 }

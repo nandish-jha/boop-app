@@ -92,21 +92,17 @@
 <!-- TopAppBar -->
 <header class="fixed top-0 w-full z-50 bg-[#131313]/60 backdrop-blur-xl flex justify-between items-center h-16 px-6">
 <div class="flex items-center gap-4">
-<span class="material-symbols-outlined text-white cursor-pointer" data-icon="menu">menu</span>
+<span id="prodash-btn-menu" class="material-symbols-outlined text-white cursor-pointer" data-icon="menu">menu</span>
 <span class="text-lg font-bold tracking-widest text-white font-manrope">SILENT ORDER</span>
 </div>
-<div class="hidden md:flex gap-8">
-<span class="font-manrope tracking-[-0.02em] text-sm uppercase font-bold text-[#474747] hover:text-white transition-colors cursor-pointer">Home</span>
-<span class="font-manrope tracking-[-0.02em] text-sm uppercase font-bold text-[#474747] hover:text-white transition-colors cursor-pointer">Hub</span>
-<span class="font-manrope tracking-[-0.02em] text-sm uppercase font-bold text-[#474747] hover:text-white transition-colors cursor-pointer">Goals</span>
-<span class="font-manrope tracking-[-0.02em] text-sm uppercase font-bold text-white cursor-pointer">Vault</span>
-<span class="font-manrope tracking-[-0.02em] text-sm uppercase font-bold text-[#474747] hover:text-white transition-colors cursor-pointer">Logs</span>
-</div>
-<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center">
+<div class="flex items-center gap-2">
+<span id="prodash-btn-search" class="material-symbols-outlined text-white cursor-pointer p-2 rounded-lg hover:bg-surface-container-low">search</span>
+<div id="prodash-btn-profile" class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer">
 <span class="material-symbols-outlined text-xs" data-icon="person">person</span>
 </div>
+</div>
 </header>
-<main class="pt-24 pb-32 px-6 max-w-7xl mx-auto">
+<main class="pt-24 pb-10 px-6 max-w-7xl mx-auto">
 <!-- Hero Section: Net Worth Asymmetry -->
 <section class="mb-12 grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
 <div class="md:col-span-8">
@@ -123,7 +119,7 @@
 </div>
 </div>
 <div class="md:col-span-4 flex md:justify-end">
-<button class="bg-primary text-on-primary px-8 py-4 rounded-lg font-manrope font-bold text-sm tracking-tight flex items-center gap-2 hover:opacity-90 transition-opacity">
+<button type="button" id="prodash-btn-add-account" class="bg-primary text-on-primary px-8 py-4 rounded-lg font-manrope font-bold text-sm tracking-tight flex items-center gap-2 hover:opacity-90 transition-opacity">
 <span class="material-symbols-outlined" data-icon="add">add</span>
                     ADD NEW ACCOUNT
                 </button>
@@ -268,7 +264,7 @@
 </select>
 </div>
 </div>
-<button class="w-full bg-primary text-on-primary py-4 rounded font-bold text-sm tracking-widest uppercase mt-4 hover:opacity-90 active:scale-[0.98] transition-all" type="submit">
+<button type="button" id="prodash-btn-add-transaction" class="w-full bg-primary text-on-primary py-4 rounded font-bold text-sm tracking-widest uppercase mt-4 hover:opacity-90 active:scale-[0.98] transition-all">
                             LOG TRANSACTION
                         </button>
 </form>
@@ -290,27 +286,4 @@
 </div>
 </div>
 </main>
-<!-- BottomNavBar -->
-<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-20 pb-4 px-2 bg-[#131313]/60 backdrop-blur-xl z-50">
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Home</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined mb-1" data-icon="grid_view">grid_view</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Hub</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined mb-1" data-icon="target">target</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Goals</span>
-</div>
-<div class="flex flex-col items-center justify-center bg-[#353534] text-white rounded-lg px-3 py-1.5 cursor-pointer">
-<span class="material-symbols-outlined mb-1" data-icon="account_balance_wallet" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Vault</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined mb-1" data-icon="list_alt">list_alt</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Logs</span>
-</div>
-</nav>
 </body></html>

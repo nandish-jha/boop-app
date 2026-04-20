@@ -107,21 +107,21 @@
 <!-- TopAppBar -->
 <header class="fixed top-0 w-full z-50 bg-[#131313]/60 backdrop-blur-xl flex justify-between items-center h-16 px-6">
 <div class="flex items-center gap-4">
-<span class="material-symbols-outlined text-white cursor-pointer">menu</span>
+<span id="prodash-btn-menu" class="material-symbols-outlined text-white cursor-pointer">menu</span>
 </div>
 <h1 class="text-lg font-bold tracking-widest text-white font-headline">SILENT ORDER</h1>
 <div class="flex items-center gap-4">
-<span class="material-symbols-outlined text-white cursor-pointer">notifications</span>
+<span id="prodash-btn-notifications" class="material-symbols-outlined text-white cursor-pointer">notifications</span>
 </div>
 </header>
-<main class="pt-24 px-6 max-w-5xl mx-auto space-y-12">
+<main class="pt-24 pb-10 px-6 max-w-5xl mx-auto space-y-12">
 <!-- Search Section -->
 <section class="w-full">
 <div class="relative group">
 <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
 <span class="material-symbols-outlined text-outline-variant">search</span>
 </div>
-<input class="w-full bg-surface-container-lowest border-none focus:ring-1 focus:ring-outline py-4 pl-12 pr-4 text-on-surface placeholder:text-outline-variant font-body rounded-lg transition-all" placeholder="Find clarity..." type="text"/>
+<input id="prodash-hub-filter" class="w-full bg-surface-container-lowest border-none focus:ring-1 focus:ring-outline py-4 pl-12 pr-4 text-on-surface placeholder:text-outline-variant font-body rounded-lg transition-all" placeholder="Find clarity..." type="text"/>
 </div>
 </section>
 <!-- Bento Grid: Featured Content -->
@@ -174,7 +174,7 @@
 <h2 class="text-2xl font-headline font-bold text-white">The Active Stream</h2>
 <p class="text-sm text-outline">Your thoughts and actions, prioritized.</p>
 </div>
-<button class="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-xs font-bold uppercase tracking-wider transition-opacity active:opacity-80">
+<button type="button" id="prodash-btn-hub-create" class="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-xs font-bold uppercase tracking-wider transition-opacity active:opacity-80">
 <span class="material-symbols-outlined text-sm">add</span>
                     Create New
                 </button>
@@ -247,28 +247,4 @@
 </div>
 </section>
 </main>
-<!-- BottomNavBar -->
-<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-20 pb-4 px-2 bg-[#131313]/60 backdrop-blur-xl z-50">
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined">home</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Home</span>
-</div>
-<!-- Active Tab: Hub -->
-<div class="flex flex-col items-center justify-center bg-[#353534] text-white rounded-lg px-3 py-1.5 cursor-pointer scale-95 duration-150">
-<span class="material-symbols-outlined">grid_view</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Hub</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined">target</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Goals</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined">account_balance_wallet</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Vault</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
-<span class="material-symbols-outlined">list_alt</span>
-<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Logs</span>
-</div>
-</nav>
 </body></html>
