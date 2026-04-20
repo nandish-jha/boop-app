@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<!-- offline-vendor -->
+<script src="../../vendor/tailwindcss.js"></script>
+<link href="../../vendor/silent-order-fonts.css" rel="stylesheet"/>
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Settings - Silent Order</title>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed": "#d7e4ec",
+                        "secondary-container": "#d1e6f0",
+                        "on-surface-variant": "#586064",
+                        "on-primary": "#f0f9ff",
+                        "primary": "#546067",
+                        "on-surface": "#2b3437",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#c3d8e2",
+                        "tertiary": "#4e6176",
+                        "error": "#9f403d",
+                        "inverse-on-surface": "#9b9d9e",
+                        "on-secondary-fixed-variant": "#4b5e67",
+                        "inverse-primary": "#e6f3fb",
+                        "on-secondary-container": "#41545d",
+                        "surface-container-high": "#e3e9ec",
+                        "surface-bright": "#f8f9fa",
+                        "surface-container": "#eaeff1",
+                        "secondary": "#4f626b",
+                        "primary-dim": "#48545b",
+                        "primary-container": "#d7e4ec",
+                        "outline": "#737c7f",
+                        "on-tertiary-fixed-variant": "#4b5d72",
+                        "background": "#f8f9fa",
+                        "on-primary-container": "#47545a",
+                        "error-container": "#fe8983",
+                        "surface-tint": "#546067",
+                        "on-primary-fixed": "#354147",
+                        "surface-dim": "#d1dce0",
+                        "on-error": "#fff7f6",
+                        "outline-variant": "#abb3b7",
+                        "on-primary-fixed-variant": "#515d64",
+                        "primary-fixed-dim": "#c9d6de",
+                        "on-tertiary-container": "#415368",
+                        "on-secondary": "#f2faff",
+                        "on-error-container": "#752121",
+                        "on-tertiary-fixed": "#2f4155",
+                        "on-tertiary": "#f7f9ff",
+                        "surface-variant": "#dbe4e7",
+                        "on-secondary-fixed": "#2f424a",
+                        "surface-container-highest": "#dbe4e7",
+                        "surface-container-low": "#f1f4f6",
+                        "tertiary-fixed": "#d1e4fe",
+                        "secondary-fixed": "#d1e6f0",
+                        "inverse-surface": "#0c0f10",
+                        "error-dim": "#4e0309",
+                        "on-background": "#2b3437",
+                        "tertiary-fixed-dim": "#c3d6ef",
+                        "surface": "#f8f9fa",
+                        "tertiary-dim": "#425569",
+                        "secondary-dim": "#43565f",
+                        "tertiary-container": "#d1e4fe"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        .glass-nav {
+            background: rgba(248, 249, 250, 0.8);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen pb-32">
+<!-- TopAppBar (Suppressed FAB as per guidelines for Details/Settings) -->
+<header class="fixed top-0 w-full z-50 glass-nav flex justify-between items-center px-8 h-20 w-full">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Professional studio portrait of a man with a calm expression against a neutral gray background, soft lighting" src="../../vendor/img/i13841415223cd50e.png"/>
+</div>
+<h1 class="font-['Inter'] text-2xl font-bold tracking-tight text-[#546067]">Hello, Nandish</h1>
+</div>
+<div class="flex gap-4">
+<button class="p-2 rounded-full hover:bg-[#e3e9ec] transition-all text-[#546067]">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</div>
+</header>
+<main class="pt-32 px-6 max-w-2xl mx-auto">
+<!-- Breadcrumb / Section Header -->
+<div class="mb-12">
+<h2 class="text-[3.5rem] font-extrabold tracking-tight leading-none text-on-surface mb-2">Settings</h2>
+<p class="text-on-surface-variant text-lg">Manage your digital sanctuary and preferences.</p>
+</div>
+<!-- Settings Groups -->
+<div class="space-y-12">
+<!-- Account Section -->
+<section>
+<h3 class="text-[0.6875rem] uppercase tracking-[0.15em] font-bold text-outline mb-6">Profile &amp; Account</h3>
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden">
+<button class="w-full flex items-center justify-between p-6 hover:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-5">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">person</span>
+</div>
+<div class="text-left">
+<p class="font-semibold text-on-surface">Personal Information</p>
+<p class="text-sm text-on-surface-variant">Update your name, email, and bio.</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-6 hover:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-5">
+<div class="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">verified_user</span>
+</div>
+<div class="text-left">
+<p class="font-semibold text-on-surface">Security</p>
+<p class="text-sm text-on-surface-variant">Password, 2FA, and login history.</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+</div>
+</section>
+<!-- Experience Section -->
+<section>
+<h3 class="text-[0.6875rem] uppercase tracking-[0.15em] font-bold text-outline mb-6">App Experience</h3>
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden">
+<div class="flex items-center justify-between p-6">
+<div class="flex items-center gap-5">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined">dark_mode</span>
+</div>
+<div class="text-left">
+<p class="font-semibold text-on-surface">Appearance</p>
+<p class="text-sm text-on-surface-variant">Toggle between light and dark themes.</p>
+</div>
+</div>
+<div class="flex bg-surface-container-low p-1 rounded-full">
+<button class="px-4 py-1 rounded-full bg-white shadow-sm text-xs font-bold text-primary">LIGHT</button>
+<button class="px-4 py-1 rounded-full text-xs font-bold text-outline">DARK</button>
+</div>
+</div>
+<button class="w-full flex items-center justify-between p-6 hover:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-5">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined">notifications_active</span>
+</div>
+<div class="text-left">
+<p class="font-semibold text-on-surface">Notifications</p>
+<p class="text-sm text-on-surface-variant">Customise how you stay informed.</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+</div>
+</section>
+<!-- Privacy & Help -->
+<section>
+<h3 class="text-[0.6875rem] uppercase tracking-[0.15em] font-bold text-outline mb-6">Support &amp; Legal</h3>
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden">
+<button class="w-full flex items-center justify-between p-6 hover:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-5">
+<div class="w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center text-outline">
+<span class="material-symbols-outlined">lock</span>
+</div>
+<div class="text-left">
+<p class="font-semibold text-on-surface">Privacy Policy</p>
+<p class="text-sm text-on-surface-variant">How we handle your personal data.</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">open_in_new</span>
+</button>
+<button class="w-full flex items-center justify-between p-6 hover:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-5">
+<div class="w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center text-outline">
+<span class="material-symbols-outlined">help_center</span>
+</div>
+<div class="text-left">
+<p class="font-semibold text-on-surface">Help &amp; Support</p>
+<p class="text-sm text-on-surface-variant">Get assistance and view FAQs.</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+</div>
+</section>
+<!-- Logout -->
+<section class="pt-4">
+<button class="w-full py-5 rounded-xl bg-error-container/20 text-on-error-container font-bold tracking-tight hover:bg-error-container/30 transition-all">
+                    Sign Out of Silent Order
+                </button>
+<p class="text-center text-[0.625rem] text-outline mt-8 uppercase tracking-widest">Version 2.4.0 • Build 882</p>
+</section>
+</div>
+</main>
+<!-- BottomNavBar (Persistent Navigation) -->
+<nav class="fixed bottom-0 w-full z-50 pb-safe glass-nav flex justify-around items-center h-24 px-4 w-full">
+<!-- Tasks -->
+<a class="flex flex-col items-center gap-1 text-[#abb3b7] hover:text-[#546067] transition-all" href="#">
+<span class="material-symbols-outlined">check_circle</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Tasks</span>
+</a>
+<!-- Habits -->
+<a class="flex flex-col items-center gap-1 text-[#abb3b7] hover:text-[#546067] transition-all" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Habits</span>
+</a>
+<!-- Finance -->
+<a class="flex flex-col items-center gap-1 text-[#abb3b7] hover:text-[#546067] transition-all" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Finance</span>
+</a>
+<!-- Supplements -->
+<a class="flex flex-col items-center gap-1 text-[#abb3b7] hover:text-[#546067] transition-all" href="#">
+<span class="material-symbols-outlined">pill</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Supplements</span>
+</a>
+<!-- Profile (Active State mapped to Settings context) -->
+<a class="flex flex-col items-center gap-1 text-[#546067] scale-110" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Profile</span>
+</a>
+</nav>
+</body></html>

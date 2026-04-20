@@ -6,31 +6,61 @@
 
     <fragment
         android:id="@+id/homeFragment"
-        android:name="com.nandish.productivity.HomeFragment"
-        android:label="Home" />
+        android:name="com.nandish.productivity.StitchWebFragment"
+        android:label="@string/nav_home">
+        <argument
+            android:name="assetHtml"
+            app:argType="string"
+            android:defaultValue="stitch/home_dashboard_dark/code.html" />
+    </fragment>
 
     <fragment
         android:id="@+id/hubFragment"
-        android:name="com.nandish.productivity.HubFragment"
-        android:label="Hub" />
+        android:name="com.nandish.productivity.StitchWebFragment"
+        android:label="@string/nav_hub">
+        <argument
+            android:name="assetHtml"
+            app:argType="string"
+            android:defaultValue="stitch/task_notes_hub_dark/code.html" />
+    </fragment>
 
     <fragment
         android:id="@+id/goalsFragment"
-        android:name="com.nandish.productivity.GoalsFragment"
-        android:label="Goals" />
+        android:name="com.nandish.productivity.StitchWebFragment"
+        android:label="@string/nav_goals">
+        <argument
+            android:name="assetHtml"
+            app:argType="string"
+            android:defaultValue="stitch/habit_goal_tracker_dark/code.html" />
+    </fragment>
 
     <fragment
         android:id="@+id/vaultFragment"
-        android:name="com.nandish.productivity.VaultFragment"
-        android:label="Vault" />
+        android:name="com.nandish.productivity.StitchWebFragment"
+        android:label="@string/nav_vault">
+        <argument
+            android:name="assetHtml"
+            app:argType="string"
+            android:defaultValue="stitch/accounts_finance_dark/code.html" />
+    </fragment>
 
     <fragment
         android:id="@+id/logsFragment"
-        android:name="com.nandish.productivity.LogsFragment"
-        android:label="Logs" />
+        android:name="com.nandish.productivity.StitchWebFragment"
+        android:label="@string/nav_logs">
+        <argument
+            android:name="assetHtml"
+            app:argType="string"
+            android:defaultValue="stitch/supplement_logger_dark/code.html" />
+    </fragment>
 
     <fragment
         android:id="@+id/settingsFragment"
-        android:name="com.nandish.productivity.SettingsFragment"
-        android:label="Settings" />
+        android:name="com.nandish.productivity.StitchWebFragment"
+        android:label="@string/settings">
+        <argument
+            android:name="assetHtml"
+            app:argType="string"
+            android:defaultValue="stitch/settings_dark/code.html" />
+    </fragment>
 </navigation>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<!-- offline-vendor -->
+<script src="../../vendor/tailwindcss.js"></script>
+<link href="../../vendor/silent-order-fonts.css" rel="stylesheet"/>
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-primary": "#5d5f5f",
+                        "on-secondary-fixed-variant": "#383c3d",
+                        "on-secondary-container": "#e0e3e4",
+                        "secondary-fixed-dim": "#a9acad",
+                        "on-primary-fixed-variant": "#e2e2e2",
+                        "error": "#ffb4ab",
+                        "tertiary": "#e1e3e4",
+                        "inverse-on-surface": "#313030",
+                        "surface-dim": "#131313",
+                        "surface-tint": "#c6c6c6",
+                        "on-primary-fixed": "#ffffff",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-error": "#690005",
+                        "outline-variant": "#474747",
+                        "secondary-container": "#444748",
+                        "background": "#131313",
+                        "primary-fixed": "#5d5f5f",
+                        "on-primary-container": "#000000",
+                        "error-container": "#93000a",
+                        "on-surface": "#e5e2e1",
+                        "primary": "#ffffff",
+                        "on-surface-variant": "#c6c6c6",
+                        "on-primary": "#1a1c1c",
+                        "tertiary-fixed-dim": "#444748",
+                        "on-background": "#e5e2e1",
+                        "tertiary-container": "#8f9192",
+                        "surface": "#131313",
+                        "secondary-fixed": "#c4c7c8",
+                        "tertiary-fixed": "#5c5f60",
+                        "inverse-surface": "#e5e2e1",
+                        "primary-container": "#d4d4d4",
+                        "outline": "#919191",
+                        "surface-container-low": "#1c1b1b",
+                        "on-tertiary-fixed-variant": "#e1e3e4",
+                        "surface-variant": "#353534",
+                        "on-tertiary": "#191c1d",
+                        "secondary": "#c4c7c8",
+                        "on-secondary-fixed": "#191c1d",
+                        "surface-container-highest": "#353534",
+                        "surface-container-high": "#2a2a2a",
+                        "on-secondary": "#191c1d",
+                        "on-tertiary-container": "#000000",
+                        "primary-fixed-dim": "#454747",
+                        "on-tertiary-fixed": "#ffffff",
+                        "surface-container": "#201f1f",
+                        "surface-bright": "#3a3939",
+                        "on-error-container": "#ffdad6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(19, 19, 19, 0.6);
+            backdrop-filter: blur(20px);
+        }
+        body {
+            background-color: #131313;
+            color: #e5e2e1;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- Top Navigation -->
+<nav class="fixed top-0 w-full z-50 bg-[#131313]/60 backdrop-blur-xl flex justify-between items-center h-16 px-6">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-white cursor-pointer">menu</span>
+<span class="font-headline tracking-widest text-lg font-bold text-white">SILENT ORDER</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant/20">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="Abstract geometric avatar for a user profile in high contrast black and white" src="../../vendor/img/i63e3f7a0944a26fa.png"/>
+</div>
+</div>
+</nav>
+<main class="pt-24 pb-32 px-6 max-w-7xl mx-auto">
+<!-- Hero: Progression & Stats -->
+<header class="mb-12 grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
+<div class="md:col-span-8">
+<span class="font-label text-[11px] uppercase tracking-widest text-outline mb-2 block">System Status: Active</span>
+<h1 class="font-headline text-5xl md:text-7xl font-extrabold tracking-[-0.03em] leading-none mb-4">OPTIMIZATION<br/>PROTOCOL</h1>
+<p class="text-on-surface-variant max-w-md font-body leading-relaxed">Daily biological recalibration. Monitoring nutrient density and cellular replenishment across all key physiological cycles.</p>
+</div>
+<div class="md:col-span-4 bg-surface-container-low p-6 rounded-lg relative overflow-hidden group">
+<div class="relative z-10">
+<span class="font-label text-[11px] uppercase tracking-[0.05em] text-outline block mb-1">TOTAL COMPLETION</span>
+<div class="text-4xl font-headline font-bold text-white mb-2" id="prodash-completion">84%</div>
+<div class="h-1 w-full bg-surface-container-lowest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[84%]"></div>
+</div>
+</div>
+<div class="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+<span class="material-symbols-outlined text-[120px]" style="font-variation-settings: 'FILL' 1;">analytics</span>
+</div>
+</div>
+</header>
+<!-- Bento Layout -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<!-- Left Column: Upcoming & Insights -->
+<div class="md:col-span-1 space-y-8">
+<!-- Next Dose -->
+<section class="bg-surface-container-high p-8 rounded-lg border-l border-primary/20">
+<div class="flex items-start justify-between mb-8">
+<div>
+<span class="font-label text-[11px] uppercase tracking-widest text-outline block mb-1">UPCOMING DOSE</span>
+<h3 class="font-headline text-2xl font-bold text-white uppercase tracking-tight">Magnesium L-Threonate</h3>
+</div>
+<span class="material-symbols-outlined text-primary">schedule</span>
+</div>
+<div class="flex items-end gap-2 mb-6">
+<span class="text-4xl font-headline font-extrabold text-white">12:30</span>
+<span class="text-outline text-lg font-medium pb-1 uppercase tracking-wider">PM</span>
+</div>
+<button class="w-full py-3 bg-primary text-on-primary font-label text-[11px] font-bold uppercase tracking-widest rounded-sm hover:opacity-90 transition-opacity">
+                        MARK AS CONSUMED
+                    </button>
+</section>
+<!-- Optimization Insight -->
+<section class="bg-surface-container-lowest p-8 rounded-lg relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4">
+<span class="material-symbols-outlined text-primary/30">lightbulb</span>
+</div>
+<h3 class="font-headline text-lg font-bold text-white mb-4 uppercase tracking-wider">OPTIMIZATION INSIGHT</h3>
+<p class="text-sm text-on-surface-variant font-body leading-relaxed mb-6">
+                        Cortisol levels typically peak at 8:00 AM. Delaying caffeine intake by 90 minutes will assist in natural adenosine clearance, preventing the afternoon crash.
+                    </p>
+<div class="flex items-center gap-3 py-3 px-4 bg-surface-container-low rounded border border-outline-variant/10">
+<span class="material-symbols-outlined text-xs text-primary">psychology</span>
+<span class="text-[10px] font-label uppercase tracking-widest text-on-surface">COGNITIVE FOCUS: +14%</span>
+</div>
+</section>
+<!-- Inventory Status -->
+<section>
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-headline text-sm font-bold uppercase tracking-widest">Inventory Status</h3>
+<span class="material-symbols-outlined text-outline cursor-pointer text-sm">settings</span>
+</div>
+<div class="space-y-6">
+<div class="group">
+<div class="flex justify-between text-[11px] font-label uppercase tracking-wider mb-2">
+<span class="text-on-surface">Whey Isolate</span>
+<span class="text-outline">12 Servings Left</span>
+</div>
+<div class="h-1 bg-surface-container-low w-full rounded-full overflow-hidden">
+<div class="h-full bg-error/80 w-[20%]"></div>
+</div>
+</div>
+<div class="group">
+<div class="flex justify-between text-[11px] font-label uppercase tracking-wider mb-2">
+<span class="text-on-surface">Omega-3 Fish Oil</span>
+<span class="text-outline">45 Servings Left</span>
+</div>
+<div class="h-1 bg-surface-container-low w-full rounded-full overflow-hidden">
+<div class="h-full bg-primary/40 w-[75%]"></div>
+</div>
+</div>
+<div class="group">
+<div class="flex justify-between text-[11px] font-label uppercase tracking-wider mb-2">
+<span class="text-on-surface">Vitamin D3+K2</span>
+<span class="text-outline">180 Servings Left</span>
+</div>
+<div class="h-1 bg-surface-container-low w-full rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[95%]"></div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column: Timeline -->
+<div class="md:col-span-2 space-y-12">
+<!-- Morning Protocol -->
+<div>
+<div class="flex items-center gap-4 mb-8">
+<h2 class="font-headline text-2xl font-extrabold tracking-tight uppercase">01 Morning Protocol</h2>
+<div class="h-[1px] flex-grow bg-outline-variant/30"></div>
+<span class="font-label text-[11px] text-outline uppercase tracking-widest">07:00 — 10:00</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="prodash-morning-grid">
+<div class="p-6 bg-surface-container-low hover:bg-surface-bright transition-colors group cursor-pointer border-l-2 border-primary">
+<div class="flex justify-between items-start mb-4">
+<span class="font-headline font-bold text-lg">Electrolyte Stack</span>
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<p class="text-xs text-outline uppercase tracking-widest">500ml Water + 2g Sodium</p>
+</div>
+<div class="p-6 bg-surface-container-low hover:bg-surface-bright transition-colors group cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<span class="font-headline font-bold text-lg">Multi-Vitamin Complex</span>
+<span class="material-symbols-outlined text-outline-variant text-sm">radio_button_unchecked</span>
+</div>
+<p class="text-xs text-outline uppercase tracking-widest">1 Capsule with Meal</p>
+</div>
+</div>
+</div>
+<!-- Mid-day Cycle -->
+<div>
+<div class="flex items-center gap-4 mb-8">
+<h2 class="font-headline text-2xl font-extrabold tracking-tight uppercase">02 Mid-day Cycle</h2>
+<div class="h-[1px] flex-grow bg-outline-variant/30"></div>
+<span class="font-label text-[11px] text-outline uppercase tracking-widest">12:00 — 15:00</span>
+</div>
+<div class="space-y-4">
+<div class="flex items-center gap-6 p-6 bg-surface-container-low hover:bg-surface-bright transition-colors cursor-pointer relative">
+<div class="w-12 h-12 bg-surface-container-lowest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-outline">pill</span>
+</div>
+<div class="flex-grow">
+<h4 class="font-headline font-bold text-white text-lg">Magnesium L-Threonate</h4>
+<p class="text-xs text-outline uppercase tracking-widest mt-1">Cognitive Support • 12:30 PM</p>
+</div>
+<div class="shrink-0 font-label text-[10px] text-primary bg-primary/10 px-2 py-1 uppercase tracking-widest">In Focus</div>
+</div>
+<div class="flex items-center gap-6 p-6 bg-surface-container-low hover:bg-surface-bright transition-colors cursor-pointer">
+<div class="w-12 h-12 bg-surface-container-lowest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-outline">fitness_center</span>
+</div>
+<div class="flex-grow">
+<h4 class="font-headline font-bold text-white text-lg">Creatine Monohydrate</h4>
+<p class="text-xs text-outline uppercase tracking-widest mt-1">ATP Production • 5g Post-Session</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Rest & Recovery -->
+<div>
+<div class="flex items-center gap-4 mb-8">
+<h2 class="font-headline text-2xl font-extrabold tracking-tight uppercase">03 Rest &amp; Recovery</h2>
+<div class="h-[1px] flex-grow bg-outline-variant/30"></div>
+<span class="font-label text-[11px] text-outline uppercase tracking-widest">20:00 — 23:00</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="p-6 bg-surface-container-low hover:bg-surface-bright transition-colors group cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<span class="font-headline font-bold text-lg">ZMA Blend</span>
+<span class="material-symbols-outlined text-outline-variant text-sm">radio_button_unchecked</span>
+</div>
+<p class="text-xs text-outline uppercase tracking-widest">Deep Sleep Optimization</p>
+</div>
+<div class="p-6 bg-surface-container-low hover:bg-surface-bright transition-colors group cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<span class="font-headline font-bold text-lg">Glycine</span>
+<span class="material-symbols-outlined text-outline-variant text-sm">radio_button_unchecked</span>
+</div>
+<p class="text-xs text-outline uppercase tracking-widest">3g Before Sleep</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-20 pb-4 px-2 bg-[#131313]/60 backdrop-blur-xl z-50">
+<div class="flex flex-col items-center justify-center text-outline px-3 py-1.5 hover:text-white transition-all cursor-pointer">
+<span class="material-symbols-outlined mb-1">home</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Home</span>
+</div>
+<div class="flex flex-col items-center justify-center text-outline px-3 py-1.5 hover:text-white transition-all cursor-pointer">
+<span class="material-symbols-outlined mb-1">grid_view</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Hub</span>
+</div>
+<div class="flex flex-col items-center justify-center text-outline px-3 py-1.5 hover:text-white transition-all cursor-pointer">
+<span class="material-symbols-outlined mb-1">target</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Goals</span>
+</div>
+<div class="flex flex-col items-center justify-center text-outline px-3 py-1.5 hover:text-white transition-all cursor-pointer">
+<span class="material-symbols-outlined mb-1">account_balance_wallet</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Vault</span>
+</div>
+<div class="flex flex-col items-center justify-center bg-surface-variant text-white rounded-lg px-3 py-1.5 cursor-pointer scale-95 duration-150">
+<span class="material-symbols-outlined mb-1">list_alt</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Logs</span>
+</div>
+</nav>
+<!-- Floating Action Button -->
+<div class="fixed bottom-24 right-6 z-40">
+<button class="w-14 h-14 bg-primary text-on-primary flex items-center justify-center rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-transform">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+</body></html>

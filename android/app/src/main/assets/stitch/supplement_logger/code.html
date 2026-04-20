@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<!-- offline-vendor -->
+<script src="../../vendor/tailwindcss.js"></script>
+<link href="../../vendor/silent-order-fonts.css" rel="stylesheet"/>
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed-variant": "#4b5e67",
+                    "outline-variant": "#abb3b7",
+                    "on-tertiary-fixed": "#2f4155",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary": "#4f626b",
+                    "on-secondary-container": "#41545d",
+                    "primary-fixed": "#d7e4ec",
+                    "on-background": "#2b3437",
+                    "secondary-container": "#d1e6f0",
+                    "surface-variant": "#dbe4e7",
+                    "tertiary-container": "#d1e4fe",
+                    "tertiary": "#4e6176",
+                    "on-secondary": "#f2faff",
+                    "on-error": "#fff7f6",
+                    "inverse-primary": "#e6f3fb",
+                    "surface-container-highest": "#dbe4e7",
+                    "primary": "#546067",
+                    "on-secondary-fixed": "#2f424a",
+                    "surface-tint": "#546067",
+                    "tertiary-dim": "#425569",
+                    "secondary-fixed-dim": "#c3d8e2",
+                    "error": "#9f403d",
+                    "on-surface": "#2b3437",
+                    "on-tertiary": "#f7f9ff",
+                    "on-tertiary-fixed-variant": "#4b5d72",
+                    "tertiary-fixed": "#d1e4fe",
+                    "primary-container": "#d7e4ec",
+                    "secondary-fixed": "#d1e6f0",
+                    "surface-container-low": "#f1f4f6",
+                    "error-dim": "#4e0309",
+                    "inverse-on-surface": "#9b9d9e",
+                    "tertiary-fixed-dim": "#c3d6ef",
+                    "on-tertiary-container": "#415368",
+                    "on-primary-fixed": "#354147",
+                    "primary-dim": "#48545b",
+                    "on-primary-container": "#47545a",
+                    "on-surface-variant": "#586064",
+                    "error-container": "#fe8983",
+                    "surface": "#f8f9fa",
+                    "background": "#f8f9fa",
+                    "outline": "#737c7f",
+                    "on-primary-fixed-variant": "#515d64",
+                    "on-error-container": "#752121",
+                    "surface-container": "#eaeff1",
+                    "primary-fixed-dim": "#c9d6de",
+                    "on-primary": "#f0f9ff",
+                    "secondary-dim": "#43565f",
+                    "surface-bright": "#f8f9fa",
+                    "surface-dim": "#d1dce0",
+                    "surface-container-high": "#e3e9ec",
+                    "inverse-surface": "#0c0f10"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.75rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-panel { backdrop-filter: blur(20px); }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#f8f9fa]/80 dark:bg-slate-950/80 backdrop-blur-[20px] shadow-[0_40px_60px_-15px_rgba(43,52,55,0.05)]">
+<div class="flex items-center justify-between px-6 py-4 max-w-screen-xl mx-auto w-full">
+<div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center overflow-hidden">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="Softly lit professional studio portrait of a man with a gentle expression and clean aesthetic" src="../../vendor/img/i18aa969152f9d474.png"/>
+</div>
+<h1 class="text-lg font-bold tracking-[-0.02em] text-[#546067] dark:text-slate-200 font-['Inter']">Silent Order</h1>
+<button class="material-symbols-outlined text-[#546067] dark:text-slate-400 hover:bg-[#e3e9ec] dark:hover:bg-slate-800 transition-colors duration-[600ms] p-2 rounded-xl active:scale-[0.98]">
+                settings
+            </button>
+</div>
+</header>
+<main class="pt-24 px-6 max-w-screen-xl mx-auto">
+<!-- Hero Section -->
+<section class="mb-12">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div>
+<span class="label-sm uppercase tracking-[0.05em] text-primary font-medium opacity-70">Daily Routine</span>
+<h2 class="text-[3.5rem] font-extrabold tracking-[-0.02em] leading-tight text-on-background mt-2">Logs</h2>
+</div>
+<div class="bg-surface-container-low rounded-xl px-6 py-4 flex flex-col items-end">
+<span class="text-sm text-outline-variant font-medium">Progress today</span>
+<span class="text-2xl font-bold text-primary">4 / 6 Done</span>
+</div>
+</div>
+</section>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+<!-- Timeline Sidebar (Asymmetric) -->
+<aside class="lg:col-span-4 space-y-8">
+<div class="bg-surface-container-low rounded-full p-8 relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-br from-primary to-primary-container opacity-5"></div>
+<div class="relative z-10">
+<h3 class="text-xl font-bold mb-4">Upcoming Next</h3>
+<div class="flex items-center gap-4 p-4 bg-surface-container-lowest rounded-xl shadow-sm">
+<div class="w-12 h-12 bg-secondary-container rounded-full flex items-center justify-center text-on-secondary-container">
+<span class="material-symbols-outlined">wb_twilight</span>
+</div>
+<div>
+<p class="font-bold">Magnesium</p>
+<p class="text-sm text-outline-variant">9:00 PM • 200mg</p>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-full p-8">
+<h3 class="text-sm uppercase tracking-widest text-outline-variant font-bold mb-6">Inventory Status</h3>
+<div class="space-y-6">
+<div class="flex justify-between items-center">
+<span class="text-on-surface font-medium">Vitamin D3</span>
+<span class="bg-error-container text-on-error-container text-[0.65rem] px-2 py-0.5 rounded-full font-bold">LOW</span>
+</div>
+<div class="w-full bg-surface-container-high h-1 rounded-full overflow-hidden">
+<div class="bg-error w-1/5 h-full"></div>
+</div>
+<div class="flex justify-between items-center pt-2">
+<span class="text-on-surface font-medium">Omega 3</span>
+<span class="text-outline-variant text-sm">24 days left</span>
+</div>
+<div class="w-full bg-surface-container-high h-1 rounded-full overflow-hidden">
+<div class="bg-primary w-4/5 h-full"></div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Log Checklist -->
+<section class="lg:col-span-8 space-y-6">
+<!-- Morning Block -->
+<div class="space-y-4">
+<div class="flex items-center gap-3 opacity-60">
+<span class="material-symbols-outlined text-sm">light_mode</span>
+<h4 class="text-xs font-bold uppercase tracking-[0.1em]">Morning Ritual</h4>
+</div>
+<!-- Item 1 -->
+<div class="group flex items-center justify-between p-6 bg-surface-container-low rounded-xl transition-all duration-[600ms] hover:bg-surface-container-high">
+<div class="flex items-center gap-6">
+<div class="relative w-8 h-8">
+<input checked="" class="peer appearance-none w-8 h-8 rounded-full border-2 border-primary checked:bg-primary transition-all duration-500 cursor-pointer" type="checkbox"/>
+<span class="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white text-lg opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none">check</span>
+</div>
+<div>
+<h5 class="text-lg font-bold text-on-surface line-through opacity-50 transition-all">Vitamin D3 + K2</h5>
+<p class="text-sm text-outline-variant">8:00 AM • 5000 IU • With Breakfast</p>
+</div>
+</div>
+<button class="material-symbols-outlined text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity">more_vert</button>
+</div>
+<!-- Item 2 -->
+<div class="group flex items-center justify-between p-6 bg-surface-container-low rounded-xl transition-all duration-[600ms] hover:bg-surface-container-high">
+<div class="flex items-center gap-6">
+<div class="relative w-8 h-8">
+<input checked="" class="peer appearance-none w-8 h-8 rounded-full border-2 border-primary checked:bg-primary transition-all duration-500 cursor-pointer" type="checkbox"/>
+<span class="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white text-lg opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none">check</span>
+</div>
+<div>
+<h5 class="text-lg font-bold text-on-surface line-through opacity-50 transition-all">Omega-3 Fish Oil</h5>
+<p class="text-sm text-outline-variant">8:00 AM • 1000mg • High EPA</p>
+</div>
+</div>
+<button class="material-symbols-outlined text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity">more_vert</button>
+</div>
+</div>
+<!-- Mid-Day Block -->
+<div class="pt-8 space-y-4">
+<div class="flex items-center gap-3 opacity-60">
+<span class="material-symbols-outlined text-sm">sunny</span>
+<h4 class="text-xs font-bold uppercase tracking-[0.1em]">Mid-Day Focus</h4>
+</div>
+<!-- Item 3 -->
+<div class="group flex items-center justify-between p-6 bg-surface-container-lowest rounded-xl shadow-sm transition-all duration-[600ms] hover:scale-[1.01]">
+<div class="flex items-center gap-6">
+<div class="relative w-8 h-8">
+<input class="peer appearance-none w-8 h-8 rounded-full border-2 border-outline-variant hover:border-primary checked:bg-primary transition-all duration-500 cursor-pointer" type="checkbox"/>
+<span class="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white text-lg opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none">check</span>
+</div>
+<div>
+<h5 class="text-lg font-bold text-on-surface">Creatine Monohydrate</h5>
+<p class="text-sm text-outline-variant">1:00 PM • 5g • Pre-workout</p>
+</div>
+</div>
+<span class="text-[0.65rem] font-bold text-primary bg-primary-container px-3 py-1 rounded-full">DUE SOON</span>
+</div>
+<!-- Item 4 -->
+<div class="group flex items-center justify-between p-6 bg-surface-container-low rounded-xl transition-all duration-[600ms] opacity-50 grayscale">
+<div class="flex items-center gap-6">
+<div class="relative w-8 h-8">
+<input checked="" class="peer appearance-none w-8 h-8 rounded-full border-2 border-primary checked:bg-primary transition-all duration-500 cursor-pointer" type="checkbox"/>
+<span class="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white text-lg opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none">check</span>
+</div>
+<div>
+<h5 class="text-lg font-bold text-on-surface line-through">B-Complex</h5>
+<p class="text-sm text-outline-variant">1:00 PM • 1 Capsule</p>
+</div>
+</div>
+<button class="material-symbols-outlined text-outline-variant">more_vert</button>
+</div>
+</div>
+<!-- Evening Block -->
+<div class="pt-8 space-y-4">
+<div class="flex items-center gap-3 opacity-60">
+<span class="material-symbols-outlined text-sm">bedtime</span>
+<h4 class="text-xs font-bold uppercase tracking-[0.1em]">Rest &amp; Recovery</h4>
+</div>
+<!-- Item 5 -->
+<div class="group flex items-center justify-between p-6 bg-surface-container-lowest rounded-xl shadow-sm transition-all duration-[600ms] border-l-4 border-primary/20">
+<div class="flex items-center gap-6">
+<div class="relative w-8 h-8">
+<input class="peer appearance-none w-8 h-8 rounded-full border-2 border-outline-variant hover:border-primary checked:bg-primary transition-all duration-500 cursor-pointer" type="checkbox"/>
+<span class="material-symbols-outlined absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white text-lg opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none">check</span>
+</div>
+<div>
+<h5 class="text-lg font-bold text-on-surface">Magnesium Glycinate</h5>
+<p class="text-sm text-outline-variant">9:00 PM • 400mg • Before Sleep</p>
+</div>
+</div>
+<button class="material-symbols-outlined text-outline-variant">notifications</button>
+</div>
+</div>
+</section>
+</div>
+<!-- Floating Insight Card -->
+<section class="mt-16">
+<div class="bg-primary text-on-primary rounded-full p-12 flex flex-col md:flex-row items-center gap-10 relative overflow-hidden">
+<div class="absolute top-0 right-0 w-64 h-64 bg-surface-container-lowest opacity-5 rounded-full -mr-20 -mt-20"></div>
+<div class="max-w-md relative z-10">
+<h3 class="text-3xl font-bold tracking-tight mb-4">Optimization Insight</h3>
+<p class="text-on-primary/80 leading-relaxed">Your consistency with Vitamin D has improved by 40% this week. Maintaining this level will significantly support your circadian rhythm.</p>
+</div>
+<div class="flex-shrink-0 relative z-10">
+<img alt="Medicine bottles" class="w-48 h-48 object-cover rounded-2xl shadow-2xl" data-alt="Modern minimalist amber glass supplement bottles on a clean white surface with soft geometric shadows" src="../../vendor/img/i319f979b21010e50.png"/>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-[#f8f9fa]/80 dark:bg-slate-950/80 backdrop-blur-[20px] shadow-[0_-10px_40px_rgba(43,52,55,0.04)] rounded-t-[0.75rem]">
+<div class="flex justify-around items-center px-4 pb-6 pt-3 max-w-screen-xl mx-auto">
+<!-- Home -->
+<a class="flex flex-col items-center justify-center text-[#abb3b7] dark:text-slate-500 hover:text-[#546067] dark:hover:text-slate-300 transition-all duration-[600ms] active:scale-[0.95]" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-['Inter'] text-[0.6875rem] uppercase tracking-[0.05em] mt-1">Home</span>
+</a>
+<!-- Hub -->
+<a class="flex flex-col items-center justify-center text-[#abb3b7] dark:text-slate-500 hover:text-[#546067] dark:hover:text-slate-300 transition-all duration-[600ms] active:scale-[0.95]" href="#">
+<span class="material-symbols-outlined">edit_note</span>
+<span class="font-['Inter'] text-[0.6875rem] uppercase tracking-[0.05em] mt-1">Hub</span>
+</a>
+<!-- Goals -->
+<a class="flex flex-col items-center justify-center text-[#abb3b7] dark:text-slate-500 hover:text-[#546067] dark:hover:text-slate-300 transition-all duration-[600ms] active:scale-[0.95]" href="#">
+<span class="material-symbols-outlined">auto_awesome</span>
+<span class="font-['Inter'] text-[0.6875rem] uppercase tracking-[0.05em] mt-1">Goals</span>
+</a>
+<!-- Vault -->
+<a class="flex flex-col items-center justify-center text-[#abb3b7] dark:text-slate-500 hover:text-[#546067] dark:hover:text-slate-300 transition-all duration-[600ms] active:scale-[0.95]" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-['Inter'] text-[0.6875rem] uppercase tracking-[0.05em] mt-1">Vault</span>
+</a>
+<!-- Logs (Active) -->
+<a class="flex flex-col items-center justify-center text-[#546067] dark:text-slate-100 font-bold bg-[#d7e4ec]/40 dark:bg-slate-800/60 rounded-xl px-3 py-1 transition-all duration-[600ms] active:scale-[0.95]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">pill</span>
+<span class="font-['Inter'] text-[0.6875rem] uppercase tracking-[0.05em] mt-1">Logs</span>
+</a>
+</div>
+</nav>
+</body></html>

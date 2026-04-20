@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<!-- offline-vendor -->
+<script src="../../vendor/tailwindcss.js"></script>
+<link href="../../vendor/silent-order-fonts.css" rel="stylesheet"/>
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Add New Entry</title>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-fixed": "#d7e4ec",
+                    "secondary-container": "#d1e6f0",
+                    "on-surface-variant": "#586064",
+                    "on-primary": "#f0f9ff",
+                    "primary": "#546067",
+                    "on-surface": "#2b3437",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed-dim": "#c3d8e2",
+                    "tertiary": "#4e6176",
+                    "error": "#9f403d",
+                    "inverse-on-surface": "#9b9d9e",
+                    "on-secondary-fixed-variant": "#4b5e67",
+                    "inverse-primary": "#e6f3fb",
+                    "on-secondary-container": "#41545d",
+                    "surface-container-high": "#e3e9ec",
+                    "surface-bright": "#f8f9fa",
+                    "surface-container": "#eaeff1",
+                    "secondary": "#4f626b",
+                    "primary-dim": "#48545b",
+                    "primary-container": "#d7e4ec",
+                    "outline": "#737c7f",
+                    "on-tertiary-fixed-variant": "#4b5d72",
+                    "background": "#f8f9fa",
+                    "on-primary-container": "#47545a",
+                    "error-container": "#fe8983",
+                    "surface-tint": "#546067",
+                    "on-primary-fixed": "#354147",
+                    "surface-dim": "#d1dce0",
+                    "on-error": "#fff7f6",
+                    "outline-variant": "#abb3b7",
+                    "on-primary-fixed-variant": "#515d64",
+                    "primary-fixed-dim": "#c9d6de",
+                    "on-tertiary-container": "#415368",
+                    "on-secondary": "#f2faff",
+                    "on-error-container": "#752121",
+                    "on-tertiary-fixed": "#2f4155",
+                    "on-tertiary": "#f7f9ff",
+                    "surface-variant": "#dbe4e7",
+                    "on-secondary-fixed": "#2f424a",
+                    "surface-dim": "#d1dce0",
+                    "tertiary-fixed": "#d1e4fe",
+                    "secondary-fixed": "#d1e6f0",
+                    "inverse-surface": "#0c0f10",
+                    "error-dim": "#4e0309",
+                    "on-background": "#2b3437",
+                    "tertiary-fixed-dim": "#c3d6ef",
+                    "surface": "#f8f9fa",
+                    "tertiary-dim": "#425569",
+                    "secondary-dim": "#43565f",
+                    "tertiary-container": "#d1e4fe"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.75rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body selection:bg-primary-container">
+<!-- Top Navigation Bar -->
+<header class="fixed top-0 w-full z-50 bg-[#f8f9fa]/80 backdrop-blur-xl flex justify-between items-center px-8 h-20 w-full">
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-[#e3e9ec] transition-all">
+<span class="material-symbols-outlined text-primary">close</span>
+</button>
+<h1 class="font-['Inter'] text-2xl font-bold tracking-tight text-[#546067]">New Entry</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="px-6 py-2 bg-primary text-on-primary rounded-xl font-medium text-sm transition-all hover:opacity-90 active:scale-95">
+                Save
+            </button>
+</div>
+</header>
+<main class="pt-32 pb-24 px-6 md:px-0 max-w-2xl mx-auto">
+<!-- Mode Toggle (Task vs Note) -->
+<div class="mb-12 flex justify-center">
+<div class="bg-surface-container-low p-1.5 rounded-full flex gap-1 items-center">
+<button class="px-8 py-2.5 rounded-full text-sm font-semibold transition-all bg-surface-container-lowest text-primary shadow-sm">
+                    Task
+                </button>
+<button class="px-8 py-2.5 rounded-full text-sm font-semibold transition-all text-on-surface-variant hover:text-primary">
+                    Note
+                </button>
+</div>
+</div>
+<!-- Form Section -->
+<section class="space-y-10">
+<!-- Title Input -->
+<div class="group">
+<input class="w-full bg-transparent border-none text-4xl md:text-5xl font-extrabold tracking-tight placeholder:text-outline-variant focus:ring-0 p-0 mb-2" placeholder="Entry Title" type="text"/>
+<div class="h-[2px] w-0 bg-primary transition-all duration-700 ease-out group-focus-within:w-full"></div>
+</div>
+<!-- Description -->
+<div class="space-y-3">
+<label class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium text-outline">Description</label>
+<textarea class="w-full bg-surface-container-low border-none rounded-xl focus:ring-0 focus:bg-surface-container-highest p-5 text-on-surface transition-all resize-none" placeholder="Add additional details or context..." rows="4"></textarea>
+</div>
+<!-- Bento Grid of Settings -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Date & Time Card -->
+<div class="bg-surface-container-lowest p-6 rounded-xl space-y-4 border border-outline-variant/10">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">calendar_today</span>
+<span class="font-medium text-sm">Schedule</span>
+</div>
+<button class="text-xs text-primary font-semibold">Today</button>
+</div>
+<div class="flex flex-col gap-2">
+<div class="flex items-center justify-between p-3 bg-surface-container-low rounded-lg group cursor-pointer hover:bg-surface-container-high transition-all">
+<span class="text-sm text-on-surface-variant">Due Date</span>
+<span class="text-sm font-semibold">Oct 24, 2023</span>
+</div>
+<div class="flex items-center justify-between p-3 bg-surface-container-low rounded-lg group cursor-pointer hover:bg-surface-container-high transition-all">
+<span class="text-sm text-on-surface-variant">Time</span>
+<span class="text-sm font-semibold">09:00 AM</span>
+</div>
+</div>
+</div>
+<!-- Category Card -->
+<div class="bg-surface-container-lowest p-6 rounded-xl space-y-4 border border-outline-variant/10">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">label</span>
+<span class="font-medium text-sm">Category</span>
+</div>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-1.5 rounded-full bg-secondary-container text-on-secondary-container text-xs font-semibold">Work</button>
+<button class="px-4 py-1.5 rounded-full bg-surface-container-low text-on-surface-variant text-xs font-semibold hover:bg-surface-container-high">Personal</button>
+<button class="px-4 py-1.5 rounded-full bg-surface-container-low text-on-surface-variant text-xs font-semibold hover:bg-surface-container-high">Finance</button>
+<button class="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Connectivity -->
+<div class="bg-primary-container/30 p-6 rounded-xl flex items-center justify-between group cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="relative flex items-center">
+<input class="peer h-6 w-6 rounded border-outline-variant text-primary focus:ring-0" id="connect_note" type="checkbox"/>
+</div>
+<label class="flex flex-col cursor-pointer" for="connect_note">
+<span class="font-semibold text-on-primary-container">Connect to Note</span>
+<span class="text-xs text-on-primary-fixed-variant">Automatically create a linked workspace for this task</span>
+</label>
+</div>
+<span class="material-symbols-outlined text-primary-dim opacity-40 group-hover:opacity-100 transition-opacity">link</span>
+</div>
+<!-- Reminder Toggle -->
+<div class="flex items-center justify-between px-2">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-weight="fill" style="font-variation-settings: 'FILL' 1;">notifications</span>
+</div>
+<div>
+<p class="text-sm font-bold">Smart Reminders</p>
+<p class="text-[11px] text-outline">Alert 15 minutes before due time</p>
+</div>
+</div>
+<div class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navbar - Suppressed as per Task-Focused Page Rule, but structure kept for potential context if this were a main view -->
+<nav class="fixed bottom-0 w-full z-50 pb-safe md:hidden bg-[#f8f9fa]/80 backdrop-blur-xl flex justify-around items-center h-24 px-4 w-full">
+<div class="flex flex-col items-center gap-1 text-[#546067] scale-110">
+<span class="material-symbols-outlined" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Tasks</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-[#abb3b7]">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Habits</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-[#abb3b7]">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Finance</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-[#abb3b7]">
+<span class="material-symbols-outlined">pill</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Supplements</span>
+</div>
+</nav>
+<!-- Visual Polish: Accent Background Gradient -->
+<div class="fixed top-0 left-0 w-full h-full -z-10 pointer-events-none overflow-hidden">
+<div class="absolute -top-[20%] -right-[10%] w-[60%] h-[60%] rounded-full bg-primary/5 blur-[120px]"></div>
+<div class="absolute -bottom-[10%] -left-[10%] w-[40%] h-[40%] rounded-full bg-secondary-container/10 blur-[100px]"></div>
+</div>
+</body></html>

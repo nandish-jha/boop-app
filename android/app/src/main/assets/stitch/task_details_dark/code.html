@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<!-- offline-vendor -->
+<script src="../../vendor/tailwindcss.js"></script>
+<link href="../../vendor/silent-order-fonts.css" rel="stylesheet"/>
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "inverse-primary": "#5d5f5f",
+                    "on-secondary-fixed-variant": "#383c3d",
+                    "on-secondary-container": "#e0e3e4",
+                    "secondary-fixed-dim": "#a9acad",
+                    "on-primary-fixed-variant": "#e2e2e2",
+                    "error": "#ffb4ab",
+                    "tertiary": "#e1e3e4",
+                    "inverse-on-surface": "#313030",
+                    "surface-dim": "#131313",
+                    "surface-tint": "#c6c6c6",
+                    "on-primary-fixed": "#ffffff",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-error": "#690005",
+                    "outline-variant": "#474747",
+                    "secondary-container": "#444748",
+                    "background": "#131313",
+                    "primary-fixed": "#5d5f5f",
+                    "on-primary-container": "#000000",
+                    "error-container": "#93000a",
+                    "on-surface": "#e5e2e1",
+                    "primary": "#ffffff",
+                    "on-surface-variant": "#c6c6c6",
+                    "on-primary": "#1a1c1c",
+                    "tertiary-fixed-dim": "#444748",
+                    "on-background": "#e5e2e1",
+                    "tertiary-container": "#8f9192",
+                    "surface": "#131313",
+                    "secondary-fixed": "#c4c7c8",
+                    "tertiary-fixed": "#5c5f60",
+                    "inverse-surface": "#e5e2e1",
+                    "primary-container": "#d4d4d4",
+                    "outline": "#919191",
+                    "surface-container-low": "#1c1b1b",
+                    "on-tertiary-fixed-variant": "#e1e3e4",
+                    "surface-variant": "#353534",
+                    "on-tertiary": "#191c1d",
+                    "secondary": "#c4c7c8",
+                    "on-secondary-fixed": "#191c1d",
+                    "surface-container-highest": "#353534",
+                    "surface-container-high": "#2a2a2a",
+                    "on-secondary": "#191c1d",
+                    "on-tertiary-container": "#000000",
+                    "primary-fixed-dim": "#454747",
+                    "on-tertiary-fixed": "#ffffff",
+                    "surface-container": "#201f1f",
+                    "surface-bright": "#3a3939",
+                    "on-error-container": "#ffdad6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+            font-size: 20px;
+        }
+        body {
+            background-color: #131313;
+            color: #e5e2e1;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0e0e0e;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #353534;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body selection:bg-primary selection:text-on-primary">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#131313]/60 backdrop-blur-xl">
+<div class="flex justify-between items-center h-16 px-6">
+<div class="flex items-center gap-4">
+<button class="text-white material-symbols-outlined hover:bg-[#1c1b1b] transition-colors p-2 rounded">arrow_back</button>
+<h1 class="font-headline tracking-[-0.02em] text-sm uppercase font-bold text-white">SILENT ORDER</h1>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-white material-symbols-outlined hover:bg-[#1c1b1b] transition-colors p-2 rounded">share</span>
+<span class="text-white material-symbols-outlined hover:bg-[#1c1b1b] transition-colors p-2 rounded">more_vert</span>
+</div>
+</div>
+</header>
+<main class="pt-24 pb-32 px-6 max-w-6xl mx-auto">
+<!-- Header Section -->
+<section class="mb-12">
+<div class="flex flex-wrap items-center gap-3 mb-6">
+<span class="bg-surface-container-highest text-on-surface px-3 py-1 text-[10px] uppercase tracking-widest font-bold rounded-sm">Priority: Urgent</span>
+<span class="bg-surface-container-low text-outline px-3 py-1 text-[10px] uppercase tracking-widest font-bold rounded-sm">Infrastructure</span>
+</div>
+<h2 class="font-headline text-5xl md:text-6xl font-extrabold tracking-tighter text-white mb-6 leading-none">
+                OBSIDIAN PROTOCOL <br/> CORE MIGRATION
+            </h2>
+<div class="flex flex-wrap items-center gap-8 text-on-surface-variant">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center border border-outline-variant/20 overflow-hidden">
+<img class="w-full h-full object-cover grayscale" data-alt="monochrome portrait of a serious professional man in soft dark studio lighting" src="../../vendor/img/i34ef79c60f4a6d0c.png"/>
+</div>
+<div>
+<p class="text-[10px] uppercase tracking-widest text-outline font-bold leading-none mb-1">Assignee</p>
+<p class="text-sm font-medium text-white">Elias Thorne</p>
+</div>
+</div>
+<div>
+<p class="text-[10px] uppercase tracking-widest text-outline font-bold leading-none mb-1">Due Date</p>
+<p class="text-sm font-medium text-white">24 Oct 2024</p>
+</div>
+<div>
+<p class="text-[10px] uppercase tracking-widest text-outline font-bold leading-none mb-1">Status</p>
+<p class="text-sm font-medium text-white flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                        Active Phase
+                    </p>
+</div>
+</div>
+</section>
+<!-- Content Grid (Asymmetric) -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+<!-- Left Column: Description & Milestones -->
+<div class="lg:col-span-8 space-y-16">
+<!-- Description -->
+<article>
+<h3 class="text-[11px] uppercase tracking-[0.2em] text-outline font-black mb-6">Execution Narrative</h3>
+<div class="space-y-6 text-on-surface leading-relaxed text-lg font-light">
+<p>
+                            The Obsidian Protocol represents the final stage of our architectural overhaul. This task involves the complete decommissioning of legacy slate-clusters and the transition to the new monochromatic depth model. 
+                        </p>
+<p>
+                            Integrity checks must be performed at every nodal intersection. We are moving away from traditional grid-based rendering to a fluid, perception-based depth system. The "Silent Utility" philosophy must be maintained throughout the script implementation.
+                        </p>
+</div>
+</article>
+<!-- Milestones Checklist -->
+<section>
+<div class="flex justify-between items-end mb-8">
+<h3 class="text-[11px] uppercase tracking-[0.2em] text-outline font-black">Milestones</h3>
+<span class="text-[11px] font-mono text-outline">64% Complete</span>
+</div>
+<div class="space-y-1">
+<!-- Completed Item -->
+<div class="group flex items-center gap-6 p-4 bg-surface-container-lowest transition-colors">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="text-on-surface-variant line-through font-light">Initial server handshake and authentication handshake</span>
+</div>
+<!-- Completed Item -->
+<div class="group flex items-center gap-6 p-4 bg-surface-container-lowest transition-colors">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="text-on-surface-variant line-through font-light">Node-level encryption deployment</span>
+</div>
+<!-- Active Item -->
+<div class="group flex items-center gap-6 p-4 bg-surface-container-low border-l-2 border-primary transition-colors">
+<span class="material-symbols-outlined text-white">radio_button_unchecked</span>
+<span class="text-white font-medium italic">Database architecture migration (Current Phase)</span>
+</div>
+<!-- Pending Item -->
+<div class="group flex items-center gap-6 p-4 bg-surface-container-lowest transition-colors">
+<span class="material-symbols-outlined text-outline">radio_button_unchecked</span>
+<span class="text-outline font-light">Final protocol synchronization</span>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column: Assets & Metadata -->
+<aside class="lg:col-span-4 space-y-12">
+<!-- Asset Gallery -->
+<section>
+<h3 class="text-[11px] uppercase tracking-[0.2em] text-outline font-black mb-6">Related Assets</h3>
+<div class="grid grid-cols-2 gap-4">
+<div class="aspect-square bg-surface-container-low overflow-hidden group cursor-pointer">
+<img class="w-full h-full object-cover grayscale transition-transform duration-500 group-hover:scale-110 opacity-60 group-hover:opacity-100" data-alt="abstract dark grey smoke and liquid textures swirling in a monochromatic minimalist style" src="../../vendor/img/ieed7af4e271842eb.png"/>
+</div>
+<div class="aspect-square bg-surface-container-low overflow-hidden group cursor-pointer">
+<img class="w-full h-full object-cover grayscale transition-transform duration-500 group-hover:scale-110 opacity-60 group-hover:opacity-100" data-alt="minimalist architectural shot of dark concrete stairs with sharp shadows and high contrast" src="../../vendor/img/ib6259441c481de5b.png"/>
+</div>
+<div class="aspect-square bg-surface-container-low overflow-hidden group cursor-pointer relative">
+<img class="w-full h-full object-cover grayscale transition-transform duration-500 group-hover:scale-110 opacity-60 group-hover:opacity-100" data-alt="close up of dark obsidian rock texture with sharp glass-like edges and deep shadows" src="../../vendor/img/i50410b618d5f5856.png"/>
+</div>
+<div class="aspect-square bg-surface-container-low flex flex-col items-center justify-center gap-2 group cursor-pointer border border-outline-variant/10 hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-outline group-hover:text-white">add</span>
+<span class="text-[10px] uppercase tracking-widest text-outline font-bold">Upload</span>
+</div>
+</div>
+</section>
+<!-- Context Card -->
+<section class="bg-surface-container-low p-8 border border-white/5">
+<h3 class="text-[11px] uppercase tracking-[0.2em] text-outline font-black mb-4">Project Context</h3>
+<p class="text-sm text-on-surface-variant mb-6 leading-relaxed">
+                        Part of the <span class="text-white font-mono">X-7 ARCHIVE</span> project. Last edited by <span class="text-white">Sarah Jenkins</span> 4 hours ago.
+                    </p>
+<button class="w-full bg-white text-on-primary py-4 px-6 text-[11px] uppercase tracking-[0.2em] font-black flex items-center justify-center gap-2 hover:bg-primary-container transition-all">
+                        VIEW TIMELINE
+                        <span class="material-symbols-outlined">north_east</span>
+</button>
+</section>
+<!-- Tags -->
+<section>
+<h3 class="text-[11px] uppercase tracking-[0.2em] text-outline font-black mb-4">Labels</h3>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1.5 bg-surface-container-lowest text-[10px] font-mono text-on-surface uppercase tracking-wider">#architecture</span>
+<span class="px-3 py-1.5 bg-surface-container-lowest text-[10px] font-mono text-on-surface uppercase tracking-wider">#security-v4</span>
+<span class="px-3 py-1.5 bg-surface-container-lowest text-[10px] font-mono text-on-surface uppercase tracking-wider">#obsidian</span>
+</div>
+</section>
+</aside></div>
+</main>
+<!-- Bottom Navigation Shell -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-20 pb-4 px-2 bg-[#131313]/60 backdrop-blur-xl z-50">
+<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
+<span class="material-symbols-outlined">home</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Home</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
+<span class="material-symbols-outlined">grid_view</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Hub</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
+<span class="material-symbols-outlined">target</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Goals</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all cursor-pointer">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Vault</span>
+</div>
+<div class="flex flex-col items-center justify-center bg-[#353534] text-white rounded-lg px-3 py-1.5 scale-95 duration-150 cursor-pointer">
+<span class="material-symbols-outlined">list_alt</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase mt-1">Logs</span>
+</div>
+</nav>
+</body></html>

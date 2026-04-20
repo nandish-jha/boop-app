@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<!-- offline-vendor -->
+<script src="../../vendor/tailwindcss.js"></script>
+<link href="../../vendor/silent-order-fonts.css" rel="stylesheet"/>
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Finance Management | The Elevated Life-Manager</title>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-fixed": "#d7e4ec",
+                    "secondary-container": "#d1e6f0",
+                    "on-surface-variant": "#586064",
+                    "on-primary": "#f0f9ff",
+                    "primary": "#546067",
+                    "on-surface": "#2b3437",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed-dim": "#c3d8e2",
+                    "tertiary": "#4e6176",
+                    "error": "#9f403d",
+                    "inverse-on-surface": "#9b9d9e",
+                    "on-secondary-fixed-variant": "#4b5e67",
+                    "inverse-primary": "#e6f3fb",
+                    "on-secondary-container": "#41545d",
+                    "surface-container-high": "#e3e9ec",
+                    "surface-bright": "#f8f9fa",
+                    "surface-container": "#eaeff1",
+                    "secondary": "#4f626b",
+                    "primary-dim": "#48545b",
+                    "primary-container": "#d7e4ec",
+                    "outline": "#737c7f",
+                    "on-tertiary-fixed-variant": "#4b5d72",
+                    "background": "#f8f9fa",
+                    "on-primary-container": "#47545a",
+                    "error-container": "#fe8983",
+                    "surface-tint": "#546067",
+                    "on-primary-fixed": "#354147",
+                    "surface-dim": "#d1dce0",
+                    "on-error": "#fff7f6",
+                    "outline-variant": "#abb3b7",
+                    "on-primary-fixed-variant": "#515d64",
+                    "primary-fixed-dim": "#c9d6de",
+                    "on-tertiary-container": "#415368",
+                    "on-secondary": "#f2faff",
+                    "on-error-container": "#752121",
+                    "on-tertiary-fixed": "#2f4155",
+                    "on-tertiary": "#f7f9ff",
+                    "surface-variant": "#dbe4e7",
+                    "on-secondary-fixed": "#2f424a",
+                    "surface-dim": "#d1dce0",
+                    "on-background": "#2b3437",
+                    "tertiary-fixed-dim": "#c3d6ef",
+                    "surface": "#f8f9fa",
+                    "tertiary-dim": "#425569",
+                    "secondary-dim": "#43565f",
+                    "tertiary-container": "#d1e4fe"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.75rem",
+                    "full": "999px"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        .glass-panel {
+            background: rgba(248, 249, 250, 0.8);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#f8f9fa]/80 dark:bg-[#2b3437]/80 backdrop-blur-xl flex justify-between items-center px-8 h-20 w-full">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-primary-container">
+<img alt="Profile of Nandish" class="w-full h-full object-cover" data-alt="Professional headshot of a man with a warm smile, soft natural lighting, minimalist grey background" src="../../vendor/img/ia85fdde61235d8aa.png"/>
+</div>
+<h1 class="font-['Inter'] text-2xl font-bold tracking-tight text-[#546067]">Hello, Nandish</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-full hover:bg-[#e3e9ec] transition-all">
+<span class="material-symbols-outlined text-[#546067]" data-icon="notifications">notifications</span>
+</button>
+</div>
+</header>
+<main class="pt-28 pb-32 px-8 max-w-7xl mx-auto space-y-12">
+<!-- Hero Financial Summary -->
+<section class="flex flex-col md:flex-row justify-between items-end gap-8">
+<div class="space-y-2">
+<p class="text-[11px] uppercase tracking-[0.05em] font-medium text-outline">Total Net Worth</p>
+<h2 class="text-[3.5rem] font-bold tracking-tight text-on-surface leading-none">$142,850.00</h2>
+</div>
+<div class="flex gap-4 items-center">
+<div class="bg-surface-container-low px-4 py-2 rounded-xl flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="trending_up">trending_up</span>
+<span class="text-sm font-semibold text-primary">+4.2%</span>
+<span class="text-xs text-outline ml-1">vs last month</span>
+</div>
+<button class="bg-primary text-on-primary px-6 py-3 rounded-xl font-semibold flex items-center gap-2 hover:opacity-90 transition-all">
+<span class="material-symbols-outlined text-lg" data-icon="add">add</span>
+                    Add New Account
+                </button>
+</div>
+</section>
+<!-- Bento Grid Accounts -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Account Card 1 -->
+<div class="col-span-1 md:col-span-2 bg-surface-container-lowest rounded-xl p-8 flex flex-col justify-between min-h-[220px] group cursor-pointer hover:shadow-xl transition-all duration-600 ease-[cubic-bezier(0.25,1,0.5,1)] relative overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none"></div>
+<div class="flex justify-between items-start relative z-10">
+<div>
+<p class="text-xs uppercase tracking-widest text-outline mb-1">Checking Account</p>
+<h3 class="text-xl font-bold text-on-surface">Chase Private Client</h3>
+</div>
+<span class="material-symbols-outlined text-primary" data-icon="account_balance">account_balance</span>
+</div>
+<div class="flex justify-between items-end relative z-10">
+<div>
+<p class="text-2xl font-bold text-on-surface">$42,500.20</p>
+<p class="text-xs text-outline">**** 8829</p>
+</div>
+<div class="w-12 h-8 bg-surface-container rounded flex items-center justify-center">
+<div class="w-6 h-4 bg-primary/20 rounded-sm"></div>
+</div>
+</div>
+</div>
+<!-- Account Card 2 -->
+<div class="bg-surface-container-low rounded-xl p-8 flex flex-col justify-between min-h-[220px] transition-all hover:bg-surface-container-high cursor-pointer">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-xs uppercase tracking-widest text-outline mb-1">Investment</p>
+<h3 class="text-xl font-bold text-on-surface">Vanguard Brokerage</h3>
+</div>
+<span class="material-symbols-outlined text-primary" data-icon="analytics">analytics</span>
+</div>
+<div>
+<p class="text-2xl font-bold text-on-surface">$85,200.45</p>
+<div class="mt-4 flex gap-1 h-1 rounded-full bg-outline-variant/20 overflow-hidden">
+<div class="h-full bg-primary w-2/3"></div>
+<div class="h-full bg-secondary w-1/3"></div>
+</div>
+</div>
+</div>
+<!-- Account Card 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-8 flex flex-col justify-between transition-all hover:shadow-lg cursor-pointer">
+<div class="flex justify-between items-start">
+<div class="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-container" data-icon="credit_card">credit_card</span>
+</div>
+<span class="text-xs font-bold text-error">-$2,145.10</span>
+</div>
+<div class="mt-8">
+<p class="text-xs uppercase tracking-widest text-outline mb-1">Credit Card</p>
+<h3 class="text-lg font-bold text-on-surface">Amex Gold</h3>
+</div>
+</div>
+<!-- Account Card 4 -->
+<div class="bg-surface-container-low rounded-xl p-8 flex flex-col justify-between transition-all hover:bg-surface-container-high cursor-pointer">
+<div class="flex justify-between items-start">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="savings">savings</span>
+</div>
+<span class="text-xs font-bold text-primary">$17,294.45</span>
+</div>
+<div class="mt-8">
+<p class="text-xs uppercase tracking-widest text-outline mb-1">Savings</p>
+<h3 class="text-lg font-bold text-on-surface">Marcus HYSA</h3>
+</div>
+</div>
+<!-- Transaction Input Panel -->
+<div class="col-span-1 bg-surface-container rounded-xl p-8 flex flex-col gap-6">
+<h3 class="text-lg font-bold text-on-surface">Quick Transaction</h3>
+<div class="space-y-4">
+<div class="space-y-1">
+<label class="text-[10px] uppercase tracking-wider text-outline font-bold">Amount</label>
+<div class="flex items-center bg-surface-container-low rounded-xl p-4 focus-within:bg-surface-container-highest transition-all group">
+<span class="text-primary font-bold mr-2">$</span>
+<input class="bg-transparent border-none p-0 focus:ring-0 text-xl font-bold w-full placeholder:text-outline-variant" placeholder="0.00" type="text"/>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-1">
+<label class="text-[10px] uppercase tracking-wider text-outline font-bold">Type</label>
+<select class="w-full bg-surface-container-low border-none rounded-xl p-4 focus:ring-0 text-sm font-medium">
+<option>Expense</option>
+<option>Income</option>
+</select>
+</div>
+<div class="space-y-1">
+<label class="text-[10px] uppercase tracking-wider text-outline font-bold">Date</label>
+<input class="w-full bg-surface-container-low border-none rounded-xl p-4 focus:ring-0 text-sm font-medium" type="date"/>
+</div>
+</div>
+<div class="space-y-1">
+<label class="text-[10px] uppercase tracking-wider text-outline font-bold">Category</label>
+<select class="w-full bg-surface-container-low border-none rounded-xl p-4 focus:ring-0 text-sm font-medium">
+<option>Dining &amp; Drinks</option>
+<option>Health &amp; Fitness</option>
+<option>Travel</option>
+<option>Shopping</option>
+<option>Utilities</option>
+</select>
+</div>
+<button class="w-full bg-on-surface text-surface py-4 rounded-xl font-bold mt-4 hover:opacity-90 transition-all flex justify-center items-center gap-2">
+<span class="material-symbols-outlined text-lg" data-icon="send">send</span>
+                        Log Transaction
+                    </button>
+</div>
+</div>
+</section>
+<!-- Transaction Timeline -->
+<section class="space-y-8">
+<div class="flex justify-between items-center">
+<h3 class="text-xl font-bold text-on-surface">Recent Activity</h3>
+<button class="text-primary text-sm font-bold flex items-center gap-1 hover:underline">
+                    View Statements <span class="material-symbols-outlined text-base" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+<div class="space-y-4">
+<!-- Transaction 1 -->
+<div class="bg-surface-container-lowest p-6 rounded-xl flex items-center justify-between group transition-all">
+<div class="flex items-center gap-6">
+<div class="w-12 h-12 bg-surface-container-low rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="restaurant">restaurant</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Auberge du Soleil</h4>
+<p class="text-xs text-outline">Dining • Chase Checking • 2h ago</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-bold text-on-surface">-$184.20</p>
+<p class="text-[10px] uppercase tracking-tighter text-outline">Pending</p>
+</div>
+</div>
+<!-- Transaction 2 -->
+<div class="bg-surface-container-lowest p-6 rounded-xl flex items-center justify-between group transition-all">
+<div class="flex items-center gap-6">
+<div class="w-12 h-12 bg-surface-container-low rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="work">work</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Monthly Salary</h4>
+<p class="text-xs text-outline">Income • Chase Checking • Yesterday</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-bold text-primary">+$8,500.00</p>
+<p class="text-[10px] uppercase tracking-tighter text-primary">Cleared</p>
+</div>
+</div>
+<!-- Transaction 3 -->
+<div class="bg-surface-container-lowest p-6 rounded-xl flex items-center justify-between group transition-all">
+<div class="flex items-center gap-6">
+<div class="w-12 h-12 bg-surface-container-low rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="fitness_center">fitness_center</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Equinox Membership</h4>
+<p class="text-xs text-outline">Subscription • Amex Gold • Jan 12</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-bold text-on-surface">-$260.00</p>
+<p class="text-[10px] uppercase tracking-tighter text-outline">Cleared</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 pb-safe bg-[#f8f9fa]/80 backdrop-blur-xl flex justify-around items-center h-24 px-4 w-full">
+<!-- Tasks -->
+<a class="flex flex-col items-center gap-1 text-[#abb3b7] hover:text-[#546067] transition-transform duration-600 ease-[cubic-bezier(0.25,1,0.5,1)]" href="#">
+<span class="material-symbols-outlined" data-icon="check_circle">check_circle</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Tasks</span>
+</a>
+<!-- Habits -->
+<a class="flex flex-col items-center gap-1 text-[#abb3b7] hover:text-[#546067] transition-transform duration-600 ease-[cubic-bezier(0.25,1,0.5,1)]" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Habits</span>
+</a>
+<!-- Finance (Active) -->
+<a class="flex flex-col items-center gap-1 text-[#546067] scale-110 transition-transform duration-600 ease-[cubic-bezier(0.25,1,0.5,1)]" href="#">
+<span class="material-symbols-outlined" data-icon="payments" style="font-variation-settings: 'FILL' 1;">payments</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Finance</span>
+</a>
+<!-- Supplements -->
+<a class="flex flex-col items-center gap-1 text-[#abb3b7] hover:text-[#546067] transition-transform duration-600 ease-[cubic-bezier(0.25,1,0.5,1)]" href="#">
+<span class="material-symbols-outlined" data-icon="pill">pill</span>
+<span class="font-['Inter'] text-[11px] uppercase tracking-[0.05em] font-medium">Supplements</span>
+</a>
+</nav>
+</body></html>

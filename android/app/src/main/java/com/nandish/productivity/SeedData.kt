@@ -45,54 +45,22 @@ object SeedData {
                 )
             ),
             goals = arrayListOf(
-                Goal(
-                    id = uid(),
-                    title = "Cognitive fortress",
-                    target = "MINDSET",
-                    deadline = "",
-                    progress = 85
-                ),
-                Goal(
-                    id = uid(),
-                    title = "Zenith protocol",
-                    target = "PHYSICAL",
-                    deadline = "",
-                    progress = 28
-                ),
-                Goal(
-                    id = uid(),
-                    title = "Vault expansion",
-                    target = "FINANCIAL",
-                    deadline = "",
-                    progress = 51
-                )
+                Goal(uid(), "Cognitive fortress", "MINDSET", "", 65),
+                Goal(uid(), "Zenith protocol", "PHYSICAL", "", 28),
+                Goal(uid(), "Vault expansion", "FINANCIAL", "", 92)
             ),
             habits = arrayListOf(
                 Habit("h_sleep", "Sleep consistency", "hrs", "timerange", 1, 7.0, 9.0),
                 Habit("h_water", "Water intake", "ml", "quant", 2000, null, null),
                 Habit("h_read", "Reading", "min", "quant", 30, null, null),
                 Habit("h_medit", "Meditation", "", "check", 1, null, null),
-                Habit("h_pray", "Pray to god", "", "check", 1, null, null),
-                Habit("h_food", "No outside food", "", "check", 1, null, null),
-                Habit("h_gym", "Gym", "", "check", 1, null, null),
-                Habit("h_wake", "4am wake up", "", "check", 1, null, null),
-                Habit("h_grat", "Gratitude (night)", "", "check", 1, null, null)
+                Habit("h_gym", "Gym", "", "check", 1, null, null)
             ),
             supplements = arrayListOf(
-                Supplement("s1", "Vitamin D3", "morning", "1000 IU"),
-                Supplement("s2", "Omega 3 Fish Oil", "morning", "1 cap (with food)"),
-                Supplement("s3", "Zinc", "morning", "15 mg"),
-                Supplement("s4", "Rhodiola Rosea", "morning", "300 mg"),
-                Supplement("s5", "Probiotic", "morning", "1 cap"),
-                Supplement("s6", "Whey Protein Isolate", "workout", "1 scoop (after)"),
-                Supplement("s7", "Electrolytes", "workout", "1 serving"),
-                Supplement("s8", "Creatine", "workout", "5 g"),
-                Supplement("s9", "L-Citrulline", "workout", "6 g"),
-                Supplement("s10", "Magnesium Glycinate", "night", "400 mg"),
-                Supplement("s11", "Ashwagandha", "night", "600 mg"),
-                Supplement("s12", "Glycine", "night", "3 g"),
-                Supplement("s13", "L-Theanine", "night", "200 mg"),
-                Supplement("s14", "Inositol", "night", "2 g")
+                Supplement("s1", "Magnesium Glycinate", "morning", "250mg"),
+                Supplement("s2", "Vitamin D3", "morning", "1000 IU"),
+                Supplement("s3", "Omega 3", "morning", "1 cap"),
+                Supplement("s4", "Rhodiola", "morning", "300 mg")
             ),
             accounts = arrayListOf(
                 Account("a1", "Scotiabank Chequing", "chequing", "Scotiabank", 12450.0),
@@ -100,11 +68,10 @@ object SeedData {
                 Account("a3", "Wealthsimple TFSA", "tfsa", "Wealthsimple", 364120.10),
                 Account("a4", "Scotiabank Credit Card", "credit", "Scotiabank", -8679.68)
             ),
-            categories = arrayListOf(
-                "Hanging out with friends", "Shopping", "Phone bill",
-                "Gym subscription", "Perplexity AI subscription",
-                "Groceries", "Food", "Transport", "Rent", "Utilities",
-                "Transfer", "Investment", "Other"
+            transactions = arrayListOf(
+                Transaction(uid(), "expense", 260.0, "Lifestyle", "a1", t, "Equinox Fitness"),
+                Transaction(uid(), "income", 1450.20, "Investment", "a3", t, "Dividend Payout"),
+                Transaction(uid(), "expense", 112.50, "Dining", "a4", t, "The Nomad Library")
             ),
             notes = arrayListOf(
                 Note(
@@ -115,13 +82,6 @@ object SeedData {
                     updated = System.currentTimeMillis() - 2 * 24 * 60 * 60 * 1000L
                 )
             ),
-            transactions = arrayListOf(
-                Transaction(uid(), "expense", 1299.0, "Electronics", "a1", t, "Apple Store Infinite Loop"),
-                Transaction(uid(), "expense", 84.5, "Food", "a1", t, "Whole Foods Market"),
-                Transaction(uid(), "expense", 42.0, "Lifestyle", "a1", t, "Blue Bottle Coffee"),
-                Transaction(uid(), "income", 3200.0, "Transfer", "a1", t, "Payroll deposit")
-            ),
-            budget = Budget(monthlySavingsGoal = 500.0, monthlyBudget = 3500.0),
             settings = Settings()
         )
     }

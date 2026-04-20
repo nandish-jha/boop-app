@@ -3,38 +3,52 @@ package com.nandish.productivity
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 object StateRepository {
-    private const val PREFS = "silent_order_state"
-    private const val KEY = "app_state_json"
+
+    private const val PREFS = "prodash_state"
+    private const val KEY_JSON = "app_state_json"
 
     private val gson: Gson = GsonBuilder().create()
-    private lateinit var appCtx: Context
+    private val lock = ReentrantReadWriteLock()
+    private lateinit var appContext: Context
     private var state: AppState = SeedData.defaultState()
 
     fun init(context: Context) {
-        appCtx = context.applicationContext
-        val raw = appCtx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
-        state = if (raw.isNullOrBlank()) {
-            SeedData.defaultState().also { persist() }
-        } else {
-            try {
-                gson.fromJson(raw, AppState::class.java) ?: SeedData.defaultState()
-            } catch (_: Exception) {
+        appContext = context.applicationContext
+        lock.write {
+            val sp = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val raw = sp.getString(KEY_JSON, null)
+            state = if (raw.isNullOrBlank()) {
                 SeedData.defaultState()
+            } else {
+                try {
+                    gson.fromJson(raw, AppState::class.java) ?: SeedData.defaultState()
+                } catch (_: Exception) {
+                    SeedData.defaultState()
+                }
             }
+            persistLocked()
         }
     }
 
-    fun get(): AppState = state
-
-    fun persist() {
-        val json = gson.toJson(state)
-        appCtx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, json).apply()
-    }
+    fun get(): AppState = lock.read { copyState(state) }
 
     fun update(block: AppState.() -> Unit) {
-        state.block()
-        persist()
+        lock.write {
+            block(state)
+            persistLocked()
+        }
     }
+
+    private fun persistLocked() {
+        val sp = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        sp.edit().putString(KEY_JSON, gson.toJson(state)).apply()
+    }
+
+    private fun copyState(s: AppState): AppState =
+        gson.fromJson(gson.toJson(s), AppState::class.java)!!
 }

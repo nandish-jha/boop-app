@@ -39,12 +39,6 @@ data class Supplement(
     var dose: String = ""
 )
 
-data class Skincare(
-    var id: String = "",
-    var name: String = "",
-    var time: String = "morning"
-)
-
 data class Account(
     var id: String = "",
     var name: String = "",
@@ -63,6 +57,14 @@ data class Transaction(
     var note: String = ""
 )
 
+data class Note(
+    var id: String = "",
+    var title: String = "",
+    var body: String = "",
+    var tags: ArrayList<String> = arrayListOf(),
+    var updated: Long = 0L
+)
+
 data class Budget(
     var monthlySavingsGoal: Double = 500.0,
     var monthlyBudget: Double = 0.0
@@ -73,42 +75,18 @@ data class Settings(
     var theme: String = "dark"
 )
 
-data class Note(
-    var id: String = "",
-    var title: String = "",
-    var body: String = "",
-    var tags: ArrayList<String> = arrayListOf(),
-    var updated: Long = 0L
-)
-
-data class WorkoutDay(
-    var day: String = "",
-    var exercises: ArrayList<String> = arrayListOf()
-)
-
-data class Workout(
-    var id: String = "",
-    var name: String = "",
-    var note: String = "",
-    var days: ArrayList<WorkoutDay> = arrayListOf()
-)
-
 data class AppState(
     var tasks: ArrayList<Task> = arrayListOf(),
     var goals: ArrayList<Goal> = arrayListOf(),
     var habits: ArrayList<Habit> = arrayListOf(),
-    /** day -> habitId -> value as string (true/false, number, or json for timerange) */
     var habitLogs: HashMap<String, HashMap<String, String>> = HashMap(),
     var supplements: ArrayList<Supplement> = arrayListOf(),
     var supplementLogs: HashMap<String, HashMap<String, Boolean>> = HashMap(),
-    var skincare: ArrayList<Skincare> = arrayListOf(),
-    var skincareLogs: HashMap<String, HashMap<String, Boolean>> = HashMap(),
     var accounts: ArrayList<Account> = arrayListOf(),
     var categories: ArrayList<String> = arrayListOf(),
     var transactions: ArrayList<Transaction> = arrayListOf(),
     var budget: Budget = Budget(),
     var notes: ArrayList<Note> = arrayListOf(),
-    var workouts: ArrayList<Workout> = arrayListOf(),
     var settings: Settings = Settings(),
-    @SerializedName("schemaVersion") var schemaVersion: Int = 3
+    @SerializedName("schemaVersion") var schemaVersion: Int = 4
 )

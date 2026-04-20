@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<!-- offline-vendor -->
+<script src="../../vendor/tailwindcss.js"></script>
+<link href="../../vendor/silent-order-fonts.css" rel="stylesheet"/>
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "inverse-primary": "#5d5f5f",
+                    "on-secondary-fixed-variant": "#383c3d",
+                    "on-secondary-container": "#e0e3e4",
+                    "secondary-fixed-dim": "#a9acad",
+                    "on-primary-fixed-variant": "#e2e2e2",
+                    "error": "#ffb4ab",
+                    "tertiary": "#e1e3e4",
+                    "inverse-on-surface": "#313030",
+                    "surface-dim": "#131313",
+                    "surface-tint": "#c6c6c6",
+                    "on-primary-fixed": "#ffffff",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-error": "#690005",
+                    "outline-variant": "#474747",
+                    "secondary-container": "#444748",
+                    "background": "#131313",
+                    "primary-fixed": "#5d5f5f",
+                    "on-primary-container": "#000000",
+                    "error-container": "#93000a",
+                    "on-surface": "#e5e2e1",
+                    "primary": "#ffffff",
+                    "on-surface-variant": "#c6c6c6",
+                    "on-primary": "#1a1c1c",
+                    "tertiary-fixed-dim": "#444748",
+                    "on-background": "#e5e2e1",
+                    "tertiary-container": "#8f9192",
+                    "surface": "#131313",
+                    "secondary-fixed": "#c4c7c8",
+                    "tertiary-fixed": "#5c5f60",
+                    "inverse-surface": "#e5e2e1",
+                    "primary-container": "#d4d4d4",
+                    "outline": "#919191",
+                    "surface-container-low": "#1c1b1b",
+                    "on-tertiary-fixed-variant": "#e1e3e4",
+                    "surface-variant": "#353534",
+                    "on-tertiary": "#191c1d",
+                    "secondary": "#c4c7c8",
+                    "on-secondary-fixed": "#191c1d",
+                    "surface-container-highest": "#353534",
+                    "surface-container-high": "#2a2a2a",
+                    "on-secondary": "#191c1d",
+                    "on-tertiary-container": "#000000",
+                    "primary-fixed-dim": "#454747",
+                    "on-tertiary-fixed": "#ffffff",
+                    "surface-container": "#201f1f",
+                    "surface-bright": "#3a3939",
+                    "on-error-container": "#ffdad6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .scrolling-hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .scrolling-hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body selection:bg-primary selection:text-on-primary">
+<!-- Top Navigation Anchor -->
+<header class="fixed top-0 w-full z-50 bg-[#131313]/60 backdrop-blur-xl flex justify-between items-center h-16 px-6">
+<div class="flex items-center gap-4">
+<button class="text-white hover:bg-[#1c1b1b] transition-colors p-2 rounded-lg active:opacity-80 duration-200">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+<h1 class="font-headline tracking-[-0.02em] text-sm uppercase font-bold text-white">SILENT ORDER</h1>
+</div>
+<button class="bg-primary text-on-primary px-5 py-1.5 rounded text-sm font-bold tracking-tight hover:opacity-90 active:scale-95 transition-all">
+            SAVE
+        </button>
+</header>
+<main class="pt-24 pb-32 px-6 max-w-2xl mx-auto space-y-12">
+<!-- Toggle Component -->
+<section class="flex justify-center">
+<div class="bg-surface-container-lowest p-1 rounded-lg flex w-full max-w-xs">
+<button class="flex-1 py-2 text-xs font-label tracking-widest uppercase bg-surface-container-highest text-white rounded-lg transition-all">
+                    Task
+                </button>
+<button class="flex-1 py-2 text-xs font-label tracking-widest uppercase text-outline transition-all hover:text-white">
+                    Note
+                </button>
+</div>
+</section>
+<!-- Title Input -->
+<section class="space-y-2">
+<label class="block text-[10px] font-label uppercase tracking-[0.2em] text-outline ml-1">Subject</label>
+<input class="w-full bg-transparent border-none text-4xl font-headline font-bold tracking-tighter placeholder:text-surface-container-highest focus:ring-0 px-0" placeholder="Entry title..." type="text"/>
+</section>
+<!-- Main Content Area: Bento Style -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Description Field (Large Span) -->
+<section class="md:col-span-2 bg-surface-container-low p-6 rounded-xl space-y-4">
+<div class="flex items-center justify-between">
+<label class="text-[10px] font-label uppercase tracking-[0.2em] text-outline">Details</label>
+<span class="material-symbols-outlined text-outline text-lg" data-icon="edit_note">edit_note</span>
+</div>
+<textarea class="w-full bg-transparent border-none text-on-surface placeholder:text-outline-variant focus:ring-0 p-0 resize-none font-body leading-relaxed" placeholder="Describe the intent..." rows="4"></textarea>
+</section>
+<!-- Schedule Picker -->
+<section class="bg-surface-container-low p-6 rounded-xl space-y-4 hover:bg-surface-bright transition-colors cursor-pointer group">
+<div class="flex items-center justify-between">
+<label class="text-[10px] font-label uppercase tracking-[0.2em] text-outline">Schedule</label>
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors" data-icon="calendar_today">calendar_today</span>
+</div>
+<div class="space-y-1">
+<p class="text-white font-semibold">Today, 14:00</p>
+<p class="text-[11px] text-outline uppercase tracking-wider">No Repetition</p>
+</div>
+</section>
+<!-- Category Selection -->
+<section class="bg-surface-container-low p-6 rounded-xl space-y-4 hover:bg-surface-bright transition-colors cursor-pointer group">
+<div class="flex items-center justify-between">
+<label class="text-[10px] font-label uppercase tracking-[0.2em] text-outline">Cluster</label>
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors" data-icon="folder">folder</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(255,255,255,0.4)]"></div>
+<p class="text-white font-semibold">Deep Work</p>
+</div>
+</section>
+<!-- Connect to Note Option (Full Width) -->
+<section class="md:col-span-2 bg-surface-container-lowest p-6 rounded-xl border border-white/5 flex items-center justify-between group hover:border-white/20 transition-all cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 bg-surface-container-low rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-outline-variant" data-icon="link">link</span>
+</div>
+<div>
+<p class="text-sm font-semibold text-white">Connect to Note</p>
+<p class="text-xs text-outline">Link this task to an existing obsidian vault entry</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:text-white transition-colors" data-icon="chevron_right">chevron_right</span>
+</section>
+</div>
+<!-- Metadata Section -->
+<section class="pt-8 border-t border-outline-variant/10 flex flex-wrap gap-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-outline" data-icon="priority_high">priority_high</span>
+<span class="text-[11px] font-label uppercase tracking-widest text-outline">High Priority</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-outline" data-icon="lock">lock</span>
+<span class="text-[11px] font-label uppercase tracking-widest text-outline">Private Entry</span>
+</div>
+</section>
+</main>
+<!-- Navigation Shell (Contextual BottomNavBar) -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-20 pb-4 px-2 bg-[#131313]/60 backdrop-blur-xl z-50">
+<a class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="grid_view">grid_view</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Hub</span>
+</a>
+<!-- Active State Logic: Mapping to Logs since it's a detail screen -->
+<a class="flex flex-col items-center justify-center bg-[#353534] text-white rounded-lg px-3 py-1.5 active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="list_alt">list_alt</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Logs</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="target">target</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Goals</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#474747] px-3 py-1.5 hover:text-white transition-all active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-inter text-[11px] font-medium tracking-wider uppercase">Vault</span>
+</a>
+</nav>
+</body></html>

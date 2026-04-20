@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<!-- offline-vendor -->
+<script src="../../vendor/tailwindcss.js"></script>
+<link href="../../vendor/silent-order-fonts.css" rel="stylesheet"/>
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Silent Order - Visual Dashboard</title>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed-variant": "#4b5e67",
+                    "outline-variant": "#abb3b7",
+                    "on-tertiary-fixed": "#2f4155",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary": "#4f626b",
+                    "on-secondary-container": "#41545d",
+                    "primary-fixed": "#d7e4ec",
+                    "on-background": "#2b3437",
+                    "secondary-container": "#d1e6f0",
+                    "surface-variant": "#dbe4e7",
+                    "tertiary-container": "#d1e4fe",
+                    "tertiary": "#4e6176",
+                    "on-secondary": "#f2faff",
+                    "on-error": "#fff7f6",
+                    "inverse-primary": "#e6f3fb",
+                    "surface-container-highest": "#dbe4e7",
+                    "primary": "#546067",
+                    "on-secondary-fixed": "#2f424a",
+                    "surface-tint": "#546067",
+                    "tertiary-dim": "#425569",
+                    "secondary-fixed-dim": "#c3d8e2",
+                    "error": "#9f403d",
+                    "on-surface": "#2b3437",
+                    "on-tertiary": "#f7f9ff",
+                    "on-tertiary-fixed-variant": "#4b5d72",
+                    "tertiary-fixed": "#d1e4fe",
+                    "primary-container": "#d7e4ec",
+                    "secondary-fixed": "#d1e6f0",
+                    "surface-container-low": "#f1f4f6",
+                    "error-dim": "#4e0309",
+                    "inverse-on-surface": "#9b9d9e",
+                    "tertiary-fixed-dim": "#c3d6ef",
+                    "on-tertiary-container": "#415368",
+                    "on-primary-fixed": "#354147",
+                    "primary-dim": "#48545b",
+                    "on-primary-container": "#47545a",
+                    "on-surface-variant": "#586064",
+                    "error-container": "#fe8983",
+                    "surface": "#f8f9fa",
+                    "background": "#f8f9fa",
+                    "outline": "#737c7f",
+                    "on-primary-fixed-variant": "#515d64",
+                    "on-error-container": "#752121",
+                    "surface-container": "#eaeff1",
+                    "primary-fixed-dim": "#c9d6de",
+                    "on-primary": "#f0f9ff",
+                    "secondary-dim": "#43565f",
+                    "surface-bright": "#f8f9fa",
+                    "surface-dim": "#d1dce0",
+                    "surface-container-high": "#e3e9ec",
+                    "inverse-surface": "#0c0f10"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-surface text-on-surface antialiased min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#f8f9fa]/80 dark:bg-slate-950/80 backdrop-blur-[20px] shadow-[0_40px_60px_-15px_rgba(43,52,55,0.05)]">
+<div class="flex items-center justify-between px-6 py-4 max-w-screen-xl mx-auto w-full">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="close-up portrait of a woman with a serene expression in soft daylight, minimalist aesthetic" src="../../vendor/img/i02ed2adc531e3c61.png"/>
+</div>
+</div>
+<h1 class="text-lg font-bold tracking-[-0.02em] text-[#546067] dark:text-slate-200">Silent Order</h1>
+<div class="flex items-center">
+<button class="material-symbols-outlined text-[#546067] dark:text-slate-400 p-2 hover:bg-[#e3e9ec] dark:hover:bg-slate-800 transition-colors duration-[600ms] ease-[cubic-bezier(0.25,1,0.5,1)] rounded-full active:scale-[0.98]">settings</button>
+</div>
+</div>
+</header>
+<main class="pt-24 pb-32 px-6 max-w-screen-xl mx-auto">
+<!-- Hero: Inspiring Quote Section -->
+<section class="mb-12 relative overflow-hidden rounded-full p-1 w-full">
+<div class="bg-surface-container-low rounded-full px-8 py-12 text-center relative overflow-hidden">
+<div class="absolute inset-0 opacity-10 bg-gradient-to-br from-primary to-primary-container"></div>
+<span class="label-sm uppercase tracking-[0.1em] text-outline-variant block mb-4">Today's Reflection</span>
+<p class="text-2xl md:text-3xl font-light text-on-surface leading-snug max-w-2xl mx-auto italic">
+                    "Simplicity is the ultimate sophistication."
+                </p>
+<p class="mt-4 text-sm text-primary font-medium">— Leonardo da Vinci</p>
+</div>
+</section><!-- Daily Progress Section -->
+<section class="mb-8">
+<div class="bg-surface-container-lowest rounded-full p-6 md:p-8 flex flex-col md:flex-row md:items-center gap-4 shadow-sm">
+<div class="flex-shrink-0">
+<h2 class="text-sm font-bold text-on-surface uppercase tracking-wider mb-1 md:mb-0">Daily Progress</h2>
+</div>
+<div class="flex-grow flex flex-col gap-2">
+<div class="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 65%"></div>
+</div>
+<p class="text-xs font-medium text-outline-variant">
+<span class="text-primary font-bold">65%</span> of today's intentions completed
+      </p>
+</div>
+</div>
+</section>
+<!-- Bento Grid Dashboard -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Habit Progress (Large Left Widget) -->
+<div class="md:col-span-8 bg-surface-container-lowest rounded-full p-8 transition-all duration-300">
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="text-xl font-bold text-on-surface mb-1">Habit Progress</h2>
+<p class="text-sm text-outline-variant">Weekly consistency tracking</p>
+</div>
+<div class="flex gap-2">
+<span class="px-3 py-1 bg-primary-container text-on-primary-container text-[0.6875rem] font-bold uppercase tracking-wider rounded-full">Active</span>
+</div>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+<!-- Habit Mini Chart 1 -->
+<div class="flex flex-col items-center">
+<div class="relative w-16 h-16 mb-4">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-surface-container-high" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-width="4"></circle>
+<circle class="text-primary" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-dasharray="175.9" stroke-dashoffset="35" stroke-width="4"></circle>
+</svg>
+<span class="absolute inset-0 flex items-center justify-center text-xs font-bold">80%</span>
+</div>
+<span class="text-xs font-semibold text-on-surface">Meditation</span>
+</div>
+<!-- Habit Mini Chart 2 -->
+<div class="flex flex-col items-center">
+<div class="relative w-16 h-16 mb-4">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-surface-container-high" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-width="4"></circle>
+<circle class="text-primary opacity-60" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-dasharray="175.9" stroke-dashoffset="105" stroke-width="4"></circle>
+</svg>
+<span class="absolute inset-0 flex items-center justify-center text-xs font-bold">40%</span>
+</div>
+<span class="text-xs font-semibold text-on-surface">Deep Work</span>
+</div>
+<!-- Habit Mini Chart 3 -->
+<div class="flex flex-col items-center">
+<div class="relative w-16 h-16 mb-4">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-surface-container-high" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-width="4"></circle>
+<circle class="text-primary" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-dasharray="175.9" stroke-dashoffset="10" stroke-width="4"></circle>
+</svg>
+<span class="absolute inset-0 flex items-center justify-center text-xs font-bold">95%</span>
+</div>
+<span class="text-xs font-semibold text-on-surface">Hydration</span>
+</div>
+<!-- Habit Mini Chart 4 -->
+<div class="flex flex-col items-center">
+<div class="relative w-16 h-16 mb-4">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-surface-container-high" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-width="4"></circle>
+<circle class="text-primary opacity-80" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-dasharray="175.9" stroke-dashoffset="60" stroke-width="4"></circle>
+</svg>
+<span class="absolute inset-0 flex items-center justify-center text-xs font-bold">65%</span>
+</div>
+<span class="text-xs font-semibold text-on-surface">Reading</span>
+</div>
+</div>
+</div>
+<!-- Finance Overview (Tall Right Widget) -->
+<div class="md:col-span-4 bg-primary text-on-primary rounded-full p-8 flex flex-col justify-between">
+<div>
+<h2 class="text-lg font-bold opacity-80 mb-6">Finance</h2>
+<div class="mb-2">
+<span class="text-sm opacity-70 block">Available Balance</span>
+<span class="text-3xl font-extrabold tracking-tight">$12,450.80</span>
+</div>
+</div>
+<div class="space-y-4 mt-8">
+<div class="flex justify-between items-center bg-white/10 p-4 rounded-full">
+<span class="text-xs font-medium">Monthly Spend</span>
+<span class="text-sm font-bold">$2,104</span>
+</div>
+<div class="flex justify-between items-center bg-white/10 p-4 rounded-full">
+<span class="text-xs font-medium">Investments</span>
+<span class="text-sm font-bold">+12.4%</span>
+</div>
+</div>
+</div>
+<!-- Task Highlights (Bottom Left) -->
+<div class="md:col-span-7 bg-surface-container-low rounded-full p-8">
+<div class="flex justify-between items-center mb-6">
+<h2 class="text-xl font-bold text-on-surface">Task Highlights</h2>
+<span class="material-symbols-outlined text-primary">arrow_forward</span>
+</div>
+<div class="space-y-3">
+<div class="flex items-center gap-4 bg-surface-container-lowest p-4 rounded-full">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+<span class="flex-grow text-sm font-medium">Finalize Q4 strategy deck</span>
+<span class="text-[0.6875rem] text-outline-variant font-bold uppercase">10:00 AM</span>
+</div>
+<div class="flex items-center gap-4 bg-surface-container-lowest p-4 rounded-full">
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+<span class="flex-grow text-sm font-medium">Client review: Project Aurora</span>
+<span class="text-[0.6875rem] text-outline-variant font-bold uppercase">02:30 PM</span>
+</div>
+<div class="flex items-center gap-4 bg-surface-container-lowest p-4 rounded-full">
+<div class="w-2 h-2 rounded-full bg-error"></div>
+<span class="flex-grow text-sm font-medium">Renew server subscriptions</span>
+<span class="text-[0.6875rem] text-error font-bold uppercase">Urgent</span>
+</div>
+</div>
+</div>
+<!-- Small Aesthetic Accent (Bottom Right) -->
+<div class="md:col-span-5 relative group overflow-hidden rounded-full h-full min-h-[200px]">
+<img alt="Aesthetic" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="minimalist interior with a single designer lamp, soft morning light casting long shadows on a neutral wall" src="../../vendor/img/ief9a2b094cb59476.png"/>
+<div class="absolute inset-0 bg-gradient-to-t from-on-background/40 to-transparent"></div>
+<div class="absolute bottom-8 left-8">
+<span class="text-white text-lg font-light tracking-wide">Stay Mindful.</span>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-3 bg-[#f8f9fa]/80 dark:bg-slate-950/80 backdrop-blur-[20px] shadow-[0_-10px_40px_rgba(43,52,55,0.04)] rounded-t-[0.75rem] z-50">
+<!-- Home (Active) -->
+<a class="flex flex-col items-center justify-center text-[#546067] dark:text-slate-100 font-bold bg-[#d7e4ec]/40 dark:bg-slate-800/60 rounded-xl px-3 py-1 active:scale-[0.95] transition-all duration-[600ms] ease-out" href="#">
+<span class="material-symbols-outlined mb-0.5">dashboard</span>
+<span class="font-['Inter'] text-[0.6875rem] uppercase tracking-[0.05em]">Home</span>
+</a>
+<!-- Hub -->
+<a class="flex flex-col items-center justify-center text-[#abb3b7] dark:text-slate-500 hover:text-[#546067] dark:hover:text-slate-300 active:scale-[0.95] transition-all duration-[600ms] ease-out" href="#">
+<span class="material-symbols-outlined mb-0.5">edit_note</span>
+<span class="font-['Inter'] text-[0.6875rem] uppercase tracking-[0.05em]">Hub</span>
+</a>
+<!-- Goals -->
+<a class="flex flex-col items-center justify-center text-[#abb3b7] dark:text-slate-500 hover:text-[#546067] dark:hover:text-slate-300 active:scale-[0.95] transition-all duration-[600ms] ease-out" href="#">
+<span class="material-symbols-outlined mb-0.5">auto_awesome</span>
+<span class="font-['Inter'] text-[0.6875rem] uppercase tracking-[0.05em]">Goals</span>
+</a>
+<!-- Vault -->
+<a class="flex flex-col items-center justify-center text-[#abb3b7] dark:text-slate-500 hover:text-[#546067] dark:hover:text-slate-300 active:scale-[0.95] transition-all duration-[600ms] ease-out" href="#">
+<span class="material-symbols-outlined mb-0.5">payments</span>
+<span class="font-['Inter'] text-[0.6875rem] uppercase tracking-[0.05em]">Vault</span>
+</a>
+<!-- Logs -->
+<a class="flex flex-col items-center justify-center text-[#abb3b7] dark:text-slate-500 hover:text-[#546067] dark:hover:text-slate-300 active:scale-[0.95] transition-all duration-[600ms] ease-out" href="#">
+<span class="material-symbols-outlined mb-0.5">pill</span>
+<span class="font-['Inter'] text-[0.6875rem] uppercase tracking-[0.05em]">Logs</span>
+</a>
+</nav>
+<button aria-label="Quick Add" class="fixed bottom-24 right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center z-[60] hover:scale-105 active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]">
+<span class="material-symbols-outlined text-2xl">add</span>
+</button></body></html>
