@@ -2,7 +2,7 @@
 // Local-only storage (localStorage). Export / import JSON supported.
 
 const STORAGE_KEY = 'nandish.productivity.v1';
-const APP_VERSION = '1.0.9';
+const APP_VERSION = '1.0.10';
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const todayISO = (d = new Date()) => d.toISOString().slice(0, 10);
 const fmtMoney = n => (n < 0 ? '-' : '') + '$' + Math.abs(n).toFixed(2);
@@ -192,8 +192,15 @@ views.home = root => {
   const supps = state.supplementLogs[t] || {};
   const suppsDone = Object.values(supps).filter(Boolean).length;
   const suppsTotal = state.supplements.length;
+  const topTask = todayTasks[0];
 
   root.innerHTML = `
+    <div class="focus-strip mb-12">
+      <div class="focus-label">Today focus</div>
+      <div class="focus-title">${topTask ? escapeHTML(topTask.title) : 'No urgent task pending'}</div>
+      <div class="focus-meta">${topTask ? `Due ${topTask.due || 'today'} · ${escapeHTML(topTask.type || 'task')}` : 'Use quick actions to plan your day.'}</div>
+    </div>
+
     <div class="grid-2 mb-12">
       <div class="kpi"><div class="k">Tasks today</div><div class="v">${todayTasks.length}</div><div class="d">due or overdue</div></div>
       <div class="kpi"><div class="k">Habits</div><div class="v">${habitsDone}/${state.habits.length}</div><div class="d">hit target</div></div>
@@ -201,12 +208,12 @@ views.home = root => {
       <div class="kpi"><div class="k">Saved this month</div><div class="v">${fmtMoney(saved)}</div><div class="d">goal ${fmtMoney(state.budget.monthlySavingsGoal)}</div></div>
     </div>
 
-    <div class="section-h">Quick actions</div>
+    <div class="section-h">Jump in</div>
     <div class="qa-row mb-12">
-      <button class="qa" id="qaTask">New task<small>Add to tracker</small></button>
-      <button class="qa" id="qaTxn">Add expense<small>Log transaction</small></button>
-      <button class="qa" id="qaHabit">Check habits<small>Today</small></button>
-      <button class="qa" id="qaSupp">Supplements<small>Morning / night</small></button>
+      <button class="qa" id="qaTask"><span>New task</span><small>Add to tracker</small></button>
+      <button class="qa" id="qaTxn"><span>Add expense</span><small>Log transaction</small></button>
+      <button class="qa" id="qaHabit"><span>Check habits</span><small>Today</small></button>
+      <button class="qa" id="qaSupp"><span>Supplements</span><small>Morning / night</small></button>
     </div>
 
     <div class="section-h">Savings progress</div>
