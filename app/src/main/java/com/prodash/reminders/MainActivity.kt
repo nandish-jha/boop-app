@@ -1079,12 +1079,17 @@ private fun DashboardCompactSection(
     onToggle: () -> Unit,
     content: @Composable () -> Unit,
 ) {
+    val interaction = remember(title) { MutableInteractionSource() }
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF161619)),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onToggle),
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onToggle,
+            ),
     ) {
         Column(
             Modifier
@@ -1229,10 +1234,16 @@ private fun DashboardScreen(
                         Text("Nothing scheduled in the next day.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
                     } else {
                         upcomingTasks.forEach { task ->
+                            val taskInteraction = remember(task.id) { MutableInteractionSource() }
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
                                 shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth().clickable { onOpenTask(task) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(
+                                        interactionSource = taskInteraction,
+                                        indication = null,
+                                    ) { onOpenTask(task) },
                             ) {
                                 Row(
                                     Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
@@ -1360,12 +1371,16 @@ private fun DashboardHabitCompactCard(
         todayKey in parseHabitDayKeys(habit.dayKeys)
     }
     val doneCount = parseHabitDayKeys(habit.dayKeys).size
+    val interaction = remember(habit.id) { MutableInteractionSource() }
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onOpenHabit(habit) },
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+            ) { onOpenHabit(habit) },
     ) {
         Row(
             Modifier
@@ -1402,12 +1417,17 @@ private fun DashboardHabitCompactCard(
 @Composable
 private fun DashboardNoteTile(note: BoopNote, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val snippet = remember(note.body) { plainNoteSnippet(note.body, 72) }
+    val interaction = remember(note.id) { MutableInteractionSource() }
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
         shape = RoundedCornerShape(14.dp),
         modifier = modifier
             .heightIn(min = 88.dp, max = 120.dp)
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+            ),
     ) {
         Column(
             Modifier.padding(10.dp),
