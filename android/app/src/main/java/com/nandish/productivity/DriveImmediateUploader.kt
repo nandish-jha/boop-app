@@ -44,6 +44,7 @@ object DriveImmediateUploader {
 
     fun scheduleAfterChange() {
         val ctx = appContext ?: return
+        if (!AppSession.isInteractive()) return
         synchronized(scheduleLock) {
             debounceJob?.cancel()
             debounceJob = scope.launch {

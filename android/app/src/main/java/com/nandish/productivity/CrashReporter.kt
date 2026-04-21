@@ -15,13 +15,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Captures uncaught JVM exceptions to a small on-device text file so you can share the stack trace
- * without adb. Installed from [ProDashApp.attachBaseContext].
+ * without adb. There is **no automatic popup** on launch (that was destabilizing some devices);
+ * use **Menu → Diagnostics (crash report)** after a crash.
  */
 object CrashReporter {
 
     private const val FILE_NAME = "prodash_last_crash.txt"
-    private const val PREFS = "prodash_crash_prefs"
-    private const val KEY_PENDING_AUTO_PROMPT = "pending_auto_prompt"
     private const val MESSAGE_PREVIEW_CHARS = 3500
     private val installed = AtomicBoolean(false)
 
@@ -39,9 +38,6 @@ object CrashReporter {
             }
         }
     }
-
-    private fun prefs(ctx: Context): android.content.SharedPreferences =
-        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private fun writeCrash(app: Context, thread: Thread, throwable: Throwable) {
         val sw = StringWriter()
@@ -71,7 +67,6 @@ object CrashReporter {
             appendLine(sw.toString().trimEnd())
         }
         File(app.filesDir, FILE_NAME).bufferedWriter().use { it.write(body) }
-        prefs(app).edit().putBoolean(KEY_PENDING_AUTO_PROMPT, true).apply()
     }
 
     fun readReport(context: Context): String? {
@@ -86,21 +81,6 @@ object CrashReporter {
             File(context.applicationContext.filesDir, FILE_NAME).delete()
         } catch (_: Exception) {
         }
-        prefs(context).edit().putBoolean(KEY_PENDING_AUTO_PROMPT, false).apply()
-    }
-
-    /**
-     * One-time prompt after a crash (next cold start). No-op if there is no new crash since last prompt.
-     */
-    fun promptAutoIfPending(activity: AppCompatActivity) {
-        val sp = prefs(activity)
-        if (!sp.getBoolean(KEY_PENDING_AUTO_PROMPT, false)) return
-        val text = readReport(activity) ?: run {
-            sp.edit().putBoolean(KEY_PENDING_AUTO_PROMPT, false).apply()
-            return
-        }
-        sp.edit().putBoolean(KEY_PENDING_AUTO_PROMPT, false).apply()
-        showReportDialog(activity, text)
     }
 
     /** Opens the saved report if present. Returns true if a dialog was shown. */

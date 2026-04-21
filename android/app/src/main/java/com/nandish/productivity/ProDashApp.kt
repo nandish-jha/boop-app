@@ -12,11 +12,21 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.io.File
 
 class ProDashApp : MultiDexApplication() {
 
     override fun attachBaseContext(base: Context) {
-        CrashReporter.installOnce(base)
+        try {
+            CrashReporter.installOnce(base)
+        } catch (t: Throwable) {
+            try {
+                File(base.filesDir, "prodash_startup_error.log").appendText(
+                    "${System.currentTimeMillis()} attachBaseContext CrashReporter: ${t.stackTraceToString()}\n\n"
+                )
+            } catch (_: Throwable) {
+            }
+        }
         super.attachBaseContext(base)
     }
 
@@ -31,17 +41,41 @@ class ProDashApp : MultiDexApplication() {
 
     override fun onCreate() {
         super.onCreate()
-        NotificationChannels.ensure(this)
-        StateRepository.init(this)
-        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStop(owner: LifecycleOwner) {
-                flushDriveIfNeeded()
-            }
-        })
+        try {
+            NotificationChannels.ensure(this)
+        } catch (t: Throwable) {
+            logStartupFailure("NotificationChannels", t)
+        }
+        try {
+            StateRepository.init(this)
+        } catch (t: Throwable) {
+            logStartupFailure("StateRepository.init", t)
+            throw t
+        }
+        try {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+                override fun onStop(owner: LifecycleOwner) {
+                    flushDriveIfNeeded()
+                }
+            })
+        } catch (t: Throwable) {
+            logStartupFailure("ProcessLifecycleOwner", t)
+        }
+    }
+
+    private fun logStartupFailure(where: String, t: Throwable) {
+        try {
+            File(filesDir, "prodash_startup_error.log").appendText(
+                "${System.currentTimeMillis()} $where: ${t.stackTraceToString()}\n\n"
+            )
+        } catch (_: Throwable) {
+        }
+        Log.e("ProDashApp", "Startup failure: $where", t)
     }
 
     private fun flushDriveIfNeeded() {
         try {
+            if (!AppSession.isInteractive()) return
             if (!DriveAutoBackupState.hasDirty()) return
             val acct = GoogleDriveSync.lastSignedInAccount(this) ?: return
             if (acct.account == null) return

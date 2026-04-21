@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,8 +18,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
 
-    private var crashPromptPosted: Boolean = false
-
     private val requestNotifPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -31,10 +28,6 @@ class MainActivity : AppCompatActivity() {
         window.navigationBarColor = getColor(R.color.background)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        if (savedInstanceState == null) {
-            binding.root.post { CrashReporter.promptAutoIfPending(this) }
-        }
 
         maybeRequestPostNotifications()
 
@@ -58,18 +51,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (crashPromptPosted || isFinishing) return
-        crashPromptPosted = true
-        window.decorView.post {
-            if (isFinishing || isDestroyed) return@post
-            try {
-                CrashReporter.promptAutoIfPending(this@MainActivity)
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Crash report prompt failed", e)
-            }
-        }
+    override fun onPostResume() {
+        super.onPostResume()
+        AppSession.markInteractive()
+        // Retries any debounced upload skipped while !interactive (e.g. updates during fragment resume).
+        DriveImmediateUploader.scheduleAfterChange()
     }
 
     private fun maybeRequestPostNotifications() {
