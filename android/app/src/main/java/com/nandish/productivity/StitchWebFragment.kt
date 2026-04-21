@@ -1,7 +1,7 @@
 package com.nandish.productivity
 
+import android.app.Activity
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -17,12 +17,19 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.google.android.gms.common.api.ApiException
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.api.client.googleapis.extensions.android.gms.auth.UserRecoverableAuthIOException
 import com.google.gson.Gson
 import com.nandish.productivity.databinding.FragmentStitchBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.nio.charset.StandardCharsets
 
 class StitchWebFragment : Fragment(), ProDashBridge.Host {
 
@@ -37,48 +44,34 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
 
     private var backCallback: OnBackPressedCallback? = null
 
-    private val exportBackupLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
-    ) { uri: Uri? ->
-        if (uri == null || !isAdded) return@registerForActivityResult
-        try {
-            requireContext().contentResolver.openOutputStream(uri)?.use { os ->
-                os.write(StateRepository.exportJson().toByteArray(StandardCharsets.UTF_8))
-            } ?: throw IllegalStateException("Could not open file")
-            Toast.makeText(requireContext(), "Backup saved", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(requireContext(), "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
-        }
-    }
+    private var pendingDriveAfterSignIn: ((GoogleSignInAccount) -> Unit)? = null
 
-    private val importBackupLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        if (uri == null || !isAdded) return@registerForActivityResult
-        val text = try {
-            requireContext().contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-        } catch (_: Exception) {
-            null
-        }
-        if (text.isNullOrBlank()) {
-            Toast.makeText(requireContext(), "Could not read file", Toast.LENGTH_SHORT).show()
+    private val googleDriveSignInLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (!isAdded) return@registerForActivityResult
+        if (result.resultCode != Activity.RESULT_OK) {
+            pendingDriveAfterSignIn = null
             return@registerForActivityResult
         }
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle("Import backup")
-            .setMessage("Replace all data on this device with this backup? This cannot be undone.")
-            .setPositiveButton("Replace") { _, _ ->
-                val ok = StateRepository.importReplace(text)
-                if (ok) {
-                    ReminderScheduler.schedule(requireContext().applicationContext)
-                    refreshWeb()
-                    Toast.makeText(requireContext(), "Backup restored", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(requireContext(), "Invalid backup file", Toast.LENGTH_LONG).show()
-                }
+        val data = result.data ?: run {
+            pendingDriveAfterSignIn = null
+            return@registerForActivityResult
+        }
+        val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+        try {
+            val account = task.getResult(ApiException::class.java)!!
+            val pending = pendingDriveAfterSignIn
+            pendingDriveAfterSignIn = null
+            if (pending != null) {
+                pending.invoke(account)
+            } else {
+                Toast.makeText(requireContext(), "Signed in with Google", Toast.LENGTH_SHORT).show()
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        } catch (_: ApiException) {
+            pendingDriveAfterSignIn = null
+            Toast.makeText(requireContext(), "Google sign-in was cancelled or failed.", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun refreshWeb() {
@@ -167,8 +160,7 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
             .setItems(
                 arrayOf(
                     "Add…",
-                    "Export backup…",
-                    "Import backup…",
+                    "Google Drive…",
                     "Settings",
                     "Refresh this screen",
                     "About"
@@ -176,11 +168,10 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
             ) { _, which ->
                 when (which) {
                     0 -> ItemEditors.showAddPicker(this) { refreshWeb() }
-                    1 -> exportBackupLauncher.launch("prodash-backup.json")
-                    2 -> importBackupLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
-                    3 -> onNavigate("settings")
-                    4 -> injectHydration(wv)
-                    5 -> showAbout()
+                    1 -> showGoogleDriveMenu()
+                    2 -> onNavigate("settings")
+                    3 -> injectHydration(wv)
+                    4 -> showAbout()
                 }
             }
             .show()
@@ -284,6 +275,105 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
             .show()
     }
 
+    private fun showGoogleDriveMenu() {
+        if (!isAdded) return
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Google Drive")
+            .setItems(
+                arrayOf(
+                    "Back up now",
+                    "Restore from Drive",
+                    "Sign out of Google"
+                )
+            ) { _, which ->
+                when (which) {
+                    0 -> backupToGoogleDrive()
+                    1 -> restoreFromGoogleDrive()
+                    2 -> signOutGoogleDrive()
+                }
+            }
+            .show()
+    }
+
+    private fun withGoogleAccount(block: (GoogleSignInAccount) -> Unit) {
+        if (!isAdded) return
+        val existing = GoogleDriveSync.lastSignedInAccount(requireContext())
+        if (existing != null) {
+            block(existing)
+        } else {
+            pendingDriveAfterSignIn = { block(it) }
+            val intent = GoogleDriveSync.googleSignInClient(requireContext()).signInIntent
+            googleDriveSignInLauncher.launch(intent)
+        }
+    }
+
+    private fun backupToGoogleDrive() {
+        if (!isAdded) return
+        withGoogleAccount { account ->
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        GoogleDriveSync.uploadStateJson(requireContext(), account, StateRepository.exportJson())
+                    }
+                    Toast.makeText(requireContext(), "Backed up to Google Drive", Toast.LENGTH_SHORT).show()
+                } catch (e: UserRecoverableAuthIOException) {
+                    requireActivity().startActivity(e.intent)
+                } catch (e: Exception) {
+                    Toast.makeText(requireContext(), "Drive backup failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun restoreFromGoogleDrive() {
+        if (!isAdded) return
+        withGoogleAccount { account ->
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Restore from Google Drive")
+                .setMessage("Replace all data on this device with the copy on Drive? This cannot be undone.")
+                .setPositiveButton("Replace") { _, _ ->
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        try {
+                            val json = withContext(Dispatchers.IO) {
+                                GoogleDriveSync.downloadStateJson(requireContext(), account)
+                            }
+                            if (json.isNullOrBlank()) {
+                                Toast.makeText(
+                                    requireContext(),
+                                    "No backup found on Drive yet. Use Back up first.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                return@launch
+                            }
+                            val ok = StateRepository.importReplace(json)
+                            if (ok) {
+                                ReminderScheduler.schedule(requireContext().applicationContext)
+                                refreshWeb()
+                                Toast.makeText(requireContext(), "Restored from Drive", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(requireContext(), "Invalid backup on Drive", Toast.LENGTH_LONG).show()
+                            }
+                        } catch (e: UserRecoverableAuthIOException) {
+                            requireActivity().startActivity(e.intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(requireContext(), "Drive restore failed: ${e.message}", Toast.LENGTH_LONG)
+                                .show()
+                        }
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+    }
+
+    private fun signOutGoogleDrive() {
+        if (!isAdded) return
+        GoogleDriveSync.googleSignInClient(requireContext()).signOut().addOnCompleteListener {
+            if (!isAdded) return@addOnCompleteListener
+            Toast.makeText(requireContext(), "Signed out of Google", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onSetSetting(key: String, value: String) {
         if (!isAdded) return
         when (key.trim().lowercase()) {
@@ -301,7 +391,7 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
             .setTitle("About")
             .setMessage(
                 "Silent Order (ProDash)\nVersion $vn\n\n" +
-                    "Offline-first: data stays on this device. Use Menu → Export / Import backup to move JSON between installs."
+                    "Data stays on this device. Use Menu → Google Drive to back up or restore your JSON to your Google account (app data folder)."
             )
             .setPositiveButton(android.R.string.ok, null)
             .show()
