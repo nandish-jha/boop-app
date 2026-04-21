@@ -29,6 +29,10 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        if (savedInstanceState == null) {
+            binding.root.post { CrashReporter.promptAutoIfPending(this) }
+        }
+
         maybeRequestPostNotifications()
 
         val navHost = supportFragmentManager.findFragmentById(R.id.nav_host) as NavHostFragment

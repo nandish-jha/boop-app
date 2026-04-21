@@ -16,6 +16,7 @@ import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -163,7 +164,8 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
                     "Google Drive…",
                     "Settings",
                     "Refresh this screen",
-                    "About"
+                    "About",
+                    "Diagnostics (crash report)"
                 )
             ) { _, which ->
                 when (which) {
@@ -172,6 +174,7 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
                     2 -> onNavigate("settings")
                     3 -> injectHydration(wv)
                     4 -> showAbout()
+                    5 -> openCrashDiagnostics()
                 }
             }
             .show()
@@ -273,6 +276,18 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
                 }
             }
             .show()
+    }
+
+    private fun openCrashDiagnostics() {
+        if (!isAdded) return
+        val act = requireActivity() as AppCompatActivity
+        if (!CrashReporter.showSavedReportFromMenu(act)) {
+            Toast.makeText(
+                requireContext(),
+                "No crash report is saved on this device yet.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     private fun showGoogleDriveMenu() {
