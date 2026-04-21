@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -24,13 +23,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -58,6 +57,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,7 +109,7 @@ fun EditorScreen(
                     onClick = {
                         val pickedMillis = datePickerState.selectedDateMillis ?: viewModel.dueEpochMillis
                         val current = LocalDateTime.ofInstant(Instant.ofEpochMilli(viewModel.dueEpochMillis), zone)
-                        val pickedDate = Instant.ofEpochMilli(pickedMillis).atZone(zone).toLocalDate()
+                        val pickedDate = Instant.ofEpochMilli(pickedMillis).atZone(ZoneOffset.UTC).toLocalDate()
                         val merged = LocalDateTime.of(pickedDate, current.toLocalTime())
                         viewModel.updateDue(merged.atZone(zone).toInstant().toEpochMilli())
                         showDatePicker = false
@@ -228,8 +228,7 @@ fun EditorScreen(
                 ) { Text("Task") }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Surface(
-                tonalElevation = 1.dp,
+            OutlinedCard(
                 shape = MaterialTheme.shapes.large,
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
@@ -277,8 +276,7 @@ fun EditorScreen(
                     }
                 }
             } else {
-                Surface(
-                    tonalElevation = 1.dp,
+                OutlinedCard(
                     shape = MaterialTheme.shapes.large,
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
