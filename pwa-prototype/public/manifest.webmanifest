@@ -1,0 +1,23 @@
+{
+  "name": "Boop",
+  "short_name": "Boop",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#131313",
+  "theme_color": "#131313",
+  "description": "Monochrome notes and reminders with cloud sync.",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
