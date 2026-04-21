@@ -1,8 +1,6 @@
 package com.prodash.reminders
 
 import android.Manifest
-import android.content.Intent
-import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.ComponentActivity
@@ -133,10 +131,6 @@ private fun RootNav(
         composable("account") {
             AccountScreen(
                 onBack = { navController.popBackStack() },
-                onSyncGoogleCalendar = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://calendar.google.com"))
-                    navController.context.startActivity(intent)
-                },
                 onSignOut = {
                     FirebaseAuth.getInstance().signOut()
                     navController.navigate("signin") {
