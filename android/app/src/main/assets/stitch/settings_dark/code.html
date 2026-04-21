@@ -151,8 +151,11 @@
 <span class="font-label text-[0.6875rem] font-medium tracking-[0.05em] uppercase text-outline">App Experience</span>
 </div>
 <div id="prodash-btn-reminder" class="bg-surface-container-low px-6 py-5 flex items-center justify-between hover:bg-surface-bright transition-colors cursor-pointer mb-2">
+<div class="flex flex-col gap-0.5 min-w-0">
 <span class="text-sm font-medium">Daily reminder time</span>
-<span class="material-symbols-outlined text-outline-variant" data-icon="schedule">schedule</span>
+<span id="prodash-reminder-time" class="text-xs text-outline font-mono">21:00</span>
+</div>
+<span class="material-symbols-outlined text-outline-variant shrink-0" data-icon="schedule">schedule</span>
 </div>
 <div class="bg-surface-container-low p-6">
 <div class="flex items-center justify-between mb-8">
@@ -160,20 +163,20 @@
 <h3 class="text-sm font-semibold text-white">Obsidian Mode</h3>
 <p class="text-xs text-on-surface-variant mt-1">Enable deep monochromatic dark interface.</p>
 </div>
-<div class="relative inline-flex items-center cursor-pointer">
-<input checked="" class="sr-only peer" type="checkbox"/>
+<label for="prodash-toggle-obsidian" class="relative inline-flex items-center cursor-pointer">
+<input id="prodash-toggle-obsidian" class="sr-only peer" type="checkbox"/>
 <div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-primary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-fixed"></div>
-</div>
+</label>
 </div>
 <div class="flex items-center justify-between">
 <div>
 <h3 class="text-sm font-semibold text-white">Haptic Feedback</h3>
 <p class="text-xs text-on-surface-variant mt-1">Subtle tactile responses for all actions.</p>
 </div>
-<div class="relative inline-flex items-center cursor-pointer">
-<input checked="" class="sr-only peer" type="checkbox"/>
+<label for="prodash-toggle-haptics" class="relative inline-flex items-center cursor-pointer">
+<input id="prodash-toggle-haptics" class="sr-only peer" type="checkbox"/>
 <div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-primary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-fixed"></div>
-</div>
+</label>
 </div>
 </div>
 <div class="mt-4 bg-surface-container-low px-6 py-5 flex items-center justify-between hover:bg-surface-bright transition-colors cursor-pointer">
@@ -207,7 +210,7 @@
 <span class="font-headline font-bold text-sm text-on-primary-container tracking-wider uppercase">Sign Out</span>
 </button>
 <div class="mt-12 text-center">
-<p class="font-label text-[10px] text-outline-variant tracking-widest uppercase">Version 4.2.0-Alpha • Built in Silence</p>
+<p id="prodash-settings-version" class="font-label text-[10px] text-outline-variant tracking-widest uppercase">Version …</p>
 </div>
 </main>
 </body></html>

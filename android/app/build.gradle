@@ -11,12 +11,13 @@ android {
         applicationId "com.nandish.productivity.v2"
         minSdk 23
         targetSdk 34
-        versionCode 27
-        versionName "3.2.1"
+        versionCode 28
+        versionName "3.3.0"
     }
 
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 
     signingConfigs {

@@ -188,6 +188,24 @@
     );
   }
 
+  /** Deep obsidian vs calmer dark (toggle from Settings). */
+  window.ProDashApplyAppearance = function (obsidian) {
+    try {
+      var h = document.documentElement;
+      if (!h) return;
+      if (!document.getElementById('prodash-appearance-styles')) {
+        var st = document.createElement('style');
+        st.id = 'prodash-appearance-styles';
+        st.textContent =
+          'html.prodash-calm.dark{filter:saturate(0.88) brightness(1.12) contrast(0.94);}' +
+          'html.prodash-calm.dark body{background-color:#26262b!important;}';
+        (document.head || h).appendChild(st);
+      }
+      if (!h.classList.contains('dark')) h.classList.add('dark');
+      h.classList.toggle('prodash-calm', obsidian !== true);
+    } catch (x) {}
+  };
+
   function morningTile(m) {
     var icon = m.taken
       ? '<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: &quot;FILL&quot; 1;">check_circle</span>'
@@ -266,6 +284,18 @@
       setText('prodash-completion', (data.completionPct != null ? data.completionPct : '') + '%');
       if (data.morning && document.getElementById('prodash-morning-grid')) {
         setHtml('prodash-morning-grid', data.morning.map(morningTile).join(''));
+      }
+    } else if (data.page === 'settings') {
+      setText('prodash-reminder-time', data.reminderTime || '');
+      var obs = document.getElementById('prodash-toggle-obsidian');
+      if (obs) obs.checked = !!data.obsidianMode;
+      var hap = document.getElementById('prodash-toggle-haptics');
+      if (hap) hap.checked = !!data.hapticsEnabled;
+      if (data.appVersion) {
+        setText(
+          'prodash-settings-version',
+          'Version ' + data.appVersion + ' · Built in Silence'
+        );
       }
     }
   };

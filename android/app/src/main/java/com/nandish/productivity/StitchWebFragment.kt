@@ -70,6 +70,7 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
             .setPositiveButton("Replace") { _, _ ->
                 val ok = StateRepository.importReplace(text)
                 if (ok) {
+                    ReminderScheduler.schedule(requireContext().applicationContext)
                     refreshWeb()
                     Toast.makeText(requireContext(), "Backup restored", Toast.LENGTH_SHORT).show()
                 } else {
@@ -92,7 +93,7 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val wv = binding.webView
-        wv.setBackgroundColor(0xFF000000.toInt())
+        applyObsidianChrome(wv)
         val settings = wv.settings
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -283,6 +284,16 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
             .show()
     }
 
+    override fun onSetSetting(key: String, value: String) {
+        if (!isAdded) return
+        when (key.trim().lowercase()) {
+            "obsidianmode" -> StateRepository.update { settings.obsidianMode = value == "true" }
+            "hapticsenabled" -> StateRepository.update { settings.hapticsEnabled = value == "true" }
+            else -> return
+        }
+        refreshWeb()
+    }
+
     private fun showAbout() {
         if (!isAdded) return
         val vn = readVersionName()
@@ -327,6 +338,20 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
             "(function(){ if(window.ProDashWireChrome) ProDashWireChrome(); })();",
             null
         )
+        applyObsidianChrome(wv)
+        val obsidian = StateRepository.get().settings.obsidianMode
+        wv.evaluateJavascript(
+            "(function(){ if(window.ProDashApplyAppearance) ProDashApplyAppearance(" +
+                (if (obsidian) "true" else "false") +
+                "); })();",
+            null
+        )
+    }
+
+    private fun applyObsidianChrome(wv: WebView) {
+        val on = StateRepository.get().settings.obsidianMode
+        val color = if (on) 0xFF131313.toInt() else 0xFF26262B.toInt()
+        wv.setBackgroundColor(color)
     }
 
     override fun onDestroyView() {

@@ -16,6 +16,7 @@ class ProDashBridge(private val host: Host) {
         fun onToggleHabitToday(id: String)
         fun onToggleSupplementLog(id: String)
         fun onStreamCreate()
+        fun onSetSetting(key: String, value: String)
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -68,5 +69,10 @@ class ProDashBridge(private val host: Host) {
     @JavascriptInterface
     fun openStreamCreate() {
         runMain { host.onStreamCreate() }
+    }
+
+    @JavascriptInterface
+    fun setSetting(key: String, value: String) {
+        runMain { host.onSetSetting(key, value) }
     }
 }

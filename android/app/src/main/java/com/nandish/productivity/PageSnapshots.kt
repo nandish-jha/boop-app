@@ -14,6 +14,7 @@ object PageSnapshots {
                 assetHtml.contains("habit_goal_tracker_dark") -> goals(s)
                 assetHtml.contains("accounts_finance_dark") -> vault(s)
                 assetHtml.contains("supplement_logger_dark") -> logs(s)
+                assetHtml.contains("settings_dark") -> settings(s)
                 else -> mapOf("page" to "none")
             }
         )
@@ -185,5 +186,16 @@ object PageSnapshots {
         val takenN = morningList.count { slog[it.id] == true }
         val pct = if (morningList.isEmpty()) 0 else (takenN * 100 / morningList.size)
         return mapOf("page" to "logs", "completionPct" to pct, "morning" to morning)
+    }
+
+    private fun settings(s: AppState): Map<String, Any?> {
+        val set = s.settings
+        return mapOf(
+            "page" to "settings",
+            "reminderTime" to set.reminderTime,
+            "obsidianMode" to set.obsidianMode,
+            "hapticsEnabled" to set.hapticsEnabled,
+            "appVersion" to BuildConfig.VERSION_NAME
+        )
     }
 }

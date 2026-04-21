@@ -72,7 +72,9 @@ data class Budget(
 
 data class Settings(
     var reminderTime: String = "21:00",
-    var theme: String = "dark"
+    var theme: String = "dark",
+    var obsidianMode: Boolean = true,
+    var hapticsEnabled: Boolean = true
 )
 
 data class AppState(
@@ -88,5 +90,5 @@ data class AppState(
     var budget: Budget = Budget(),
     var notes: ArrayList<Note> = arrayListOf(),
     var settings: Settings = Settings(),
-    @SerializedName("schemaVersion") var schemaVersion: Int = 4
+    @SerializedName("schemaVersion") var schemaVersion: Int = 5
 )

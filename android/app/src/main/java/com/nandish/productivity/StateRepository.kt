@@ -31,7 +31,17 @@ object StateRepository {
                     SeedData.defaultState()
                 }
             }
+            migrateIfNeeded(state)
             persistLocked()
+        }
+        ReminderScheduler.schedule(context.applicationContext)
+    }
+
+    private fun migrateIfNeeded(s: AppState) {
+        if (s.schemaVersion < 5) {
+            s.settings.obsidianMode = true
+            s.settings.hapticsEnabled = true
+            s.schemaVersion = 5
         }
     }
 

@@ -88,6 +88,18 @@
       ProDash.openEditor('reminder', '');
     });
 
+    function wireToggle(id, settingKey) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.onchange = function () {
+        try {
+          ProDash.setSetting(settingKey, el.checked ? 'true' : 'false');
+        } catch (x) {}
+      };
+    }
+    wireToggle('prodash-toggle-obsidian', 'obsidianMode');
+    wireToggle('prodash-toggle-haptics', 'hapticsEnabled');
+
     var hubInp = document.getElementById('prodash-hub-filter');
     if (hubInp) {
       hubInp.addEventListener('input', function () {

@@ -412,6 +412,7 @@ object ItemEditors {
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val v = et.text?.toString()?.trim().orEmpty().ifBlank { snap.reminderTime }
                 StateRepository.update { settings.reminderTime = v }
+                ReminderScheduler.schedule(f.requireContext().applicationContext)
                 onDone()
             }
             .setNegativeButton(android.R.string.cancel, null)
