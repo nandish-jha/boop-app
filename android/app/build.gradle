@@ -11,8 +11,8 @@ android {
         applicationId "com.nandish.productivity.v2"
         minSdk 23
         targetSdk 34
-        versionCode 31
-        versionName "3.4.2"
+        versionCode 32
+        versionName "3.4.3"
     }
 
     buildFeatures {

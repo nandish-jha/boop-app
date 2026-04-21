@@ -4,8 +4,8 @@ Native **Android** app (not a PWA). The five main tabs (**Home · Hub · Goals �
 
 ## Download the APK
 
-- **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk) (same binary as [releases/prodash-v3.4.2.apk](releases/prodash-v3.4.2.apk))
-- **GitHub release:** [v3.4.2](https://github.com/nandish-jha/prodash-android-app/releases/tag/v3.4.2) (APK attached)
+- **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk) (same binary as [releases/prodash-v3.4.3.apk](releases/prodash-v3.4.3.apk))
+- **GitHub release:** [v3.4.3](https://github.com/nandish-jha/prodash-android-app/releases/tag/v3.4.3) (APK attached; fixes rare crashes around Drive sync)
 - **v3.4.x:** **Google Drive** backup/restore (app data folder) from the menu; **auto-upload soon after each save** when signed in (Wi‑Fi or mobile data); if that fails (e.g. offline), **upload when you leave the app** is retried. Gson `SharedPreferences`, **daily reminder**, **settings** (Obsidian appearance, haptics, reminder time).
 
 Older APKs remain under [`releases/`](releases/) for history.

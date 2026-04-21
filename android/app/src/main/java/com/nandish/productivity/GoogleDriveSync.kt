@@ -31,11 +31,12 @@ object GoogleDriveSync {
     fun lastSignedInAccount(context: Context): GoogleSignInAccount? =
         GoogleSignIn.getLastSignedInAccount(context.applicationContext)
 
-    private fun driveForAccount(context: Context, account: GoogleSignInAccount): Drive {
+    private fun driveForAccount(context: Context, account: GoogleSignInAccount): Drive? {
+        val androidAccount = account.account ?: return null
         val credential = GoogleAccountCredential.usingOAuth2(
             context.applicationContext,
             listOf(DriveScopes.DRIVE_APPDATA)
-        ).setSelectedAccount(account.account)
+        ).setSelectedAccount(androidAccount)
         return Drive.Builder(
             NetHttpTransport(),
             GsonFactory.getDefaultInstance(),
@@ -56,7 +57,7 @@ object GoogleDriveSync {
 
     /** Uploads or replaces JSON in the Drive app data folder. */
     fun uploadStateJson(context: Context, account: GoogleSignInAccount, json: String) {
-        val drive = driveForAccount(context, account)
+        val drive = driveForAccount(context, account) ?: return
         val bytes = json.toByteArray(StandardCharsets.UTF_8)
         val media = ByteArrayContent("application/json", bytes)
         val existingId = findStateFileId(drive)
@@ -73,7 +74,7 @@ object GoogleDriveSync {
 
     /** Returns JSON from Drive, or null if no file yet. */
     fun downloadStateJson(context: Context, account: GoogleSignInAccount): String? {
-        val drive = driveForAccount(context, account)
+        val drive = driveForAccount(context, account) ?: return null
         val id = findStateFileId(drive) ?: return null
         val out = ByteArrayOutputStream()
         drive.files().get(id).executeMediaAndDownloadTo(out)
