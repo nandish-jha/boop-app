@@ -1,13 +1,8 @@
 package com.prodash.reminders.ui.home
 
-import android.app.AlarmManager
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,24 +12,29 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChecklistRtl
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.StickyNote2
-import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,8 +50,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -62,8 +62,10 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
+private enum class HomeTab { HOME, REMINDERS, NOTES }
+
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun HomeScreen(
     onAddReminder: () -> Unit,
     onOpenReminder: (String) -> Unit,
@@ -73,25 +75,26 @@ fun HomeScreen(
 ) {
     val reminders by viewModel.reminders.collectAsState()
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
-    val context = LocalContext.current
-    val alarmManager = remember { context.getSystemService(AlarmManager::class.java) }
-    val needsExactAlarm = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-        alarmManager != null &&
-        !alarmManager.canScheduleExactAlarms()
+    var selectedTab by rememberSaveable { mutableStateOf(HomeTab.HOME) }
+
+    val notes = remember(reminders) { reminders.filter { it.type == ReminderType.NOTE } }
+    val tasks = remember(reminders) { reminders.filter { it.type == ReminderType.TASK } }
+    val now = System.currentTimeMillis()
+    val urgent = remember(tasks, now) { tasks.filter { !it.completed && it.dueEpochMillis in now..(now + 8 * 60 * 60 * 1000) } }
+    val todayTasks = remember(tasks) { tasks.filter { !it.completed && isToday(it.dueEpochMillis) } }
+    val upcomingTasks = remember(tasks, now) { tasks.filter { !it.completed && it.dueEpochMillis > now && !isToday(it.dueEpochMillis) } }
+    val completedTasks = remember(tasks) { tasks.filter { it.completed } }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Your notes & tasks") },
+                title = { Text("Luminous", fontWeight = FontWeight.ExtraBold) },
                 actions = {
                     IconButton(onClick = { menuExpanded = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = null)
                     }
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false },
-                    ) {
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                         DropdownMenuItem(
                             text = { Text("Delete completed tasks") },
                             onClick = {
@@ -111,95 +114,124 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddReminder) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_reminder))
+            FloatingActionButton(onClick = onAddReminder, containerColor = MaterialTheme.colorScheme.primary) {
+                Icon(Icons.Default.Add, contentDescription = null)
+            }
+        },
+        bottomBar = {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)) {
+                NavigationBarItem(
+                    selected = selectedTab == HomeTab.HOME,
+                    onClick = { selectedTab = HomeTab.HOME },
+                    icon = { Icon(Icons.Default.Home, null) },
+                    label = { Text("Home") },
+                )
+                NavigationBarItem(
+                    selected = selectedTab == HomeTab.REMINDERS,
+                    onClick = { selectedTab = HomeTab.REMINDERS },
+                    icon = { Icon(Icons.Default.Notifications, null) },
+                    label = { Text("Reminders") },
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onAddReminder,
+                    icon = { Icon(Icons.Default.Add, null) },
+                    label = { Text("Create") },
+                )
+                NavigationBarItem(
+                    selected = selectedTab == HomeTab.NOTES,
+                    onClick = { selectedTab = HomeTab.NOTES },
+                    icon = { Icon(Icons.Default.Description, null) },
+                    label = { Text("Notes") },
+                )
             }
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            AnimatedVisibility(visible = needsExactAlarm) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.exact_alarm_title),
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                            Text(
-                                text = stringResource(R.string.exact_alarm_body),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        TextButton(
-                            onClick = {
-                                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                                    data = Uri.parse("package:${context.packageName}")
-                                }
-                                context.startActivity(intent)
-                            },
-                        ) {
-                            Text(stringResource(R.string.open_settings))
+        when (selectedTab) {
+            HomeTab.HOME -> HomeDashboard(
+                modifier = Modifier.padding(padding),
+                urgent = urgent,
+                notes = notes.take(4),
+                onOpenReminder = onOpenReminder,
+            )
+            HomeTab.REMINDERS -> RemindersFeed(
+                modifier = Modifier.padding(padding),
+                todayTasks = todayTasks,
+                upcomingTasks = upcomingTasks,
+                completedTasks = completedTasks,
+                onOpenReminder = onOpenReminder,
+                onChecked = { item, checked -> viewModel.setCompleted(item, checked) },
+            )
+            HomeTab.NOTES -> NotesGallery(
+                modifier = Modifier.padding(padding),
+                notes = notes,
+                onOpenReminder = onOpenReminder,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeDashboard(
+    modifier: Modifier,
+    urgent: List<Reminder>,
+    notes: List<Reminder>,
+    onOpenReminder: (String) -> Unit,
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            Text("Good Morning.", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+            Text(
+                "You have ${urgent.size} urgent reminders and ${notes.size} notes.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("URGENT PRIORITY", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                    if (urgent.isEmpty()) {
+                        Text("No urgent reminders right now.")
+                    } else {
+                        urgent.take(2).forEach { item ->
+                            Column(Modifier.clickable { onOpenReminder(item.id) }) {
+                                Text(item.title, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "Due ${formatDateTime(item.dueEpochMillis)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
             }
-
-            if (reminders.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = stringResource(R.string.empty_state),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TextButton(onClick = onAddReminder) {
-                        Text(stringResource(R.string.add_reminder))
-                    }
-                }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 170.dp),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = 8.dp,
-                        bottom = 88.dp,
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(reminders, key = { it.id }) { reminder ->
-                        ReminderRow(
-                            reminder = reminder,
-                            onOpen = { onOpenReminder(reminder.id) },
-                            onCheckedChange = { checked ->
-                                viewModel.setCompleted(reminder, checked)
-                            },
+        }
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Recent Notes", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                TextButton(onClick = {}) { Text("View all") }
+            }
+        }
+        items(notes, key = { it.id }) { note ->
+            ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenReminder(note.id) },
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(note.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    if (note.body.isNotBlank()) {
+                        Text(
+                            note.body,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -209,89 +241,121 @@ fun HomeScreen(
 }
 
 @Composable
-private fun ReminderRow(
-    reminder: Reminder,
-    onOpen: () -> Unit,
-    onCheckedChange: (Boolean) -> Unit,
+private fun RemindersFeed(
+    modifier: Modifier,
+    todayTasks: List<Reminder>,
+    upcomingTasks: List<Reminder>,
+    completedTasks: List<Reminder>,
+    onOpenReminder: (String) -> Unit,
+    onChecked: (Reminder, Boolean) -> Unit,
 ) {
-    val formatter = remember { DateTimeFormatter.ofPattern("EEE, MMM d • h:mm a") }
-    val label = remember(reminder.dueEpochMillis) {
-        if (reminder.type == ReminderType.TASK) {
-            Instant.ofEpochMilli(reminder.dueEpochMillis)
-                .atZone(ZoneId.systemDefault())
-                .format(formatter)
-        } else {
-            "Note"
-        }
-    }
-
-    ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpen)
-            .padding(vertical = 1.dp)
-            .height(if (reminder.imageUri != null) 220.dp else 150.dp),
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
+        section("TODAY", todayTasks, onOpenReminder, onChecked)
+        section("UPCOMING", upcomingTasks, onOpenReminder, onChecked)
+        section("COMPLETED", completedTasks, onOpenReminder, onChecked)
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.section(
+    title: String,
+    items: List<Reminder>,
+    onOpenReminder: (String) -> Unit,
+    onChecked: (Reminder, Boolean) -> Unit,
+) {
+    item {
+        Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+    }
+    items(items, key = { it.id }) { item ->
+        ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                if (reminder.type == ReminderType.TASK) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = reminder.completed,
-                            onCheckedChange = onCheckedChange,
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(Icons.Default.ChecklistRtl, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Task", style = MaterialTheme.typography.labelSmall)
-                    }
+                .clickable { onOpenReminder(item.id) },
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = if (item.completed) {
+                    MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.7f)
                 } else {
-                    AssistChip(
-                        onClick = onOpen,
-                        label = { Text("Note") },
-                        leadingIcon = { Icon(Icons.Default.StickyNote2, contentDescription = null) },
-                    )
-                }
-                Text(
-                    text = reminder.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (reminder.completed) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                )
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (reminder.type == ReminderType.NOTE && reminder.body.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(6.dp))
+                    MaterialTheme.colorScheme.surfaceContainerLow
+                },
+            ),
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = item.completed, onCheckedChange = { onChecked(item, it) })
+                Spacer(Modifier.width(8.dp))
+                Column {
+                    Text(item.title, fontWeight = FontWeight.Bold)
                     Text(
-                        text = reminder.body,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 3,
+                        formatDateTime(item.dueEpochMillis),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (reminder.type == ReminderType.NOTE && reminder.imageUri != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    AsyncImage(
-                        model = reminder.imageUri,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(92.dp),
-                        contentScale = ContentScale.Crop,
                     )
                 }
             }
         }
     }
 }
+
+@Composable
+private fun NotesGallery(
+    modifier: Modifier,
+    notes: List<Reminder>,
+    onOpenReminder: (String) -> Unit,
+) {
+    if (notes.isEmpty()) {
+        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No notes yet")
+        }
+        return
+    }
+    LazyVerticalGrid(
+        modifier = modifier.fillMaxSize(),
+        columns = GridCells.Adaptive(170.dp),
+        contentPadding = PaddingValues(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        gridItems(notes, key = { it.id }) { note ->
+            ElevatedCard(
+                modifier = Modifier.clickable { onOpenReminder(note.id) },
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(note.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2)
+                    if (note.body.isNotBlank()) {
+                        Text(note.body, style = MaterialTheme.typography.bodySmall, maxLines = 4, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    note.imageUri?.let { image ->
+                        AsyncImage(
+                            model = image,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(92.dp),
+                            contentScale = ContentScale.Crop,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun isToday(epochMillis: Long): Boolean {
+    val zone = ZoneId.systemDefault()
+    val d = Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate()
+    val now = Instant.now().atZone(zone).toLocalDate()
+    return d == now
+}
+
+private fun formatDateTime(epochMillis: Long): String =
+    Instant.ofEpochMilli(epochMillis)
+        .atZone(ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("MMM d • h:mm a"))

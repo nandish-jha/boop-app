@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -47,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -180,10 +182,11 @@ fun EditorScreen(
                 title = {
                     Text(
                         if (reminderId == null) {
-                            stringResource(R.string.add_reminder)
+                            if (viewModel.type == ReminderType.NOTE) "New Note" else "New Reminder"
                         } else {
                             stringResource(R.string.edit_reminder)
                         },
+                        fontWeight = FontWeight.Bold,
                     )
                 },
                 navigationIcon = {
@@ -228,64 +231,80 @@ fun EditorScreen(
                 ) { Text("Task") }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            OutlinedCard(
-                shape = MaterialTheme.shapes.large,
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 1.dp,
+                shape = MaterialTheme.shapes.extraLarge,
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = if (viewModel.type == ReminderType.NOTE) "NOTE LABEL" else "REMINDER LABEL",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     OutlinedTextField(
                         value = viewModel.title,
                         onValueChange = viewModel::updateTitle,
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text(if (viewModel.type == ReminderType.NOTE) "Title" else "Task title") },
+                        label = { Text("What needs doing?") },
                         singleLine = true,
                     )
                     if (viewModel.type == ReminderType.NOTE) {
-                        Spacer(modifier = Modifier.height(12.dp))
                         OutlinedTextField(
                             value = viewModel.body,
                             onValueChange = viewModel::updateBody,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(180.dp),
-                            label = { Text("Write your note") },
+                                .height(220.dp),
+                            label = { Text("Start your thought here...") },
                         )
                     }
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
             if (viewModel.type == ReminderType.NOTE) {
-                OutlinedButton(
-                    onClick = { imagePicker.launch("image/*") },
-                    modifier = Modifier.fillMaxWidth(),
+                OutlinedCard(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                 ) {
-                    Icon(Icons.Default.Image, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (viewModel.imageUri == null) "Add image" else "Change image")
-                }
-                viewModel.imageUri?.let { uri ->
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Surface(shape = MaterialTheme.shapes.large) {
-                        AsyncImage(
-                            model = uri,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(210.dp),
-                            contentScale = ContentScale.Crop,
-                        )
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = { imagePicker.launch("image/*") },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.Default.Image, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (viewModel.imageUri == null) "Add image" else "Change image")
+                        }
+                        viewModel.imageUri?.let { uri ->
+                            AsyncImage(
+                                model = uri,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(220.dp),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
                     }
                 }
             } else {
-                OutlinedCard(
-                    shape = MaterialTheme.shapes.large,
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    tonalElevation = 1.dp,
+                    shape = MaterialTheme.shapes.extraLarge,
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            "SCHEDULE",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             Icon(Icons.Default.Schedule, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(text = dateTimeLabel, style = MaterialTheme.typography.bodyLarge)
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedButton(onClick = { showDatePicker = true }) {
                                 Text(stringResource(R.string.pick_date))
