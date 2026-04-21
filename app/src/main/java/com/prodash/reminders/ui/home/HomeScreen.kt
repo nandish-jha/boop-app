@@ -21,20 +21,20 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ChecklistRtl
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.StickyNote2
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -72,43 +72,40 @@ fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
 ) {
     val reminders by viewModel.reminders.collectAsState()
-    var query by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf(ReminderFilter.AllItems) }
+    var menuExpanded by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val alarmManager = remember { context.getSystemService(AlarmManager::class.java) }
     val needsExactAlarm = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
         alarmManager != null &&
         !alarmManager.canScheduleExactAlarms()
-    val now = System.currentTimeMillis()
-
-    val filtered = remember(reminders, query, filter, now) {
-        reminders.filter { reminder ->
-            val matchesQuery = query.isBlank() || reminder.title.contains(query.trim(), ignoreCase = true)
-            val matchesFilter = when (filter) {
-                ReminderFilter.AllItems -> true
-                ReminderFilter.Notes -> reminder.type == ReminderType.NOTE
-                ReminderFilter.Tasks -> reminder.type == ReminderType.TASK
-                ReminderFilter.Done -> reminder.type == ReminderType.TASK && reminder.completed
-            }
-            matchesQuery && matchesFilter
-        }
-    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
+                title = { Text("Your notes & tasks") },
                 actions = {
-                    IconButton(onClick = { viewModel.deleteCompletedTasks() }) {
-                        Icon(Icons.Default.DeleteSweep, contentDescription = "Delete completed tasks")
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = null)
                     }
-                    IconButton(
-                        onClick = {
-                            viewModel.signOut(onSignedOut)
-                        },
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.sign_out))
+                        DropdownMenuItem(
+                            text = { Text("Delete completed tasks") },
+                            onClick = {
+                                menuExpanded = false
+                                viewModel.deleteCompletedTasks()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.sign_out)) },
+                            onClick = {
+                                menuExpanded = false
+                                viewModel.signOut(onSignedOut)
+                            },
+                        )
                     }
                 },
             )
@@ -165,33 +162,7 @@ fun HomeScreen(
                 }
             }
 
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                placeholder = { Text("Search reminders") },
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ReminderFilter.entries.forEach { option ->
-                    FilterChip(
-                        selected = filter == option,
-                        onClick = { filter = option },
-                        label = { Text(option.label) },
-                    )
-                }
-            }
-
-            if (filtered.isEmpty()) {
+            if (reminders.isEmpty()) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -200,11 +171,7 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = if (query.isBlank() && filter == ReminderFilter.AllItems) {
-                            stringResource(R.string.empty_state)
-                        } else {
-                            "No matching items"
-                        },
+                        text = stringResource(R.string.empty_state),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -226,7 +193,7 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(filtered, key = { it.id }) { reminder ->
+                    items(reminders, key = { it.id }) { reminder ->
                         ReminderRow(
                             reminder = reminder,
                             onOpen = { onOpenReminder(reminder.id) },
@@ -279,10 +246,16 @@ private fun ReminderRow(
                             onCheckedChange = onCheckedChange,
                         )
                         Spacer(modifier = Modifier.width(4.dp))
+                        Icon(Icons.Default.ChecklistRtl, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(text = "Task", style = MaterialTheme.typography.labelSmall)
                     }
                 } else {
-                    AssistChip(onClick = onOpen, label = { Text("Note") })
+                    AssistChip(
+                        onClick = onOpen,
+                        label = { Text("Note") },
+                        leadingIcon = { Icon(Icons.Default.StickyNote2, contentDescription = null) },
+                    )
                 }
                 Text(
                     text = reminder.title,
@@ -321,11 +294,4 @@ private fun ReminderRow(
             }
         }
     }
-}
-
-private enum class ReminderFilter(val label: String) {
-    AllItems("All"),
-    Notes("Notes"),
-    Tasks("Tasks"),
-    Done("Done"),
 }

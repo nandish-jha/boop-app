@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -23,12 +24,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -189,6 +191,14 @@ fun EditorScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
+                actions = {
+                    TextButton(
+                        onClick = { viewModel.save(reminderId) { onBack() } },
+                        enabled = viewModel.title.isNotBlank(),
+                    ) {
+                        Text(stringResource(R.string.save))
+                    }
+                },
             )
         },
     ) { padding ->
@@ -203,7 +213,7 @@ fun EditorScreen(
                 SegmentedButton(
                     selected = viewModel.type == ReminderType.NOTE,
                     onClick = { viewModel.updateType(ReminderType.NOTE) },
-                    shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(
+                    shape = SegmentedButtonDefaults.itemShape(
                         index = 0,
                         count = 2,
                     ),
@@ -211,31 +221,40 @@ fun EditorScreen(
                 SegmentedButton(
                     selected = viewModel.type == ReminderType.TASK,
                     onClick = { viewModel.updateType(ReminderType.TASK) },
-                    shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(
+                    shape = SegmentedButtonDefaults.itemShape(
                         index = 1,
                         count = 2,
                     ),
                 ) { Text("Task") }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = viewModel.title,
-                onValueChange = viewModel::updateTitle,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.title_label)) },
-                singleLine = true,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
+            Surface(
+                tonalElevation = 1.dp,
+                shape = MaterialTheme.shapes.large,
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    OutlinedTextField(
+                        value = viewModel.title,
+                        onValueChange = viewModel::updateTitle,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(if (viewModel.type == ReminderType.NOTE) "Title" else "Task title") },
+                        singleLine = true,
+                    )
+                    if (viewModel.type == ReminderType.NOTE) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = viewModel.body,
+                            onValueChange = viewModel::updateBody,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp),
+                            label = { Text("Write your note") },
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
             if (viewModel.type == ReminderType.NOTE) {
-                OutlinedTextField(
-                    value = viewModel.body,
-                    onValueChange = viewModel::updateBody,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp),
-                    label = { Text("Note") },
-                )
-                Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = { imagePicker.launch("image/*") },
                     modifier = Modifier.fillMaxWidth(),
@@ -246,39 +265,41 @@ fun EditorScreen(
                 }
                 viewModel.imageUri?.let { uri ->
                     Spacer(modifier = Modifier.height(12.dp))
-                    AsyncImage(
-                        model = uri,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp),
-                        contentScale = ContentScale.Crop,
-                    )
+                    Surface(shape = MaterialTheme.shapes.large) {
+                        AsyncImage(
+                            model = uri,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(210.dp),
+                            contentScale = ContentScale.Crop,
+                        )
+                    }
                 }
             } else {
-                Text(text = stringResource(R.string.date_time_label), style = MaterialTheme.typography.labelLarge)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = dateTimeLabel, style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = { showDatePicker = true }) {
-                        Text(stringResource(R.string.pick_date))
-                    }
-                    OutlinedButton(onClick = { showTimePicker = true }) {
-                        Text(stringResource(R.string.pick_time))
+                Surface(
+                    tonalElevation = 1.dp,
+                    shape = MaterialTheme.shapes.large,
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Icon(Icons.Default.Schedule, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = dateTimeLabel, style = MaterialTheme.typography.bodyLarge)
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            OutlinedButton(onClick = { showDatePicker = true }) {
+                                Text(stringResource(R.string.pick_date))
+                            }
+                            OutlinedButton(onClick = { showTimePicker = true }) {
+                                Text(stringResource(R.string.pick_time))
+                            }
+                        }
                     }
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = {
-                    viewModel.save(reminderId) { onBack() }
-                },
-                enabled = viewModel.title.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.save))
-            }
         }
     }
 }
