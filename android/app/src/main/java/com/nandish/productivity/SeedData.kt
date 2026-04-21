@@ -1,11 +1,19 @@
 package com.nandish.productivity
 
-import java.time.LocalDate
+import java.util.Calendar
+import java.util.Locale
 import java.util.UUID
 
 object SeedData {
 
-    fun today(): String = LocalDate.now().toString()
+    /** ISO date local to device (Calendar only — safe on API 23 without java.time). */
+    fun today(): String {
+        val c = Calendar.getInstance()
+        val y = c.get(Calendar.YEAR)
+        val m = c.get(Calendar.MONTH) + 1
+        val d = c.get(Calendar.DAY_OF_MONTH)
+        return String.format(Locale.US, "%04d-%02d-%02d", y, m, d)
+    }
 
     fun defaultState(): AppState {
         val t = today()

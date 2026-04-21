@@ -284,7 +284,7 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
         if (!CrashReporter.showSavedReportFromMenu(act)) {
             Toast.makeText(
                 requireContext(),
-                "No crash report is saved on this device yet.",
+                "No Java/Kotlin crash file yet. If the app closes instantly, install the latest APK (v3.4.7+ fixes Android 6–7 startup); native WebView crashes need adb logcat.",
                 Toast.LENGTH_LONG
             ).show()
         }

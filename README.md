@@ -4,8 +4,8 @@ Native **Android** app (not a PWA). The five main tabs (**Home · Hub · Goals �
 
 ## Download the APK
 
-- **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk) (same binary as [releases/prodash-v3.4.6.apk](releases/prodash-v3.4.6.apk))
-- **GitHub release:** [v3.4.6](https://github.com/nandish-jha/prodash-android-app/releases/tag/v3.4.6) (APK attached; no auto crash dialog on launch; Drive gated until UI ready; startup error log)
+- **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk) (same binary as [releases/prodash-v3.4.7.apk](releases/prodash-v3.4.7.apk))
+- **GitHub release:** [v3.4.7](https://github.com/nandish-jha/prodash-android-app/releases/tag/v3.4.7) (APK attached; **fix instant crash on Android 6.0–7.1** by removing `java.time` from cold start; safer alarm scheduling)
 - **v3.4.x:** **Google Drive** backup/restore (app data folder) from the menu; **auto-upload soon after each save** when signed in (Wi‑Fi or mobile data); if that fails (e.g. offline), **upload when you leave the app** is retried. **Uncaught crashes** write a text report on the device; **Menu → Diagnostics (crash report)** opens it anytime (no automatic popup on cold start). Gson `SharedPreferences`, **daily reminder**, **settings** (Obsidian appearance, haptics, reminder time).
 
 Older APKs remain under [`releases/`](releases/) for history.
@@ -30,7 +30,7 @@ Older APKs remain under [`releases/`](releases/) for history.
 
 Primary copy of state stays **on device**. Use **Menu → Google Drive…** to **Back up now** (upload JSON) or **Restore from Drive** (replace local state). After you **sign in with Google**, each time you **save a change** the app **uploads to Drive a moment later** (so rapid taps become one upload), over **Wi‑Fi or mobile data**. If the upload could not finish (no network, etc.), it **tries again when you leave the app** with anything still pending.
 
-If the app **stops** (crashes), install **v3.4.6+** and use **Menu → Diagnostics (crash report)** to **Share** or **Copy** the saved stack trace. That report is for **Java/Kotlin** crashes; rare **native** WebView crashes may not produce a file. Non-fatal startup failures may append to `prodash_startup_error.log` in app files.
+If the app **stops** (crashes): install **v3.4.7+** (earlier builds could **exit immediately on Android 6.0–7.1** because `java.time` was used at startup without API 26+). Then use **Menu → Diagnostics (crash report)** to **Share** or **Copy** the saved stack trace (only after the UI stays open long enough to open the menu). That report covers **Java/Kotlin** crashes; some **native WebView** faults leave no file—then capture **`adb logcat`** right after reproducing. Non-fatal init issues may append to **`prodash_startup_error.log`** in the app’s private files directory.
 
 The file lives in Drive’s **app data** scope for this app; you must use the same Google account and the same installed app (package + signing) to read it.
 
