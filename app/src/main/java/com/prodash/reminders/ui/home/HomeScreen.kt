@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
@@ -28,6 +27,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,7 +59,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private enum class HomeTab { HOME, REMINDERS, CALENDAR, NOTES }
+private enum class HomeTab { HOME, REMINDERS, NOTES }
+private enum class ItemFilter { ALL, TASKS, NOTES, COMPLETED }
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,14 +73,21 @@ fun HomeScreen(
 ) {
     val reminders by viewModel.reminders.collectAsState()
     val selectedTab = rememberSaveable { androidx.compose.runtime.mutableStateOf(HomeTab.HOME) }
+    val selectedFilter = rememberSaveable { androidx.compose.runtime.mutableStateOf(ItemFilter.ALL) }
 
     val notes = remember(reminders) { reminders.filter { it.type == ReminderType.NOTE } }
     val tasks = remember(reminders) { reminders.filter { it.type == ReminderType.TASK } }
     val now = System.currentTimeMillis()
     val urgent = remember(tasks, now) { tasks.filter { !it.completed && it.dueEpochMillis in now..(now + 8 * 60 * 60 * 1000) } }
-    val todayTasks = remember(tasks) { tasks.filter { !it.completed && isToday(it.dueEpochMillis) } }
-    val upcomingTasks = remember(tasks, now) { tasks.filter { !it.completed && it.dueEpochMillis > now && !isToday(it.dueEpochMillis) } }
+    val incompleteTasks = remember(tasks) { tasks.filter { !it.completed } }
     val completedTasks = remember(tasks) { tasks.filter { it.completed } }
+    val filteredNotes = remember(notes, selectedFilter.value) {
+        when (selectedFilter.value) {
+            ItemFilter.ALL -> notes
+            ItemFilter.NOTES -> notes
+            else -> emptyList()
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -122,12 +130,6 @@ fun HomeScreen(
                     label = { Text("Reminders") },
                 )
                 NavigationBarItem(
-                    selected = selectedTab.value == HomeTab.CALENDAR,
-                    onClick = { selectedTab.value = HomeTab.CALENDAR },
-                    icon = { Icon(Icons.Default.CalendarMonth, null) },
-                    label = { Text("Calendar") },
-                )
-                NavigationBarItem(
                     selected = selectedTab.value == HomeTab.NOTES,
                     onClick = { selectedTab.value = HomeTab.NOTES },
                     icon = { Icon(Icons.Default.Description, null) },
@@ -145,20 +147,16 @@ fun HomeScreen(
             )
             HomeTab.REMINDERS -> RemindersFeed(
                 modifier = Modifier.padding(padding),
-                todayTasks = todayTasks,
-                upcomingTasks = upcomingTasks,
+                incompleteTasks = incompleteTasks,
                 completedTasks = completedTasks,
                 onOpenReminder = onOpenReminder,
                 onChecked = { item, checked -> viewModel.setCompleted(item, checked) },
             )
-            HomeTab.CALENDAR -> CalendarScreen(
-                modifier = Modifier.padding(padding),
-                tasks = tasks,
-                onOpenReminder = onOpenReminder,
-            )
             HomeTab.NOTES -> NotesGallery(
                 modifier = Modifier.padding(padding),
-                notes = notes,
+                notes = filteredNotes,
+                selectedFilter = selectedFilter.value,
+                onFilterChange = { selectedFilter.value = it },
                 onOpenReminder = onOpenReminder,
             )
         }
@@ -275,8 +273,7 @@ private fun HomeDashboard(
 @Composable
 private fun RemindersFeed(
     modifier: Modifier,
-    todayTasks: List<Reminder>,
-    upcomingTasks: List<Reminder>,
+    incompleteTasks: List<Reminder>,
     completedTasks: List<Reminder>,
     onOpenReminder: (String) -> Unit,
     onChecked: (Reminder, Boolean) -> Unit,
@@ -286,8 +283,7 @@ private fun RemindersFeed(
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        section("TODAY", todayTasks, onOpenReminder, onChecked)
-        section("UPCOMING", upcomingTasks, onOpenReminder, onChecked)
+        section("NOT COMPLETED", incompleteTasks, onOpenReminder, onChecked)
         section("COMPLETED", completedTasks, onOpenReminder, onChecked)
     }
 }
@@ -339,24 +335,52 @@ private fun androidx.compose.foundation.lazy.LazyListScope.section(
 private fun NotesGallery(
     modifier: Modifier,
     notes: List<Reminder>,
+    selectedFilter: ItemFilter,
+    onFilterChange: (ItemFilter) -> Unit,
     onOpenReminder: (String) -> Unit,
 ) {
-    if (notes.isEmpty()) {
-        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No notes yet")
-        }
-        return
-    }
-    LazyVerticalGrid(
+    LazyColumn(
         modifier = modifier.fillMaxSize(),
-        columns = GridCells.Adaptive(170.dp),
         contentPadding = PaddingValues(20.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        gridItems(notes, key = { it.id }) { note ->
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = selectedFilter == ItemFilter.ALL,
+                    onClick = { onFilterChange(ItemFilter.ALL) },
+                    label = { Text("All") },
+                )
+                FilterChip(
+                    selected = selectedFilter == ItemFilter.TASKS,
+                    onClick = { onFilterChange(ItemFilter.TASKS) },
+                    label = { Text("Tasks") },
+                )
+                FilterChip(
+                    selected = selectedFilter == ItemFilter.NOTES,
+                    onClick = { onFilterChange(ItemFilter.NOTES) },
+                    label = { Text("Notes") },
+                )
+                FilterChip(
+                    selected = selectedFilter == ItemFilter.COMPLETED,
+                    onClick = { onFilterChange(ItemFilter.COMPLETED) },
+                    label = { Text("Completed") },
+                )
+            }
+        }
+        if (notes.isEmpty()) {
+            item {
+                Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                    Text("No notes yet")
+                }
+            }
+            return@LazyColumn
+        }
+        items(notes, key = { it.id }) { note ->
             ElevatedCard(
-                modifier = Modifier.clickable { onOpenReminder(note.id) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenReminder(note.id) },
                 colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -378,13 +402,6 @@ private fun NotesGallery(
             }
         }
     }
-}
-
-private fun isToday(epochMillis: Long): Boolean {
-    val zone = ZoneId.systemDefault()
-    val d = Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate()
-    val now = Instant.now().atZone(zone).toLocalDate()
-    return d == now
 }
 
 private fun formatDateTime(epochMillis: Long): String =

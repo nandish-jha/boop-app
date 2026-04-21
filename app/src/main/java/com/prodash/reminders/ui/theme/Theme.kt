@@ -6,20 +6,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val ObsidianDark = darkColorScheme(
-    primary = Color(0xFFC0C1FF),
-    onPrimary = Color(0xFF1000A9),
-    primaryContainer = Color(0xFF8083FF),
-    onPrimaryContainer = Color(0xFF0D0096),
-    tertiary = Color(0xFFFFB783),
-    surface = Color(0xFF111317),
-    surfaceContainerLowest = Color(0xFF0C0E12),
-    surfaceContainerLow = Color(0xFF1A1C20),
-    surfaceContainer = Color(0xFF1E2024),
-    surfaceContainerHigh = Color(0xFF282A2E),
-    onSurface = Color(0xFFE2E2E8),
-    onSurfaceVariant = Color(0xFFC7C4D7),
-    outline = Color(0xFF908FA0),
-    outlineVariant = Color(0xFF464554),
+    primary = Color(0xFFE6E6E6),
+    onPrimary = Color(0xFF050505),
+    primaryContainer = Color(0xFF2A2A2A),
+    onPrimaryContainer = Color(0xFFEAEAEA),
+    tertiary = Color(0xFFBDBDBD),
+    surface = Color(0xFF000000),
+    surfaceContainerLowest = Color(0xFF000000),
+    surfaceContainerLow = Color(0xFF0A0A0A),
+    surfaceContainer = Color(0xFF101010),
+    surfaceContainerHigh = Color(0xFF171717),
+    onSurface = Color(0xFFF2F2F2),
+    onSurfaceVariant = Color(0xFFAFAFAF),
+    outline = Color(0xFF626262),
+    outlineVariant = Color(0xFF2A2A2A),
 )
 
 @Composable
