@@ -1,6 +1,8 @@
 package com.prodash.reminders
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.ComponentActivity
@@ -25,6 +27,7 @@ import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
 import com.prodash.reminders.ui.editor.EditorScreen
 import com.prodash.reminders.ui.home.HomeScreen
+import com.prodash.reminders.ui.account.AccountScreen
 import com.prodash.reminders.ui.signin.SignInScreen
 import com.prodash.reminders.ui.signin.SignInViewModel
 import com.prodash.reminders.ui.theme.AppTheme
@@ -124,7 +127,18 @@ private fun RootNav(
             HomeScreen(
                 onAddReminder = { navController.navigate("editor/new") },
                 onOpenReminder = { id -> navController.navigate("editor/$id") },
-                onSignedOut = {
+                onOpenAccount = { navController.navigate("account") },
+            )
+        }
+        composable("account") {
+            AccountScreen(
+                onBack = { navController.popBackStack() },
+                onSyncGoogleCalendar = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://calendar.google.com"))
+                    navController.context.startActivity(intent)
+                },
+                onSignOut = {
+                    FirebaseAuth.getInstance().signOut()
                     navController.navigate("signin") {
                         popUpTo(0) { inclusive = true }
                         launchSingleTop = true

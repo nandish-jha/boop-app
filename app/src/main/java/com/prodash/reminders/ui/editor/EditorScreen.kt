@@ -197,9 +197,9 @@ fun EditorScreen(
                 actions = {
                     TextButton(
                         onClick = { viewModel.save(reminderId) { onBack() } },
-                        enabled = viewModel.title.isNotBlank(),
+                        enabled = viewModel.title.isNotBlank() && !viewModel.isSaving,
                     ) {
-                        Text(stringResource(R.string.save))
+                        Text(if (viewModel.isSaving) "Saving..." else stringResource(R.string.save))
                     }
                 },
             )

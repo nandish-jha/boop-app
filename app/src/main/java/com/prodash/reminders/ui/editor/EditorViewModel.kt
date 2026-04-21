@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 
 class EditorViewModel(application: Application) : AndroidViewModel(application) {
     private val repo = ReminderRepository()
+    private var hasSaved = false
 
     var title by mutableStateOf("")
         private set
@@ -32,6 +33,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private var createdEpochMillis: Long = System.currentTimeMillis()
     var loaded by mutableStateOf(false)
+        private set
+    var isSaving by mutableStateOf(false)
         private set
 
     fun updateTitle(value: String) {
@@ -61,6 +64,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             loaded = false
             if (reminderId.isNullOrBlank()) {
+                hasSaved = false
                 title = ""
                 body = ""
                 imageUri = null
@@ -73,6 +77,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
             val existing = repo.fetchOne(reminderId)
             if (existing != null) {
+                hasSaved = false
                 title = existing.title
                 body = existing.body
                 imageUri = existing.imageUri
@@ -85,41 +90,48 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun save(existingId: String?, onSaved: () -> Unit) {
+        if (isSaving || hasSaved) return
         viewModelScope.launch {
             val trimmed = title.trim()
             if (trimmed.isEmpty()) return@launch
+            isSaving = true
 
-            val id = repo.upsert(
-                Reminder(
-                    id = existingId.orEmpty(),
-                    type = type,
-                    title = trimmed,
-                    body = body.trim(),
-                    imageUri = imageUri,
-                    dueEpochMillis = dueEpochMillis,
-                    completed = false,
-                    createdEpochMillis = createdEpochMillis,
-                ),
-            )
-
-            if (type == ReminderType.TASK) {
-                ReminderScheduler.schedule(
-                    getApplication(),
+            try {
+                val id = repo.upsert(
                     Reminder(
-                        id = id,
+                        id = existingId.orEmpty(),
                         type = type,
                         title = trimmed,
                         body = body.trim(),
-                        imageUri = null,
+                        imageUri = imageUri,
                         dueEpochMillis = dueEpochMillis,
                         completed = false,
                         createdEpochMillis = createdEpochMillis,
                     ),
                 )
-            } else {
-                ReminderScheduler.cancel(getApplication(), id)
+
+                if (type == ReminderType.TASK) {
+                    ReminderScheduler.schedule(
+                        getApplication(),
+                        Reminder(
+                            id = id,
+                            type = type,
+                            title = trimmed,
+                            body = body.trim(),
+                            imageUri = null,
+                            dueEpochMillis = dueEpochMillis,
+                            completed = false,
+                            createdEpochMillis = createdEpochMillis,
+                        ),
+                    )
+                } else {
+                    ReminderScheduler.cancel(getApplication(), id)
+                }
+                hasSaved = true
+                onSaved()
+            } finally {
+                isSaving = false
             }
-            onSaved()
         }
     }
 }
