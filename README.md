@@ -4,8 +4,8 @@ Native **Android** app (not a PWA). The five main tabs (**Home · Hub · Goals �
 
 ## Download the APK
 
-- **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk) (same binary as [releases/prodash-v3.4.4.apk](releases/prodash-v3.4.4.apk))
-- **GitHub release:** [v3.4.4](https://github.com/nandish-jha/prodash-android-app/releases/tag/v3.4.4) (APK attached; on-device **crash report** + Menu → **Diagnostics**)
+- **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk) (same binary as [releases/prodash-v3.4.5.apk](releases/prodash-v3.4.5.apk))
+- **GitHub release:** [v3.4.5](https://github.com/nandish-jha/prodash-android-app/releases/tag/v3.4.5) (APK attached; startup fixes + **Diagnostics** crash text)
 - **v3.4.x:** **Google Drive** backup/restore (app data folder) from the menu; **auto-upload soon after each save** when signed in (Wi‑Fi or mobile data); if that fails (e.g. offline), **upload when you leave the app** is retried. **Uncaught crashes** write a text report on the device; the next launch can prompt, and **Menu → Diagnostics (crash report)** opens it anytime. Gson `SharedPreferences`, **daily reminder**, **settings** (Obsidian appearance, haptics, reminder time).
 
 Older APKs remain under [`releases/`](releases/) for history.
@@ -30,7 +30,7 @@ Older APKs remain under [`releases/`](releases/) for history.
 
 Primary copy of state stays **on device**. Use **Menu → Google Drive…** to **Back up now** (upload JSON) or **Restore from Drive** (replace local state). After you **sign in with Google**, each time you **save a change** the app **uploads to Drive a moment later** (so rapid taps become one upload), over **Wi‑Fi or mobile data**. If the upload could not finish (no network, etc.), it **tries again when you leave the app** with anything still pending.
 
-If the app **stops** (crashes), install **v3.4.4+** and use **Menu → Diagnostics (crash report)** after it happens again, or open the app once after a crash to use the **Share / Copy** prompt. That report is for **Java/Kotlin** crashes; rare **native** WebView crashes may not produce a file.
+If the app **stops** (crashes), install **v3.4.5+** and use **Menu → Diagnostics (crash report)** after it happens again, or open the app once after a crash to use the **Share / Copy** prompt. That report is for **Java/Kotlin** crashes; rare **native** WebView crashes may not produce a file.
 
 The file lives in Drive’s **app data** scope for this app; you must use the same Google account and the same installed app (package + signing) to read it.
 

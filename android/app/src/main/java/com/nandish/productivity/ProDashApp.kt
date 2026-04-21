@@ -1,7 +1,7 @@
 package com.nandish.productivity
 
-import android.app.Application
 import android.content.Context
+import androidx.multidex.MultiDexApplication
 import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -13,7 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-class ProDashApp : Application() {
+class ProDashApp : MultiDexApplication() {
 
     override fun attachBaseContext(base: Context) {
         CrashReporter.installOnce(base)

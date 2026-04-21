@@ -4,11 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.os.Build
-import android.view.ViewGroup
-import android.widget.ScrollView
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -26,6 +22,7 @@ object CrashReporter {
     private const val FILE_NAME = "prodash_last_crash.txt"
     private const val PREFS = "prodash_crash_prefs"
     private const val KEY_PENDING_AUTO_PROMPT = "pending_auto_prompt"
+    private const val MESSAGE_PREVIEW_CHARS = 3500
     private val installed = AtomicBoolean(false)
 
     fun installOnce(context: Context) {
@@ -43,7 +40,7 @@ object CrashReporter {
         }
     }
 
-    private fun prefs(ctx: Context): SharedPreferences =
+    private fun prefs(ctx: Context): android.content.SharedPreferences =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private fun writeCrash(app: Context, thread: Thread, throwable: Throwable) {
@@ -114,31 +111,14 @@ object CrashReporter {
     }
 
     private fun showReportDialog(activity: AppCompatActivity, text: String) {
-        val maxPx = (activity.resources.displayMetrics.density * 280).toInt().coerceAtLeast(200)
-        val preview = ScrollView(activity).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                maxPx
-            )
-            val tv = TextView(activity).apply {
-                textSize = 11f
-                setTextIsSelectable(true)
-                this.text = text
-                val pad = (resources.displayMetrics.density * 12).toInt()
-                setPadding(pad, pad, pad, pad)
-            }
-            addView(
-                tv,
-                ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-            )
+        val preview = if (text.length <= MESSAGE_PREVIEW_CHARS) {
+            text
+        } else {
+            text.take(MESSAGE_PREVIEW_CHARS) + "\n\n…truncated in this preview. Share or Copy still sends the full report."
         }
         MaterialAlertDialogBuilder(activity)
             .setTitle("Crash report")
-            .setMessage("Share or copy this text. It helps find the exact line that failed.")
-            .setView(preview)
+            .setMessage(preview)
             .setPositiveButton("Share") { _, _ ->
                 shareText(activity, text)
             }

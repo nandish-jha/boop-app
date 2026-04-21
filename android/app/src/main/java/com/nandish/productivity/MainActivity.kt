@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +18,8 @@ import com.nandish.productivity.databinding.ActivityMainBinding
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+
+    private var crashPromptPosted: Boolean = false
 
     private val requestNotifPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -52,6 +55,20 @@ class MainActivity : AppCompatActivity() {
         navController.addOnDestinationChangedListener { _, destination, _ ->
             binding.fabSettings.visibility =
                 if (destination.id == R.id.settingsFragment) View.GONE else View.VISIBLE
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (crashPromptPosted || isFinishing) return
+        crashPromptPosted = true
+        window.decorView.post {
+            if (isFinishing || isDestroyed) return@post
+            try {
+                CrashReporter.promptAutoIfPending(this@MainActivity)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Crash report prompt failed", e)
+            }
         }
     }
 
