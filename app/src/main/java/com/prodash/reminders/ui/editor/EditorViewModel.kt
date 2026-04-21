@@ -32,6 +32,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         private set
 
     private var createdEpochMillis: Long = System.currentTimeMillis()
+    private var completed: Boolean = false
     var loaded by mutableStateOf(false)
         private set
     var isSaving by mutableStateOf(false)
@@ -71,6 +72,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 type = ReminderType.TASK
                 dueEpochMillis = System.currentTimeMillis() + 3_600_000L
                 createdEpochMillis = System.currentTimeMillis()
+                completed = false
                 loaded = true
                 return@launch
             }
@@ -84,6 +86,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 type = existing.type
                 dueEpochMillis = existing.dueEpochMillis
                 createdEpochMillis = existing.createdEpochMillis
+                completed = existing.completed
             }
             loaded = true
         }
@@ -105,12 +108,12 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                         body = body.trim(),
                         imageUri = imageUri,
                         dueEpochMillis = dueEpochMillis,
-                        completed = false,
+                        completed = completed,
                         createdEpochMillis = createdEpochMillis,
                     ),
                 )
 
-                if (type == ReminderType.TASK) {
+                if (type == ReminderType.TASK && !completed) {
                     ReminderScheduler.schedule(
                         getApplication(),
                         Reminder(
@@ -120,7 +123,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                             body = body.trim(),
                             imageUri = null,
                             dueEpochMillis = dueEpochMillis,
-                            completed = false,
+                            completed = completed,
                             createdEpochMillis = createdEpochMillis,
                         ),
                     )

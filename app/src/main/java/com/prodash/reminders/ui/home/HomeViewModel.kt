@@ -72,4 +72,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             repo.deleteCompletedTaskItems(completedTaskIds)
         }
     }
+
+    fun deleteReminder(reminder: Reminder) {
+        viewModelScope.launch {
+            ReminderScheduler.cancel(getApplication(), reminder.id)
+            ReminderNotificationManager.cancel(getApplication(), reminder.id)
+            repo.delete(reminder.id)
+        }
+    }
 }

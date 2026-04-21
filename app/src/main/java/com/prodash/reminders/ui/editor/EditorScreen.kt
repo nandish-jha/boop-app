@@ -12,8 +12,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FormatBold
+import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TimePickerDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -65,7 +71,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun EditorScreen(
     reminderId: String?,
-    initialType: ReminderType = ReminderType.TASK,
+    initialType: String? = null,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: EditorViewModel = viewModel(),
@@ -73,9 +79,12 @@ fun EditorScreen(
     LaunchedEffect(reminderId) {
         viewModel.load(reminderId)
     }
-    LaunchedEffect(reminderId, initialType) {
-        if (reminderId == null) {
-            viewModel.updateType(initialType)
+    LaunchedEffect(reminderId, initialType, viewModel.loaded) {
+        if (reminderId == null && viewModel.loaded) {
+            when (initialType?.lowercase()) {
+                "note" -> viewModel.updateType(ReminderType.NOTE)
+                "task" -> viewModel.updateType(ReminderType.TASK)
+            }
         }
     }
 
@@ -196,7 +205,7 @@ fun EditorScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Icon(Icons.Default.Close, contentDescription = "Close")
                     }
                 },
                 actions = {
@@ -273,6 +282,41 @@ fun EditorScreen(
                                 unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                             ),
                         )
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.extraLarge,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                IconButton(onClick = {}, colors = IconButtonDefaults.iconButtonColors()) {
+                                    Icon(Icons.Default.FormatBold, contentDescription = "Bold")
+                                }
+                                IconButton(onClick = {}, colors = IconButtonDefaults.iconButtonColors()) {
+                                    Icon(Icons.Default.FormatItalic, contentDescription = "Italic")
+                                }
+                                IconButton(onClick = {}, colors = IconButtonDefaults.iconButtonColors()) {
+                                    Icon(Icons.AutoMirrored.Filled.FormatListBulleted, contentDescription = "List")
+                                }
+                                IconButton(onClick = { imagePicker.launch("image/*") }, colors = IconButtonDefaults.iconButtonColors()) {
+                                    Icon(Icons.Default.Image, contentDescription = "Image")
+                                }
+                                IconButton(onClick = {}, colors = IconButtonDefaults.iconButtonColors()) {
+                                    Icon(Icons.Default.Link, contentDescription = "Link")
+                                }
+                                IconButton(
+                                    onClick = {},
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    ),
+                                ) {
+                                    Icon(Icons.Default.Mic, contentDescription = "Voice")
+                                }
+                            }
+                        }
                     }
                 }
             }
