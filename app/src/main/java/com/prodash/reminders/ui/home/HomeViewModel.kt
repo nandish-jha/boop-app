@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.prodash.reminders.data.Reminder
 import com.prodash.reminders.data.ReminderRepository
+import com.prodash.reminders.data.ReminderType
 import com.prodash.reminders.notification.ReminderNotificationManager
 import com.prodash.reminders.schedule.ReminderScheduler
 import kotlinx.coroutines.flow.SharingStarted
@@ -51,12 +52,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             repo.setCompleted(reminder.id, completed)
             if (completed) {
                 ReminderNotificationManager.cancel(getApplication(), reminder.id)
-            } else {
+            } else if (reminder.type == ReminderType.TASK) {
                 ReminderScheduler.schedule(
                     getApplication(),
                     reminder.copy(completed = false),
                 )
             }
+        }
+    }
+
+    fun deleteCompletedTasks() {
+        viewModelScope.launch {
+            val completedTaskIds = reminders.value
+                .filter { it.type == ReminderType.TASK && it.completed }
+                .map { it.id }
+            completedTaskIds.forEach { id ->
+                ReminderNotificationManager.cancel(getApplication(), id)
+            }
+            repo.deleteCompletedTaskItems(completedTaskIds)
         }
     }
 }

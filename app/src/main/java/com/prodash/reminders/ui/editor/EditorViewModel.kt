@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.prodash.reminders.data.Reminder
 import com.prodash.reminders.data.ReminderRepository
+import com.prodash.reminders.data.ReminderType
 import com.prodash.reminders.schedule.ReminderScheduler
 import kotlinx.coroutines.launch
 
@@ -15,6 +16,15 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     private val repo = ReminderRepository()
 
     var title by mutableStateOf("")
+        private set
+
+    var body by mutableStateOf("")
+        private set
+
+    var imageUri by mutableStateOf<String?>(null)
+        private set
+
+    var type by mutableStateOf(ReminderType.TASK)
         private set
 
     var dueEpochMillis by mutableStateOf(System.currentTimeMillis() + 3_600_000L)
@@ -28,6 +38,21 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         title = value
     }
 
+    fun updateBody(value: String) {
+        body = value
+    }
+
+    fun updateType(value: ReminderType) {
+        type = value
+        if (value == ReminderType.TASK) {
+            imageUri = null
+        }
+    }
+
+    fun updateImageUri(value: String?) {
+        imageUri = value
+    }
+
     fun updateDue(value: Long) {
         dueEpochMillis = value
     }
@@ -37,6 +62,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             loaded = false
             if (reminderId.isNullOrBlank()) {
                 title = ""
+                body = ""
+                imageUri = null
+                type = ReminderType.TASK
                 dueEpochMillis = System.currentTimeMillis() + 3_600_000L
                 createdEpochMillis = System.currentTimeMillis()
                 loaded = true
@@ -46,6 +74,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             val existing = repo.fetchOne(reminderId)
             if (existing != null) {
                 title = existing.title
+                body = existing.body
+                imageUri = existing.imageUri
+                type = existing.type
                 dueEpochMillis = existing.dueEpochMillis
                 createdEpochMillis = existing.createdEpochMillis
             }
@@ -61,23 +92,33 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             val id = repo.upsert(
                 Reminder(
                     id = existingId.orEmpty(),
+                    type = type,
                     title = trimmed,
+                    body = body.trim(),
+                    imageUri = imageUri,
                     dueEpochMillis = dueEpochMillis,
                     completed = false,
                     createdEpochMillis = createdEpochMillis,
                 ),
             )
 
-            ReminderScheduler.schedule(
-                getApplication(),
-                Reminder(
-                    id = id,
-                    title = trimmed,
-                    dueEpochMillis = dueEpochMillis,
-                    completed = false,
-                    createdEpochMillis = createdEpochMillis,
-                ),
-            )
+            if (type == ReminderType.TASK) {
+                ReminderScheduler.schedule(
+                    getApplication(),
+                    Reminder(
+                        id = id,
+                        type = type,
+                        title = trimmed,
+                        body = body.trim(),
+                        imageUri = null,
+                        dueEpochMillis = dueEpochMillis,
+                        completed = false,
+                        createdEpochMillis = createdEpochMillis,
+                    ),
+                )
+            } else {
+                ReminderScheduler.cancel(getApplication(), id)
+            }
             onSaved()
         }
     }

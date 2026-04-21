@@ -9,8 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -20,9 +23,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,11 +44,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.prodash.reminders.R
+import com.prodash.reminders.data.ReminderType
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -74,6 +83,11 @@ fun EditorScreen(
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    val imagePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent(),
+    ) { uri ->
+        viewModel.updateImageUri(uri?.toString())
+    }
 
     val zone = remember { ZoneId.systemDefault() }
     val dateTimeLabel = remember(viewModel.dueEpochMillis) {
@@ -172,7 +186,7 @@ fun EditorScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
             )
@@ -182,8 +196,28 @@ fun EditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
         ) {
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = viewModel.type == ReminderType.NOTE,
+                    onClick = { viewModel.updateType(ReminderType.NOTE) },
+                    shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(
+                        index = 0,
+                        count = 2,
+                    ),
+                ) { Text("Note") }
+                SegmentedButton(
+                    selected = viewModel.type == ReminderType.TASK,
+                    onClick = { viewModel.updateType(ReminderType.TASK) },
+                    shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(
+                        index = 1,
+                        count = 2,
+                    ),
+                ) { Text("Task") }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
                 value = viewModel.title,
                 onValueChange = viewModel::updateTitle,
@@ -192,16 +226,47 @@ fun EditorScreen(
                 singleLine = true,
             )
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = stringResource(R.string.date_time_label), style = MaterialTheme.typography.labelLarge)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = dateTimeLabel, style = MaterialTheme.typography.bodyLarge)
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = { showDatePicker = true }) {
-                    Text(stringResource(R.string.pick_date))
+            if (viewModel.type == ReminderType.NOTE) {
+                OutlinedTextField(
+                    value = viewModel.body,
+                    onValueChange = viewModel::updateBody,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp),
+                    label = { Text("Note") },
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = { imagePicker.launch("image/*") },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Image, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (viewModel.imageUri == null) "Add image" else "Change image")
                 }
-                OutlinedButton(onClick = { showTimePicker = true }) {
-                    Text(stringResource(R.string.pick_time))
+                viewModel.imageUri?.let { uri ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+            } else {
+                Text(text = stringResource(R.string.date_time_label), style = MaterialTheme.typography.labelLarge)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = dateTimeLabel, style = MaterialTheme.typography.bodyLarge)
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(onClick = { showDatePicker = true }) {
+                        Text(stringResource(R.string.pick_date))
+                    }
+                    OutlinedButton(onClick = { showTimePicker = true }) {
+                        Text(stringResource(R.string.pick_time))
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
