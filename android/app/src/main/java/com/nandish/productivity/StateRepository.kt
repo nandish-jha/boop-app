@@ -52,6 +52,7 @@ object StateRepository {
             block(state)
             persistLocked()
         }
+        DriveAutoBackupState.markDirty()
     }
 
     fun exportJson(): String = lock.read { gson.toJson(state) }

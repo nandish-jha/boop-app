@@ -316,6 +316,7 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
                         GoogleDriveSync.uploadStateJson(requireContext(), account, StateRepository.exportJson())
                     }
                     Toast.makeText(requireContext(), "Backed up to Google Drive", Toast.LENGTH_SHORT).show()
+                    DriveAutoBackupState.clearDirty()
                 } catch (e: UserRecoverableAuthIOException) {
                     requireActivity().startActivity(e.intent)
                 } catch (e: Exception) {
@@ -350,6 +351,7 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
                                 ReminderScheduler.schedule(requireContext().applicationContext)
                                 refreshWeb()
                                 Toast.makeText(requireContext(), "Restored from Drive", Toast.LENGTH_SHORT).show()
+                                DriveAutoBackupState.clearDirty()
                             } else {
                                 Toast.makeText(requireContext(), "Invalid backup on Drive", Toast.LENGTH_LONG).show()
                             }
@@ -391,7 +393,7 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
             .setTitle("About")
             .setMessage(
                 "Silent Order (ProDash)\nVersion $vn\n\n" +
-                    "Data stays on this device. Use Menu → Google Drive to back up or restore your JSON to your Google account (app data folder)."
+                    "Data stays on this device. Use Menu → Google Drive to back up or restore; signed-in accounts also sync when you leave the app and about once a day when online."
             )
             .setPositiveButton(android.R.string.ok, null)
             .show()

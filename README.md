@@ -4,9 +4,9 @@ Native **Android** app (not a PWA). The five main tabs (**Home · Hub · Goals �
 
 ## Download the APK
 
-- **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk) (same binary as [releases/prodash-v3.3.0.apk](releases/prodash-v3.3.0.apk))
-- **GitHub release:** [v3.3.0](https://github.com/nandish-jha/prodash-android-app/releases/tag/v3.3.0) (APK attached)
-- **v3.4.x:** Adds **Google Drive** backup/restore (app data folder) via the in-app menu; local file export/import removed. Still includes Gson `SharedPreferences`, **daily reminder**, and **settings** (Obsidian appearance, haptics, reminder time).
+- **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk) (same binary as [releases/prodash-v3.4.1.apk](releases/prodash-v3.4.1.apk))
+- **GitHub release:** [v3.4.1](https://github.com/nandish-jha/prodash-android-app/releases/tag/v3.4.1) (APK attached)
+- **v3.4.x:** **Google Drive** backup/restore (app data folder) from the menu; **auto-upload when you leave the app** after local edits (if signed in); **daily WorkManager** upload when online and signed in. Gson `SharedPreferences`, **daily reminder**, **settings** (Obsidian appearance, haptics, reminder time).
 
 Older APKs remain under [`releases/`](releases/) for history.
 
@@ -15,6 +15,7 @@ Older APKs remain under [`releases/`](releases/) for history.
 - **Kotlin**, **Material 3**, **Navigation**, **View Binding**, **WebView** + **JavaScript** hydration (`android/app/src/main/assets/vendor/`)
 - **Gson** persistence in **SharedPreferences** (`prodash_state`, key `app_state_json`)
 - **Google Sign-In** + **Drive API** (`drive.appdata`): single JSON file `prodash_cloud_state.json` in the hidden app-data folder (not shown in the user’s normal Drive file list)
+- **WorkManager** + **ProcessLifecycleOwner**: periodic (24h) and on-background flush when data changed and a Google account is linked
 - **ItemEditors** (Material dialogs) for CRUD on tasks, notes, goals, habits, supplements, accounts, transactions, and daily reminder time
 
 ## Run / build
@@ -27,7 +28,9 @@ Older APKs remain under [`releases/`](releases/) for history.
 
 ## Data & Google Drive
 
-Primary copy of state stays **on device**. Use **Menu → Google Drive…** to **Back up now** (upload JSON) or **Restore from Drive** (replace local state). The file lives in Drive’s **app data** scope for this app; you must use the same Google account and the same installed app (package + signing) to read it.
+Primary copy of state stays **on device**. Use **Menu → Google Drive…** to **Back up now** (upload JSON) or **Restore from Drive** (replace local state). After you **sign in with Google**, local edits are **uploaded when the app goes to the background** (if anything changed since the last successful upload), and a **background job** retries about **once per day** on a network connection.
+
+The file lives in Drive’s **app data** scope for this app; you must use the same Google account and the same installed app (package + signing) to read it.
 
 ### Google Cloud Console (for your own builds)
 
