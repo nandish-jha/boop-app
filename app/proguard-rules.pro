@@ -1,0 +1,4 @@
+-keepattributes Signature,*Annotation*,EnclosingMethod,InnerClasses
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
