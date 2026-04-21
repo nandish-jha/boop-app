@@ -5,6 +5,7 @@ Native **Android** app (not a PWA). The five main tabs (**Home · Hub · Goals �
 ## Download the APK
 
 - **Latest:** [releases/prodash-latest.apk](releases/prodash-latest.apk) (same binary as [releases/prodash-v3.3.0.apk](releases/prodash-v3.3.0.apk))
+- **GitHub release:** [v3.3.0](https://github.com/nandish-jha/prodash-android-app/releases/tag/v3.3.0) (APK attached)
 - **v3.3.x:** WebView UI + Gson `SharedPreferences` (`prodash_state` / `app_state_json`), **export/import JSON backup**, **daily reminder** (`AlarmManager` + notification channel), **settings** (Obsidian mode toggles deep vs calmer dark in the WebView, haptics, reminder time) persisted in app state.
 
 Older APKs remain under [`releases/`](releases/) for history.
