@@ -17,7 +17,6 @@ class ProDashApp : Application() {
         super.onCreate()
         NotificationChannels.ensure(this)
         StateRepository.init(this)
-        DrivePeriodicBackup.schedule(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) {
                 flushDriveIfNeeded()
@@ -37,7 +36,7 @@ class ProDashApp : Application() {
                 )
                 DriveAutoBackupState.clearDirty()
             } catch (_: Exception) {
-                // Keep dirty for next background exit or periodic worker.
+                // Keep dirty for next background exit or the next immediate upload attempt.
             }
         }
     }

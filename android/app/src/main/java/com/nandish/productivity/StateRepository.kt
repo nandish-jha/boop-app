@@ -19,6 +19,7 @@ object StateRepository {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        DriveImmediateUploader.init(appContext)
         lock.write {
             val sp = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val raw = sp.getString(KEY_JSON, null)
@@ -53,6 +54,7 @@ object StateRepository {
             persistLocked()
         }
         DriveAutoBackupState.markDirty()
+        DriveImmediateUploader.scheduleAfterChange()
     }
 
     fun exportJson(): String = lock.read { gson.toJson(state) }

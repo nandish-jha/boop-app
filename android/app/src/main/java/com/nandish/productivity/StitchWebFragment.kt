@@ -393,7 +393,7 @@ class StitchWebFragment : Fragment(), ProDashBridge.Host {
             .setTitle("About")
             .setMessage(
                 "Silent Order (ProDash)\nVersion $vn\n\n" +
-                    "Data stays on this device. Use Menu → Google Drive to back up or restore; signed-in accounts also sync when you leave the app and about once a day when online."
+                    "Data stays on this device. Use Menu → Google Drive to back up or restore; when signed in, changes upload to Drive shortly after you save (Wi‑Fi or data), with another try when you leave the app if needed."
             )
             .setPositiveButton(android.R.string.ok, null)
             .show()
