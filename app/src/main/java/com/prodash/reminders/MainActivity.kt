@@ -110,6 +110,12 @@ private fun RootNav(
     NavHost(navController = navController, startDestination = "signin") {
         composable("signin") {
             SignInScreen(
+                onSignedIn = {
+                    navController.navigate("home") {
+                        popUpTo("signin") { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
                 onLaunchGoogleSignIn = onLaunchGoogleSignIn,
                 viewModel = signInViewModel,
             )
