@@ -3919,6 +3919,7 @@ private fun TaskEditorSheet(
     }
     var showReminderPicker by remember(sheetKey) { mutableStateOf(false) }
     var hasExplicitSave by remember(sheetKey) { mutableStateOf(false) }
+    var skipAutoSaveOnDispose by remember(sheetKey) { mutableStateOf(false) }
     fun buildTaskForSaveOrNull(): BoopTask? {
         if (title.isBlank()) return null
         val rep = repeatEveryDays.coerceAtLeast(0)
@@ -3939,7 +3940,7 @@ private fun TaskEditorSheet(
     }
     DisposableEffect(sheetKey) {
         onDispose {
-            if (!hasExplicitSave) {
+            if (!hasExplicitSave && !skipAutoSaveOnDispose) {
                 buildTaskForSaveOrNull()?.let(onSave)
             }
         }
@@ -3954,7 +3955,12 @@ private fun TaskEditorSheet(
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onDelete != null) {
-                IconButton(onClick = onDelete) {
+                IconButton(
+                    onClick = {
+                        skipAutoSaveOnDispose = true
+                        onDelete()
+                    },
+                ) {
                     Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFF8A8A))
                 }
             }
@@ -4095,6 +4101,7 @@ private fun NoteEditorSheet(
     var recordingStartedAt by remember(session) { mutableLongStateOf(0L) }
     var recorder by remember(session) { mutableStateOf<MediaRecorder?>(null) }
     var hasExplicitSave by remember(session) { mutableStateOf(false) }
+    var skipAutoSaveOnDispose by remember(session) { mutableStateOf(false) }
     fun buildNoteForSaveOrNull(): BoopNote? {
         val noteId = initial.id ?: UUID.randomUUID().toString()
         val resolvedAttachment = serializeNoteAttachments(attachmentStored)
@@ -4154,7 +4161,7 @@ private fun NoteEditorSheet(
     }
     DisposableEffect(session) {
         onDispose {
-            if (!hasExplicitSave) {
+            if (!hasExplicitSave && !skipAutoSaveOnDispose) {
                 buildNoteForSaveOrNull()?.let(onSave)
             }
             try {
@@ -4214,7 +4221,12 @@ private fun NoteEditorSheet(
                 }
             }
             if (onDelete != null) {
-                IconButton(onClick = onDelete) {
+                IconButton(
+                    onClick = {
+                        skipAutoSaveOnDispose = true
+                        onDelete()
+                    },
+                ) {
                     Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFF8A8A))
                 }
             }
