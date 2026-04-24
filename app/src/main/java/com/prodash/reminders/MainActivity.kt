@@ -175,6 +175,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -1532,17 +1533,12 @@ private fun DashboardScreen(
                 ) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
                         Text(
-                            text = "Daily line",
-                            color = Color(0xFF8E8E90),
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
                             text = "\"${quoteOfLaunch.first}\"",
                             color = Color.White,
                             fontSize = 22.sp,
                             lineHeight = 30.sp,
                             fontWeight = FontWeight.SemiBold,
+                            fontStyle = FontStyle.Italic,
                         )
                         Spacer(Modifier.height(10.dp))
                         Text(
