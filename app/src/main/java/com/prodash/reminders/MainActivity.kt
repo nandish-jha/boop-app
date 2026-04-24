@@ -987,7 +987,7 @@ private fun BoopSpeedDialFab(
                         onClick = { onOpenExpense(); onExpandedChange(false) },
                         containerColor = Color.White,
                         contentColor = Color.Black,
-                    ) { Icon(Icons.Outlined.RemoveCircleOutline, contentDescription = "Add expense") }
+                    ) { Icon(Icons.Outlined.EditNote, contentDescription = "Add expense") }
                     SmallFloatingActionButton(
                         onClick = { onOpenTransfer(); onExpandedChange(false) },
                         containerColor = Color.White,
