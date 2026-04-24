@@ -5562,10 +5562,35 @@ private fun formatNoteCardTime(note: BoopNote): String {
     }
 }
 
+private fun linkedNotePreviewForTask(task: BoopTask): String {
+    val noteId = task.linkedNoteId ?: return ""
+    return try {
+        val notes = JSONArray(LocalStore.read("notes"))
+        for (i in 0 until notes.length()) {
+            val item = notes.getJSONObject(i)
+            if (item.optString("id") != noteId) continue
+            if (item.optBoolean("archived", false)) return ""
+            val bodyPlain = HtmlCompat.fromHtml(item.optString("body"), HtmlCompat.FROM_HTML_MODE_COMPACT)
+                .toString()
+                .replace('\n', ' ')
+                .trim()
+            val snippet = bodyPlain.ifBlank { item.optString("title").trim() }
+                .take(140)
+                .trim()
+            return if (snippet.isBlank()) "" else snippet
+        }
+        ""
+    } catch (_: Throwable) {
+        ""
+    }
+}
+
 object ReminderScheduler {
     fun schedule(context: Context, task: BoopTask) {
+        val notePreview = linkedNotePreviewForTask(task)
         val intent = Intent(context, TaskReminderReceiver::class.java).apply {
             putExtra("title", task.title)
+            if (notePreview.isNotBlank()) putExtra("subtitle", notePreview)
             putExtra("id", task.id.hashCode())
             putExtra("taskId", task.id)
             putExtra("eventId", -1L)
@@ -5805,6 +5830,7 @@ private object TaskNotificationActions {
                         reminderAt = nextAt,
                         done = false,
                         repeatEveryDays = repeatEveryDays,
+                        linkedNoteId = item.optString("linkedNoteId").ifBlank { null },
                         archived = archived,
                     )
                 } else if (!item.optBoolean("done", false)) {
