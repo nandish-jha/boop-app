@@ -3236,9 +3236,54 @@ private fun FinanceScreen(
     var entryType by rememberSaveable { mutableStateOf("expense") }
     var title by rememberSaveable { mutableStateOf("") }
     var amountText by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("") }
+    var subcategory by rememberSaveable { mutableStateOf("") }
     var note by rememberSaveable { mutableStateOf("") }
+    var dueAt by rememberSaveable { mutableLongStateOf(0L) }
+    var showDuePicker by rememberSaveable { mutableStateOf(false) }
     var selectedAccountId by rememberSaveable { mutableStateOf(accounts.firstOrNull()?.id.orEmpty()) }
     var selectedToAccountId by rememberSaveable { mutableStateOf(accounts.drop(1).firstOrNull()?.id.orEmpty()) }
+    val categorySuggestions = remember(entries, entryType) {
+        entries.filter { it.type == entryType }.map { it.category }.filter { it.isNotBlank() }.distinct().take(12)
+    }
+    val subcategorySuggestions = remember(entries, entryType, category) {
+        entries.filter { it.type == entryType && (category.isBlank() || it.category.equals(category, true)) }
+            .map { it.subcategory }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(12)
+    }
+    val monthStart = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+    val monthEnd = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+    }
+    val monthIncome = remember(entries, monthStart, monthEnd) {
+        entries.filter { it.createdAtMillis in monthStart..monthEnd && it.type == "income" }.sumOf { it.amount }
+    }
+    val monthExpense = remember(entries, monthStart, monthEnd) {
+        entries.filter { it.createdAtMillis in monthStart..monthEnd && it.type == "expense" }.sumOf { it.amount }
+    }
+    val upcomingDues = remember(entries) {
+        val now = System.currentTimeMillis()
+        entries
+            .filter { it.dueAtMillis != null && it.dueAtMillis > now }
+            .sortedBy { it.dueAtMillis }
+            .take(5)
+    }
     val balances = remember(accounts, entries) {
         accounts.associate { it.id to 0.0 }.toMutableMap().apply {
             entries.forEach { entry ->
@@ -3260,6 +3305,36 @@ private fun FinanceScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Finance", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("This month", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+                    Text("Income: CAD ${String.format(Locale.US, "%.2f", monthIncome)}", color = Color(0xFFB8F1C9), style = MaterialTheme.typography.bodySmall)
+                    Text("Expense: CAD ${String.format(Locale.US, "%.2f", monthExpense)}", color = Color(0xFFFFB9B9), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("Upcoming dues", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+                    Text("${upcomingDues.size} scheduled", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        upcomingDues.firstOrNull()?.let { "${it.title} · ${SimpleDateFormat("MMM d", Locale.US).format(it.dueAtMillis!!)}" } ?: "No upcoming dues",
+                        color = Color(0xFFBFBFBF),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
         BoopFilledTextField(
             value = accountName,
             onValueChange = { accountName = it },
@@ -3291,7 +3366,7 @@ private fun FinanceScreen(
                         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                             Text(account.name, color = Color.White, style = MaterialTheme.typography.labelLarge)
                             Text(
-                                "₹ ${String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)}",
+                                "CAD ${String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)}",
                                 color = Color(0xFFBFBFBF),
                                 style = MaterialTheme.typography.labelSmall,
                             )
@@ -3379,6 +3454,45 @@ private fun FinanceScreen(
             onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(10) },
             label = { Text("Amount") },
         )
+        BoopFilledTextField(value = category, onValueChange = { category = it }, label = { Text("Category") })
+        if (categorySuggestions.isNotEmpty()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                categorySuggestions.forEach { c ->
+                    Surface(shape = RoundedCornerShape(999.dp), color = Color(0xFF242426), modifier = Modifier.clickable { category = c }) {
+                        Text(c, color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                    }
+                }
+            }
+        }
+        BoopFilledTextField(value = subcategory, onValueChange = { subcategory = it }, label = { Text("Subcategory") })
+        if (subcategorySuggestions.isNotEmpty()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                subcategorySuggestions.forEach { sc ->
+                    Surface(shape = RoundedCornerShape(999.dp), color = Color(0xFF242426), modifier = Modifier.clickable { subcategory = sc }) {
+                        Text(sc, color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Due date (optional)", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+            TextButton(onClick = { showDuePicker = true }) {
+                Text(
+                    if (dueAt > 0L) SimpleDateFormat("MMM d, HH:mm", Locale.US).format(dueAt) else "Set due",
+                    color = Color.White,
+                )
+            }
+        }
         BoopFilledTextField(value = note, onValueChange = { note = it }, label = { Text("Note (optional)") })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(
@@ -3394,12 +3508,18 @@ private fun FinanceScreen(
                             toAccountId = selectedToAccountId.takeIf { entryType == "transfer" },
                             amount = amount,
                             title = title.trim(),
+                            category = category.trim(),
+                            subcategory = subcategory.trim(),
                             note = note.trim(),
+                            dueAtMillis = dueAt.takeIf { it > 0L },
                         ),
                     )
                     title = ""
                     amountText = ""
+                    category = ""
+                    subcategory = ""
                     note = ""
+                    dueAt = 0L
                 },
             ) { Text("Save entry", color = Color.White) }
         }
@@ -3425,7 +3545,17 @@ private fun FinanceScreen(
                             color = Color(0xFFBFBFBF),
                             style = MaterialTheme.typography.labelSmall,
                         )
-                        Text("₹ ${String.format(Locale.US, "%.2f", entry.amount)}", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                        if (entry.category.isNotBlank() || entry.subcategory.isNotBlank()) {
+                            Text(
+                                listOf(entry.category, entry.subcategory).filter { it.isNotBlank() }.joinToString(" / "),
+                                color = Color(0xFF9EC2FF),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                        Text("CAD ${String.format(Locale.US, "%.2f", entry.amount)}", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                        entry.dueAtMillis?.let {
+                            Text("Due ${SimpleDateFormat("MMM d, HH:mm", Locale.US).format(it)}", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall)
+                        }
                         if (entry.note.isNotBlank()) {
                             Text(entry.note, color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
@@ -3433,6 +3563,15 @@ private fun FinanceScreen(
                 }
             }
         }
+        ReminderPickerDialog(
+            visible = showDuePicker,
+            initialMillis = if (dueAt > 0L) dueAt else System.currentTimeMillis(),
+            onDismiss = { showDuePicker = false },
+            onConfirm = {
+                dueAt = it
+                showDuePicker = false
+            },
+        )
     }
 }
 
@@ -5067,7 +5206,10 @@ data class BoopLedgerEntry(
     val toAccountId: String? = null,
     val amount: Double,
     val title: String,
+    val category: String = "",
+    val subcategory: String = "",
     val note: String = "",
+    val dueAtMillis: Long? = null,
     val createdAtMillis: Long = System.currentTimeMillis(),
 )
 
@@ -5196,7 +5338,10 @@ private class BoopRepository(private val store: LocalStore) {
                 toAccountId = item.optString("toAccountId").ifBlank { null },
                 amount = item.optDouble("amount", 0.0),
                 title = item.optString("title"),
+                category = item.optString("category"),
+                subcategory = item.optString("subcategory"),
                 note = item.optString("note"),
+                dueAtMillis = item.optLong("dueAt", 0L).takeIf { it > 0L },
                 createdAtMillis = item.optLong("createdAt", System.currentTimeMillis()),
             )
         }.sortedByDescending { it.createdAtMillis }
@@ -5345,7 +5490,10 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("toAccountId", it.toAccountId ?: "")
                     .put("amount", it.amount)
                     .put("title", it.title)
+                    .put("category", it.category)
+                    .put("subcategory", it.subcategory)
                     .put("note", it.note)
+                    .put("dueAt", it.dueAtMillis ?: 0L)
                     .put("createdAt", it.createdAtMillis),
             )
         }
