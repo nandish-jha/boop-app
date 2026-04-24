@@ -862,14 +862,6 @@ private fun BoopBottomNavBar(
         Triple(3, "Habits", Icons.Outlined.Flag),
         Triple(4, "Accounts", Icons.Outlined.AttachMoney),
     )
-    val activeTabIndex = pagerScrollPosition.roundToInt().coerceIn(0, tabs.lastIndex)
-    val centeredTabs = remember(activeTabIndex) {
-        val count = tabs.size
-        listOf(-2, -1, 0, 1, 2).map { offset ->
-            val idx = (activeTabIndex + offset).mod(count)
-            tabs[idx]
-        }
-    }
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
@@ -877,47 +869,48 @@ private fun BoopBottomNavBar(
             .navigationBarsPadding()
             .padding(horizontal = 6.dp, vertical = 8.dp),
     ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            centeredTabs.forEach { (index, label, icon) ->
-                val selected = activeTabIndex == index
-                val interaction = remember(index) { MutableInteractionSource() }
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clickable(
-                            interactionSource = interaction,
-                            indication = null,
-                        ) { onSelectTab(index) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.graphicsLayer {
-                            alpha = if (selected) 1f else 0.4f
-                            scaleX = if (selected) 1.06f else 1f
-                            scaleY = if (selected) 1.06f else 1f
-                        },
+        val tabCount = tabs.size
+        val tabWidth = maxWidth / tabCount
+        val pillInset = 8.dp
+        val pillWidth = tabWidth - pillInset * 2
+        val coercedPage = pagerScrollPosition.coerceIn(0f, (tabCount - 1).toFloat())
+        val pillOffset = tabWidth * coercedPage + pillInset
+        val activeTabIndex = pagerScrollPosition.roundToInt().coerceIn(0, tabCount - 1)
+        Box(Modifier.fillMaxWidth().height(52.dp)) {
+            Surface(
+                modifier = Modifier
+                    .offset(x = pillOffset)
+                    .width(pillWidth)
+                    .fillMaxHeight(0.88f)
+                    .align(Alignment.CenterStart),
+                shape = RoundedCornerShape(16.dp),
+                color = Color.White,
+                shadowElevation = 2.dp,
+            ) {}
+            Row(
+                Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                tabs.forEach { (index, label, icon) ->
+                    val selected = activeTabIndex == index
+                    val interaction = remember(index) { MutableInteractionSource() }
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable(
+                                interactionSource = interaction,
+                                indication = null,
+                            ) { onSelectTab(index) },
+                        contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             icon,
                             contentDescription = label,
-                            tint = if (selected) Color.White else Color(0xFFBFBFBF),
-                            modifier = Modifier.size(22.dp),
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (selected) Color.White else Color(0xFFBFBFBF),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            tint = if (selected) Color.Black else Color(0xFF7E7E82),
+                            modifier = Modifier
+                                .size(22.dp)
+                                .graphicsLayer { alpha = if (selected) 1f else 0.5f },
                         )
                     }
                 }
