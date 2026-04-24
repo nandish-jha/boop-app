@@ -118,6 +118,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -1368,24 +1369,30 @@ private fun DashboardScreen(
                 }
                 val quoteOfLaunch = remember { quotes.random() }
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = Color(0xFF1B1B1F),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2E2E33)),
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF151517),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF26262B)),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
+                        Text(
+                            text = "Daily line",
+                            color = Color(0xFF8E8E90),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             text = "\"${quoteOfLaunch.first}\"",
-                            color = Color(0xFFE6E6E8),
-                            fontSize = 20.sp,
-                            lineHeight = 28.sp,
-                            fontWeight = FontWeight.Medium,
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            lineHeight = 30.sp,
+                            fontWeight = FontWeight.SemiBold,
                         )
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(10.dp))
                         Text(
                             text = "— ${quoteOfLaunch.second ?: "Unknown"}",
-                            color = Color(0xFFAAAAAF),
-                            style = MaterialTheme.typography.labelLarge,
+                            color = Color(0xFFBFBFBF),
+                            style = MaterialTheme.typography.titleSmall,
                         )
                     }
                 }
@@ -2246,6 +2253,17 @@ private fun TaskListScreen(
                                     }
                                 }
                             },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = Color(0xFFC9FFE0),
+                                uncheckedColor = Color(0xFF7D7D82),
+                                checkmarkColor = Color(0xFF111113),
+                            ),
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .graphicsLayer {
+                                    scaleX = 1.08f
+                                    scaleY = 1.08f
+                                },
                         )
                     }
                 }
@@ -3097,8 +3115,11 @@ private fun HabitsListScreen(
     onPersistHabit: (BoopHabit) -> Unit,
     onOpenHabit: (BoopHabit) -> Unit,
 ) {
-    val todayKey = todayHabitDayKey()
     val sortedHabits = remember(habits) { habits.sortedBy { it.title.lowercase(Locale.getDefault()) } }
+    val dayHabits = remember(sortedHabits) { sortedHabits.filter { normalizeHabitCategory(it.dayPeriodCategory) == "day" } }
+    val nightHabits = remember(sortedHabits) { sortedHabits.filter { normalizeHabitCategory(it.dayPeriodCategory) == "night" } }
+    var dayExpanded by rememberSaveable { mutableStateOf(true) }
+    var nightExpanded by rememberSaveable { mutableStateOf(true) }
     Column(
         Modifier
             .fillMaxSize()
@@ -3106,205 +3127,36 @@ private fun HabitsListScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Habits", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
-        LazyColumn(
+        Column(
             Modifier
                 .weight(1f)
-                .fillMaxWidth(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(sortedHabits, key = { it.id }) { habit ->
-                val doneCount = parseHabitDayKeys(habit.dayKeys).size
-                val todayAmount = parseHabitDayValues(habit.quantityDayValues)[todayKey] ?: 0
-                val progressFraction = if (habit.quantityMode) {
-                    (todayAmount.toFloat() / habit.quantityDailyTarget.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
-                } else {
-                    (habit.progress.toFloat() / habit.goal.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+            DashboardCompactSection(
+                title = "Day habits",
+                summary = if (dayHabits.isEmpty()) "No day habits" else "${dayHabits.size} habits",
+                expanded = dayExpanded,
+                onToggle = { dayExpanded = !dayExpanded },
+            ) {
+                dayHabits.forEach { habit ->
+                    HabitWeekStripCard(habit = habit, onPersist = onPersistHabit, onOpenHabit = onOpenHabit)
                 }
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenHabit(habit) },
-                ) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            "${habit.title} · ${habitCategoryLabel(habit.dayPeriodCategory)}",
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = Color(0xFF242426),
-                        ) {
-                            Row(
-                                Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Box(
-                                    Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(if (progressFraction >= 1f) Color(0xFF6BE28F) else Color(0xFF8E8E90)),
-                                )
-                                Text(
-                                    if (habit.quantityMode) {
-                                        val unit = habit.quantityUnit.ifBlank { "units" }
-                                        "Today ${todayAmount}/${habit.quantityDailyTarget} $unit"
-                                    } else {
-                                        "Progress ${habit.progress}/${habit.goal} · $doneCount checks"
-                                    },
-                                    color = Color(0xFFD0D0D0),
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            }
-                        }
-                        LinearProgressIndicator(
-                            progress = { progressFraction },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(999.dp)),
-                            color = Color.White,
-                            trackColor = Color(0xFF2A2A2E),
-                        )
-                        if (habit.quantityMode) {
-                            val dayValues = parseHabitDayValues(habit.quantityDayValues)
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                for (row in 0 until 2) {
-                                    Row(
-                                        Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        for (col in 0 until 7) {
-                                            val i = row * 7 + col
-                                            val offset = i - 13
-                                            val cal = Calendar.getInstance().also { it.add(Calendar.DAY_OF_MONTH, offset) }
-                                            val key = habitDayKeyFormat.format(cal.time)
-                                            val done = (dayValues[key] ?: 0) >= habit.quantityDailyTarget.coerceAtLeast(1)
-                                            val isToday = key == todayKey
-                                            Box(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .height(34.dp)
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(if (done) Color(0xFF1B5E20) else Color(0xFF222224))
-                                                    .then(
-                                                        if (isToday) Modifier.border(1.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier,
-                                                    ),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                Text(
-                                                    SimpleDateFormat("E", Locale.US).format(cal.time).take(1),
-                                                    color = Color(0xFFD0D0D0),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                val unit = habit.quantityUnit.ifBlank { "units" }
-                                val quickAdd = listOf(
-                                    1,
-                                    maxOf(5, habit.quantityDailyTarget / 4),
-                                    maxOf(10, habit.quantityDailyTarget / 2),
-                                ).distinct()
-                                quickAdd.forEach { delta ->
-                                    Surface(
-                                        shape = RoundedCornerShape(999.dp),
-                                        color = Color(0xFF242426),
-                                        modifier = Modifier.clickable {
-                                            val map = parseHabitDayValues(habit.quantityDayValues).toMutableMap()
-                                            map[todayKey] = todayAmount + delta
-                                            onPersistHabit(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
-                                        },
-                                    ) {
-                                        Text(
-                                            "+$delta $unit",
-                                            color = Color.White,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                        )
-                                    }
-                                    Spacer(Modifier.width(6.dp))
-                                }
-                                Surface(
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = Color(0xFF1F1F22),
-                                    modifier = Modifier.clickable {
-                                        val map = parseHabitDayValues(habit.quantityDayValues).toMutableMap()
-                                        map[todayKey] = 0
-                                        onPersistHabit(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
-                                    },
-                                ) {
-                                    Text(
-                                        "Reset",
-                                        color = Color(0xFFBFBFBF),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    )
-                                }
-                            }
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                for (row in 0 until 2) {
-                                    Row(
-                                        Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        for (col in 0 until 7) {
-                                            val i = row * 7 + col
-                                            val offset = i - 13
-                                            val cal = Calendar.getInstance().also { it.add(Calendar.DAY_OF_MONTH, offset) }
-                                            val key = habitDayKeyFormat.format(cal.time)
-                                            val done = key in parseHabitDayKeys(habit.dayKeys)
-                                            val isToday = key == todayKey
-                                            val interaction = remember(habit.id, row, col) { MutableInteractionSource() }
-                                            Box(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .height(34.dp)
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(if (done) Color(0xFF1B5E20) else Color(0xFF222224))
-                                                    .then(
-                                                        if (isToday) Modifier.border(1.dp, Color.White, RoundedCornerShape(10.dp)) else Modifier,
-                                                    )
-                                                    .clickable(
-                                                        enabled = isToday,
-                                                        interactionSource = interaction,
-                                                        indication = null,
-                                                    ) {
-                                                        val next = parseHabitDayKeys(habit.dayKeys).toMutableSet()
-                                                        if (todayKey in next) next.remove(todayKey) else next.add(todayKey)
-                                                        onPersistHabit(habit.copy(dayKeys = serializeHabitDayKeys(next)))
-                                                    },
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                Text(
-                                                    SimpleDateFormat("E", Locale.US).format(cal.time).take(1),
-                                                    color = Color(0xFFD0D0D0),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+            }
+            DashboardCompactSection(
+                title = "Night habits",
+                summary = if (nightHabits.isEmpty()) "No night habits" else "${nightHabits.size} habits",
+                expanded = nightExpanded,
+                onToggle = { nightExpanded = !nightExpanded },
+            ) {
+                nightHabits.forEach { habit ->
+                    HabitWeekStripCard(habit = habit, onPersist = onPersistHabit, onOpenHabit = onOpenHabit)
                 }
+            }
+            Spacer(Modifier.height(92.dp))
+            if (sortedHabits.isEmpty()) {
+                Text("No habits yet.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -4354,14 +4206,6 @@ private fun TaskEditorSheet(
             showReminderPicker = false
         },
     )
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("Mark complete", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyLarge)
-        Switch(checked = done, onCheckedChange = { done = it })
-    }
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
         hasExplicitSave = true
@@ -5300,7 +5144,7 @@ object EventReminderScheduler {
             if (at <= System.currentTimeMillis()) return@forEachIndexed
             val requestCode = ((eventId % Int.MAX_VALUE) + (idx + 1) * 13_337).toInt()
             val intent = Intent(context, TaskReminderReceiver::class.java).apply {
-                putExtra("title", "Event: $title")
+                putExtra("title", title)
                 putExtra("id", requestCode)
                 putExtra("taskId", "")
                 putExtra("eventId", eventId)
@@ -5333,8 +5177,8 @@ object EventReminderScheduler {
             val requestCode = (((event.id and 0x7FFFFFFF) * 37L) + (event.beginMillis / 60_000L)).toInt()
             val source = if (event.calendarDisplayName.isNotBlank()) event.calendarDisplayName else "Calendar"
             val intent = Intent(context, TaskReminderReceiver::class.java).apply {
-                putExtra("title", "Event: ${event.title}")
-                putExtra("subtitle", source)
+                putExtra("title", event.title)
+                putExtra("subtitle", "From $source")
                 putExtra("id", requestCode)
                 putExtra("taskId", "")
                 putExtra("eventId", event.id)
@@ -5369,7 +5213,7 @@ class TaskReminderReceiver : BroadcastReceiver() {
             androidx.core.app.NotificationManagerCompat.from(context).cancel(id)
             return
         }
-        val title = intent.getStringExtra("title") ?: "Task due"
+        val title = intent.getStringExtra("title") ?: "Reminder"
         val id = intent.getIntExtra("id", 1)
         val taskId = intent.getStringExtra("taskId").orEmpty()
         val subtitle = intent.getStringExtra("subtitle").orEmpty()
@@ -5406,8 +5250,8 @@ object ReminderNotifier {
         )
         val builder = androidx.core.app.NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification_minimal)
-            .setContentTitle("Boop reminder")
-            .setContentText(title)
+            .setContentTitle(title.ifBlank { "Reminder" })
+            .setContentText(subtitle.ifBlank { "Tap to open" })
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
         val launchIntent = Intent(context, MainActivity::class.java).apply {
@@ -5422,9 +5266,11 @@ object ReminderNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         builder.setContentIntent(launchPending)
-        if (subtitle.isNotBlank()) {
-            builder.setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText("$title\n$subtitle"))
-        }
+        builder.setStyle(
+            androidx.core.app.NotificationCompat.BigTextStyle().bigText(
+                subtitle.ifBlank { title },
+            ),
+        )
         if (taskId.isNotBlank()) {
             builder.addAction(0, "Mark as completed", completePending)
         }
