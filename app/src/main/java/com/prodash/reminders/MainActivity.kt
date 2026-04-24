@@ -3241,6 +3241,9 @@ private fun FinanceScreen(
     var note by rememberSaveable { mutableStateOf("") }
     var dueAt by rememberSaveable { mutableLongStateOf(0L) }
     var showDuePicker by rememberSaveable { mutableStateOf(false) }
+    var balanceAdjustAccountId by rememberSaveable { mutableStateOf("") }
+    var balanceAdjustText by rememberSaveable { mutableStateOf("") }
+    var renameAccountText by rememberSaveable { mutableStateOf("") }
     var selectedAccountId by rememberSaveable { mutableStateOf(accounts.firstOrNull()?.id.orEmpty()) }
     var selectedToAccountId by rememberSaveable { mutableStateOf(accounts.drop(1).firstOrNull()?.id.orEmpty()) }
     val categorySuggestions = remember(entries, entryType) {
@@ -3362,7 +3365,15 @@ private fun FinanceScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 accounts.forEach { account ->
-                    Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF1B1B1E)) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF1B1B1E),
+                        modifier = Modifier.clickable {
+                            balanceAdjustAccountId = account.id
+                            balanceAdjustText = String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)
+                            renameAccountText = account.name
+                        },
+                    ) {
                         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                             Text(account.name, color = Color.White, style = MaterialTheme.typography.labelLarge)
                             Text(
@@ -3370,6 +3381,70 @@ private fun FinanceScreen(
                                 color = Color(0xFFBFBFBF),
                                 style = MaterialTheme.typography.labelSmall,
                             )
+                        }
+                    }
+                }
+            }
+            if (balanceAdjustAccountId.isNotBlank()) {
+                val adjustAccount = accounts.firstOrNull { it.id == balanceAdjustAccountId }
+                if (adjustAccount != null) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "Set current balance for ${adjustAccount.name}",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            BoopFilledTextField(
+                                value = balanceAdjustText,
+                                onValueChange = { balanceAdjustText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(12) },
+                                label = { Text("Current real balance (CAD)") },
+                            )
+                            BoopFilledTextField(
+                                value = renameAccountText,
+                                onValueChange = { renameAccountText = it },
+                                label = { Text("Account name") },
+                            )
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = {
+                                    balanceAdjustAccountId = ""
+                                    renameAccountText = ""
+                                }) {
+                                    Text("Cancel", color = Color(0xFFBFBFBF))
+                                }
+                                TextButton(
+                                    onClick = {
+                                        val target = balanceAdjustText.toDoubleOrNull() ?: return@TextButton
+                                        val current = balances[adjustAccount.id] ?: 0.0
+                                        val delta = target - current
+                                        if (kotlin.math.abs(delta) >= 0.005) {
+                                            onSaveEntry(
+                                                BoopLedgerEntry(
+                                                    id = UUID.randomUUID().toString(),
+                                                    type = if (delta >= 0) "income" else "expense",
+                                                    accountId = adjustAccount.id,
+                                                    amount = kotlin.math.abs(delta),
+                                                    title = "Balance adjustment",
+                                                    note = "Manual account reconciliation to CAD ${String.format(Locale.US, "%.2f", target)}",
+                                                ),
+                                            )
+                                        }
+                                        val trimmedName = renameAccountText.trim()
+                                        if (trimmedName.isNotBlank() && trimmedName != adjustAccount.name) {
+                                            onSaveAccount(adjustAccount.copy(name = trimmedName))
+                                        }
+                                        balanceAdjustAccountId = ""
+                                        balanceAdjustText = ""
+                                        renameAccountText = ""
+                                    },
+                                ) {
+                                    Text("Apply", color = Color.White)
+                                }
+                            }
                         }
                     }
                 }
