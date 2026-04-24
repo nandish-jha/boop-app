@@ -284,6 +284,12 @@ private sealed class ItemSheet {
         val repeatEveryDays: Int,
     ) : ItemSheet()
 
+    data class AccountSheet(
+        val id: String?,
+        val sessionKey: String,
+        val name: String,
+    ) : ItemSheet()
+
     data class FinanceEntrySheet(
         val sessionKey: String,
         val type: String, // income | expense | transfer
@@ -393,6 +399,14 @@ private fun BoopApp() {
         itemSheet = ItemSheet.FinanceEntrySheet(
             sessionKey = UUID.randomUUID().toString(),
             type = type,
+        )
+        speedDialExpanded = false
+    }
+    fun openAccountSheet(account: BoopAccount? = null) {
+        itemSheet = ItemSheet.AccountSheet(
+            id = account?.id,
+            sessionKey = account?.id ?: UUID.randomUUID().toString(),
+            name = account?.name.orEmpty(),
         )
         speedDialExpanded = false
     }
@@ -523,6 +537,7 @@ private fun BoopApp() {
                         onOpenIncome = { openFinanceEntrySheet("income") },
                         onOpenExpense = { openFinanceEntrySheet("expense") },
                         onOpenTransfer = { openFinanceEntrySheet("transfer") },
+                        onOpenAccount = { openAccountSheet(null) },
                     )
                 },
                 floatingActionButtonPosition = androidx.compose.material3.FabPosition.End,
@@ -593,10 +608,6 @@ private fun BoopApp() {
                             onOpenHabitCheckIn = {
                                 itemSheet = null
                                 habitCheckInOpen = true
-                            },
-                            onSaveAccount = { account ->
-                                repository.saveAccount(account)
-                                refresh()
                             },
                             onSaveLedgerEntry = { entry ->
                                 repository.saveLedgerEntry(entry)
@@ -706,6 +717,15 @@ private fun BoopApp() {
                                     itemSheet = null
                                 },
                             )
+                            is ItemSheet.AccountSheet -> AccountEditorSheet(
+                                initial = sheet,
+                                onDismiss = { itemSheet = null },
+                                onSave = { account ->
+                                    repository.saveAccount(account)
+                                    refresh()
+                                    itemSheet = null
+                                },
+                            )
                         }
                     }
                 }
@@ -758,7 +778,6 @@ private fun BoopPagerPage(
     onCalendarSelectedDayChanged: (Long) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
     onOpenHabitCheckIn: () -> Unit,
-    onSaveAccount: (BoopAccount) -> Unit,
     onSaveLedgerEntry: (BoopLedgerEntry) -> Unit,
 ) {
     var showNotesInCombinedTab by rememberSaveable { mutableStateOf(false) }
@@ -818,7 +837,6 @@ private fun BoopPagerPage(
             else -> FinanceScreen(
                 accounts = accounts,
                 entries = ledgerEntries,
-                onSaveAccount = onSaveAccount,
                 onSaveEntry = onSaveLedgerEntry,
             )
         }
@@ -836,7 +854,7 @@ private fun BoopBottomNavBar(
         Triple(1, "Tasks", Icons.Outlined.Notifications),
         Triple(2, "Calendar", Icons.Outlined.CalendarMonth),
         Triple(3, "Habits", Icons.Outlined.Flag),
-        Triple(4, "Finance", Icons.Outlined.AttachMoney),
+        Triple(4, "Accounts", Icons.Outlined.AttachMoney),
     )
     BoxWithConstraints(
         Modifier
@@ -920,6 +938,7 @@ private fun BoopSpeedDialFab(
     onOpenIncome: () -> Unit,
     onOpenExpense: () -> Unit,
     onOpenTransfer: () -> Unit,
+    onOpenAccount: () -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.End,
@@ -955,6 +974,11 @@ private fun BoopSpeedDialFab(
                     ) { Icon(Icons.Outlined.Link, contentDescription = "Add external calendar") }
                 } else if (selectedTab == 4) {
                     SmallFloatingActionButton(
+                        onClick = { onOpenAccount(); onExpandedChange(false) },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.Add, contentDescription = "Add account") }
+                    SmallFloatingActionButton(
                         onClick = { onOpenIncome(); onExpandedChange(false) },
                         containerColor = Color.White,
                         contentColor = Color.Black,
@@ -963,7 +987,7 @@ private fun BoopSpeedDialFab(
                         onClick = { onOpenExpense(); onExpandedChange(false) },
                         containerColor = Color.White,
                         contentColor = Color.Black,
-                    ) { Icon(Icons.Outlined.Notifications, contentDescription = "Add expense") }
+                    ) { Icon(Icons.Outlined.RemoveCircleOutline, contentDescription = "Add expense") }
                     SmallFloatingActionButton(
                         onClick = { onOpenTransfer(); onExpandedChange(false) },
                         containerColor = Color.White,
@@ -990,6 +1014,13 @@ private fun BoopSpeedDialFab(
                         containerColor = Color.White,
                         contentColor = Color.Black,
                     ) { Icon(Icons.Outlined.Flag, contentDescription = "Add habit") }
+                    if (selectedTab == 0) {
+                        SmallFloatingActionButton(
+                            onClick = { onOpenAccount(); onExpandedChange(false) },
+                            containerColor = Color.White,
+                            contentColor = Color.Black,
+                        ) { Icon(Icons.Outlined.Add, contentDescription = "Add account") }
+                    }
                 }
             }
         }
@@ -1444,13 +1475,13 @@ private fun DashboardScreen(
                     }
                 }
                 DashboardCompactSection(
-                    title = "Finance",
+                    title = "Accounts",
                     summary = if (accounts.isEmpty()) "No accounts yet" else "${accounts.size} accounts · net CAD ${String.format(Locale.US, "%.2f", netBalance)}",
                     expanded = financeExpanded,
                     onToggle = { financeExpanded = !financeExpanded },
                 ) {
                     if (accounts.isEmpty()) {
-                        Text("No finance accounts yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                        Text("No accounts yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
                     } else {
                         topAccounts.forEach { account ->
                             val bal = accountBalances[account.id] ?: 0.0
@@ -3323,10 +3354,8 @@ private fun HabitsListScreen(
 private fun FinanceScreen(
     accounts: List<BoopAccount>,
     entries: List<BoopLedgerEntry>,
-    onSaveAccount: (BoopAccount) -> Unit,
     onSaveEntry: (BoopLedgerEntry) -> Unit,
 ) {
-    var accountName by rememberSaveable { mutableStateOf("") }
     var reconcileAccountId by rememberSaveable { mutableStateOf("") }
     var reconcileBalanceText by rememberSaveable { mutableStateOf("") }
     val balances = remember(accounts, entries) {
@@ -3349,26 +3378,10 @@ private fun FinanceScreen(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Finance", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
-        BoopFilledTextField(
-            value = accountName,
-            onValueChange = { accountName = it },
-            label = { Text("Add account") },
-            placeholder = { Text("Cash, Bank, Card...", color = Color(0xFF8A8A8A)) },
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(
-                onClick = {
-                    if (accountName.isNotBlank()) {
-                        onSaveAccount(BoopAccount(id = UUID.randomUUID().toString(), name = accountName.trim()))
-                        accountName = ""
-                    }
-                },
-            ) { Text("Save account", color = Color.White) }
-        }
+        Text("Accounts", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
         Text("Accounts", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
         if (accounts.isEmpty()) {
-            Text("No accounts yet. Use + menu on Finance tab.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
+            Text("No accounts yet. Use + menu on Accounts tab.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
             return
         }
         LazyColumn(
@@ -3444,6 +3457,36 @@ private fun FinanceScreen(
 }
 
 @Composable
+private fun AccountEditorSheet(
+    initial: ItemSheet.AccountSheet,
+    onDismiss: () -> Unit,
+    onSave: (BoopAccount) -> Unit,
+) {
+    var name by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.name) }
+    BoopSheetHeaderTitle(if (initial.id == null) "Add account" else "Edit account")
+    Spacer(Modifier.height(12.dp))
+    BoopFilledTextField(
+        value = name,
+        onValueChange = { name = it },
+        label = { Text("Account name") },
+        placeholder = { Text("Cash, Bank, Card...", color = Color(0xFF8A8A8A)) },
+    )
+    Spacer(Modifier.height(16.dp))
+    BoopWhiteButton(if (initial.id == null) "Save account" else "Save changes") {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return@BoopWhiteButton
+        onSave(
+            BoopAccount(
+                id = initial.id ?: UUID.randomUUID().toString(),
+                name = trimmed,
+            ),
+        )
+    }
+    Spacer(Modifier.height(8.dp))
+    TextButton(onClick = onDismiss) { Text("Cancel", color = Color(0xFFBFBFBF)) }
+}
+
+@Composable
 private fun FinanceEntrySheet(
     initial: ItemSheet.FinanceEntrySheet,
     accounts: List<BoopAccount>,
@@ -3461,7 +3504,7 @@ private fun FinanceEntrySheet(
     var toAccountId by rememberSaveable(initial.sessionKey) { mutableStateOf(accounts.drop(1).firstOrNull()?.id.orEmpty()) }
 
     if (accounts.isEmpty()) {
-        Text("Add an account first from Finance page.", color = Color(0xFFBFBFBF))
+        Text("Add an account first from the + menu.", color = Color(0xFFBFBFBF))
         Spacer(Modifier.height(12.dp))
         BoopWhiteButton("Close") { onDismiss() }
         return
