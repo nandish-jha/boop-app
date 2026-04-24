@@ -609,6 +609,10 @@ private fun BoopApp() {
                                 itemSheet = null
                                 habitCheckInOpen = true
                             },
+                            onDeleteAccount = { accountId ->
+                                repository.deleteAccount(accountId)
+                                refresh()
+                            },
                             onSaveLedgerEntry = { entry ->
                                 repository.saveLedgerEntry(entry)
                                 refresh()
@@ -778,6 +782,7 @@ private fun BoopPagerPage(
     onCalendarSelectedDayChanged: (Long) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
     onOpenHabitCheckIn: () -> Unit,
+    onDeleteAccount: (String) -> Unit,
     onSaveLedgerEntry: (BoopLedgerEntry) -> Unit,
 ) {
     var showNotesInCombinedTab by rememberSaveable { mutableStateOf(false) }
@@ -837,6 +842,7 @@ private fun BoopPagerPage(
             else -> FinanceScreen(
                 accounts = accounts,
                 entries = ledgerEntries,
+                onDeleteAccount = onDeleteAccount,
                 onSaveEntry = onSaveLedgerEntry,
             )
         }
@@ -856,6 +862,14 @@ private fun BoopBottomNavBar(
         Triple(3, "Habits", Icons.Outlined.Flag),
         Triple(4, "Accounts", Icons.Outlined.AttachMoney),
     )
+    val activeTabIndex = pagerScrollPosition.roundToInt().coerceIn(0, tabs.lastIndex)
+    val centeredTabs = remember(activeTabIndex) {
+        val count = tabs.size
+        listOf(-2, -1, 0, 1, 2).map { offset ->
+            val idx = (activeTabIndex + offset).mod(count)
+            tabs[idx]
+        }
+    }
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
@@ -863,60 +877,48 @@ private fun BoopBottomNavBar(
             .navigationBarsPadding()
             .padding(horizontal = 6.dp, vertical = 8.dp),
     ) {
-        val tabCount = tabs.size
-        val tabWidth = maxWidth / tabCount
-        val pillInset = 5.dp
-        val pillWidth = tabWidth - pillInset * 2
-        val coercedPage = pagerScrollPosition.coerceIn(0f, (tabCount - 1).toFloat())
-        val pillOffset = tabWidth * coercedPage + pillInset
-        val activeTabIndex = pagerScrollPosition.roundToInt().coerceIn(0, tabCount - 1)
-        Box(Modifier.fillMaxWidth().height(52.dp)) {
-            Surface(
-                modifier = Modifier
-                    .offset(x = pillOffset)
-                    .width(pillWidth)
-                    .fillMaxHeight(0.88f)
-                    .align(Alignment.CenterStart),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                shadowElevation = 2.dp,
-            ) {}
-            Row(
-                Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                tabs.forEach { (index, label, icon) ->
-                    val selected = activeTabIndex == index
-                    val interaction = remember(index) { MutableInteractionSource() }
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable(
-                                interactionSource = interaction,
-                                indication = null,
-                            ) { onSelectTab(index) },
-                        contentAlignment = Alignment.Center,
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            centeredTabs.forEach { (index, label, icon) ->
+                val selected = activeTabIndex == index
+                val interaction = remember(index) { MutableInteractionSource() }
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(
+                            interactionSource = interaction,
+                            indication = null,
+                        ) { onSelectTab(index) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = if (selected) 1f else 0.4f
+                            scaleX = if (selected) 1.06f else 1f
+                            scaleY = if (selected) 1.06f else 1f
+                        },
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Icon(
-                                icon,
-                                contentDescription = label,
-                                tint = if (selected) Color.Black else Color(0xFFBFBFBF),
-                                modifier = Modifier.size(22.dp),
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (selected) Color.Black else Color(0xFFBFBFBF),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
+                        Icon(
+                            icon,
+                            contentDescription = label,
+                            tint = if (selected) Color.White else Color(0xFFBFBFBF),
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (selected) Color.White else Color(0xFFBFBFBF),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
@@ -3354,10 +3356,14 @@ private fun HabitsListScreen(
 private fun FinanceScreen(
     accounts: List<BoopAccount>,
     entries: List<BoopLedgerEntry>,
+    onDeleteAccount: (String) -> Unit,
     onSaveEntry: (BoopLedgerEntry) -> Unit,
 ) {
+    var viewMode by rememberSaveable { mutableStateOf("overview") } // overview | accounts | transactions
     var reconcileAccountId by rememberSaveable { mutableStateOf("") }
     var reconcileBalanceText by rememberSaveable { mutableStateOf("") }
+    var pendingDeleteAccountId by rememberSaveable { mutableStateOf("") }
+    val accountNames = remember(accounts) { accounts.associate { it.id to it.name } }
     val balances = remember(accounts, entries) {
         accounts.associate { it.id to 0.0 }.toMutableMap().apply {
             entries.forEach { entry ->
@@ -3372,6 +3378,13 @@ private fun FinanceScreen(
             }
         }
     }
+    val totalIncome = remember(entries) {
+        entries.sumOf { entry -> if (entry.type == "income" || entry.type == "transfer") entry.amount else 0.0 }
+    }
+    val totalExpense = remember(entries) {
+        entries.sumOf { entry -> if (entry.type == "expense" || entry.type == "transfer") entry.amount else 0.0 }
+    }
+    val netTotal = balances.values.sum()
     Column(
         Modifier
             .fillMaxSize()
@@ -3379,34 +3392,160 @@ private fun FinanceScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Accounts", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
-        Text("Accounts", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
-        if (accounts.isEmpty()) {
-            Text("No accounts yet. Use + menu on Accounts tab.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
-            return
+        if (viewMode == "overview") {
+            Text("Overview", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
+        } else {
+            TextButton(onClick = { viewMode = "overview" }) {
+                Text("Back to overview", color = Color(0xFFBFBFBF))
+            }
         }
-        LazyColumn(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(accounts, key = { it.id }) { account ->
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.clickable {
-                        reconcileAccountId = account.id
-                        reconcileBalanceText = String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)
-                    },
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+        when (viewMode) {
+            "accounts" -> {
+                if (accounts.isEmpty()) {
+                    Text("No accounts yet. Use + menu on Accounts tab.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
+                } else {
+                    LazyColumn(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(account.name, color = Color.White, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("CAD ${String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)}", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+                        items(accounts, key = { it.id }) { account ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.clickable {
+                                    reconcileAccountId = account.id
+                                    reconcileBalanceText = String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)
+                                },
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(account.name, color = Color.White, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("CAD ${String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)}", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+                                        IconButton(onClick = { pendingDeleteAccountId = account.id }) {
+                                            Icon(Icons.Outlined.Delete, contentDescription = "Delete account", tint = Color(0xFFEF9A9A))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        item { Spacer(Modifier.height(112.dp)) }
                     }
+                }
+            }
+            "transactions" -> {
+                if (entries.isEmpty()) {
+                    Text("No transactions yet. Use + menu to add income, expense or transfer.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
+                } else {
+                    LazyColumn(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(entries, key = { it.id }) { entry ->
+                            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)), shape = RoundedCornerShape(14.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(entry.title.ifBlank { entry.type.replaceFirstChar { it.uppercase() } }, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                                    when (entry.type) {
+                                        "income" -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text(accountNames[entry.accountId] ?: "Account", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                            Text("+ CAD ${String.format(Locale.US, "%.2f", entry.amount)}", color = Color(0xFF66BB6A), style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                        "expense" -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text(accountNames[entry.accountId] ?: "Account", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                            Text("- CAD ${String.format(Locale.US, "%.2f", entry.amount)}", color = Color(0xFFEF5350), style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                        else -> {
+                                            val fromName = accountNames[entry.accountId] ?: "From account"
+                                            val toName = accountNames[entry.toAccountId] ?: "To account"
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("$fromName (out)", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                                Text("- CAD ${String.format(Locale.US, "%.2f", entry.amount)}", color = Color(0xFFEF5350), style = MaterialTheme.typography.bodyMedium)
+                                            }
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("$toName (in)", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                                Text("+ CAD ${String.format(Locale.US, "%.2f", entry.amount)}", color = Color(0xFF66BB6A), style = MaterialTheme.typography.bodyMedium)
+                                            }
+                                        }
+                                    }
+                                    Text(SimpleDateFormat("MMM d, HH:mm", Locale.US).format(entry.createdAtMillis), color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                        item { Spacer(Modifier.height(112.dp)) }
+                    }
+                }
+            }
+            else -> {
+                LazyColumn(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    item {
+                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)), shape = RoundedCornerShape(14.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("Money flow", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                                val maxFlow = maxOf(totalIncome, totalExpense, 1.0)
+                                val incomeRatio = (totalIncome / maxFlow).toFloat().coerceIn(0f, 1f)
+                                val expenseRatio = (totalExpense / maxFlow).toFloat().coerceIn(0f, 1f)
+                                Text("Income", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall)
+                                LinearProgressIndicator(progress = { incomeRatio }, color = Color(0xFF66BB6A), trackColor = Color(0xFF2A2A2C), modifier = Modifier.fillMaxWidth().height(8.dp))
+                                Text("Expense", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall)
+                                LinearProgressIndicator(progress = { expenseRatio }, color = Color(0xFFEF5350), trackColor = Color(0xFF2A2A2C), modifier = Modifier.fillMaxWidth().height(8.dp))
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Income", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                    Text("CAD ${String.format(Locale.US, "%.2f", totalIncome)}", color = Color(0xFF66BB6A), style = MaterialTheme.typography.bodyMedium)
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Expense", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                    Text("CAD ${String.format(Locale.US, "%.2f", totalExpense)}", color = Color(0xFFEF5350), style = MaterialTheme.typography.bodyMedium)
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Net", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                                    Text("CAD ${String.format(Locale.US, "%.2f", netTotal)}", color = if (netTotal >= 0) Color(0xFF66BB6A) else Color(0xFFEF5350), style = MaterialTheme.typography.titleSmall)
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth().clickable { viewMode = "accounts" },
+                        ) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column {
+                                    Text("Accounts list", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                                    Text("${accounts.size} accounts", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text(">", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+                    }
+                    item {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth().clickable { viewMode = "transactions" },
+                        ) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column {
+                                    Text("Transaction history", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                                    Text("${entries.size} records", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text(">", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+                    }
+                    item { Spacer(Modifier.height(112.dp)) }
                 }
             }
         }
@@ -3450,6 +3589,24 @@ private fun FinanceScreen(
                         reconcileAccountId = ""
                     },
                 ) { Text("Apply", color = Color.White) }
+            },
+            containerColor = Color(0xFF151517),
+        )
+    }
+    val pendingDeleteAccount = accounts.firstOrNull { it.id == pendingDeleteAccountId }
+    if (pendingDeleteAccount != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingDeleteAccountId = "" },
+            title = { Text("Delete account", color = Color.White) },
+            text = { Text("Delete ${pendingDeleteAccount.name}? This also removes related transactions.", color = Color(0xFFBFBFBF)) },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteAccountId = "" }) { Text("Cancel", color = Color(0xFFBFBFBF)) }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteAccount(pendingDeleteAccount.id)
+                    pendingDeleteAccountId = ""
+                }) { Text("Delete", color = Color(0xFFEF9A9A)) }
             },
             containerColor = Color(0xFF151517),
         )
@@ -5521,6 +5678,42 @@ private class BoopRepository(private val store: LocalStore) {
         }
         store.save("accounts", arr.toString())
         sync("accounts", arr.toString())
+    }
+
+    fun deleteAccount(accountId: String) {
+        val updatedAccounts = readAccounts().filterNot { it.id == accountId }
+        val accountsArr = JSONArray()
+        updatedAccounts.forEach {
+            accountsArr.put(
+                JSONObject()
+                    .put("id", it.id)
+                    .put("name", it.name)
+                    .put("createdAt", it.createdAtMillis),
+            )
+        }
+        store.save("accounts", accountsArr.toString())
+        sync("accounts", accountsArr.toString())
+
+        val updatedEntries = readLedgerEntries().filterNot { it.accountId == accountId || it.toAccountId == accountId }
+        val entriesArr = JSONArray()
+        updatedEntries.forEach {
+            entriesArr.put(
+                JSONObject()
+                    .put("id", it.id)
+                    .put("type", it.type)
+                    .put("accountId", it.accountId)
+                    .put("toAccountId", it.toAccountId ?: "")
+                    .put("amount", it.amount)
+                    .put("title", it.title)
+                    .put("category", it.category)
+                    .put("subcategory", it.subcategory)
+                    .put("note", it.note)
+                    .put("dueAt", it.dueAtMillis ?: 0L)
+                    .put("createdAt", it.createdAtMillis),
+            )
+        }
+        store.save("ledgerEntries", entriesArr.toString())
+        sync("ledgerEntries", entriesArr.toString())
     }
 
     fun saveLedgerEntry(entry: BoopLedgerEntry) {
