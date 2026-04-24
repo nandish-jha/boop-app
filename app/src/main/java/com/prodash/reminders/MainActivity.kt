@@ -232,6 +232,7 @@ private sealed class ItemSheet {
         val reminderAt: Long,
         val done: Boolean,
         val repeatEveryDays: Int,
+        val linkedNoteId: String? = null,
         val archived: Boolean = false,
     ) : ItemSheet()
 
@@ -252,6 +253,8 @@ private sealed class ItemSheet {
 
     data class HabitSheet(
         val id: String?,
+        /** Stable key for `rememberSaveable` when creating a new habit (id is null). */
+        val sessionKey: String,
         val title: String,
         val dayPeriodCategory: String,
         val goal: Int,
@@ -334,6 +337,7 @@ private fun BoopApp() {
             reminderAt = task?.reminderAt ?: (System.currentTimeMillis() + 30 * 60_000),
             done = task?.done ?: false,
             repeatEveryDays = task?.repeatEveryDays ?: 0,
+            linkedNoteId = task?.linkedNoteId,
             archived = task?.archived ?: false,
         )
         speedDialExpanded = false
@@ -359,6 +363,7 @@ private fun BoopApp() {
     fun openHabitSheet(habit: BoopHabit? = null) {
         itemSheet = ItemSheet.HabitSheet(
             id = habit?.id,
+            sessionKey = habit?.id ?: UUID.randomUUID().toString(),
             title = habit?.title.orEmpty(),
             dayPeriodCategory = habit?.dayPeriodCategory ?: "day",
             goal = habit?.goal ?: 30,
@@ -597,6 +602,7 @@ private fun BoopApp() {
                         when (sheet) {
                             is ItemSheet.TaskSheet -> TaskEditorSheet(
                                 initial = sheet,
+                                notes = notes.filter { !it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis },
                                 onDismiss = { itemSheet = null },
                                 onDelete = sheet.id?.let { id ->
                                     {
@@ -604,6 +610,9 @@ private fun BoopApp() {
                                         refresh()
                                         itemSheet = null
                                     }
+                                },
+                                onSaveNote = { note ->
+                                    repository.saveNote(note)
                                 },
                                 onSave = { task ->
                                     repository.saveTask(task)
@@ -614,7 +623,6 @@ private fun BoopApp() {
                             )
                             is ItemSheet.NoteSheet -> NoteEditorSheet(
                                 initial = sheet,
-                                tasks = tasks.sortedBy { it.reminderAt },
                                 onDismiss = { itemSheet = null },
                                 onDelete = sheet.id?.let { id ->
                                     {
@@ -1205,8 +1213,12 @@ private fun DashboardScreen(
         .filter { !it.archived }
         .sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
         .take(4)
-    val activeHabits = habits.sortedBy { it.title.lowercase(Locale.getDefault()) }.take(6)
+    val activeHabits = habits.sortedBy { it.title.lowercase(Locale.getDefault()) }.take(8)
+    val dayHabits = activeHabits.filter { normalizeHabitCategory(it.dayPeriodCategory) == "day" }
+    val nightHabits = activeHabits.filter { normalizeHabitCategory(it.dayPeriodCategory) == "night" }
     var habitsExpanded by rememberSaveable { mutableStateOf(false) }
+    var dayHabitsExpanded by rememberSaveable { mutableStateOf(true) }
+    var nightHabitsExpanded by rememberSaveable { mutableStateOf(true) }
     var upcomingExpanded by rememberSaveable { mutableStateOf(false) }
     var notesExpanded by rememberSaveable { mutableStateOf(false) }
     val greetingSecond = run {
@@ -1265,8 +1277,25 @@ private fun DashboardScreen(
                     if (activeHabits.isEmpty()) {
                         Text("No habits yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
                     } else {
-                        activeHabits.forEach { habit ->
-                            DashboardHabitCompactCard(habit = habit, onOpenHabit = onOpenHabit)
+                        DashboardCompactSection(
+                            title = "Day",
+                            summary = if (dayHabits.isEmpty()) "No day habits" else "${dayHabits.size} day habits",
+                            expanded = dayHabitsExpanded,
+                            onToggle = { dayHabitsExpanded = !dayHabitsExpanded },
+                        ) {
+                            dayHabits.forEach { habit ->
+                                DashboardHabitCompactCard(habit = habit, onOpenHabit = onOpenHabit)
+                            }
+                        }
+                        DashboardCompactSection(
+                            title = "Night",
+                            summary = if (nightHabits.isEmpty()) "No night habits" else "${nightHabits.size} night habits",
+                            expanded = nightHabitsExpanded,
+                            onToggle = { nightHabitsExpanded = !nightHabitsExpanded },
+                        ) {
+                            nightHabits.forEach { habit ->
+                                DashboardHabitCompactCard(habit = habit, onOpenHabit = onOpenHabit)
+                            }
                         }
                     }
                 }
@@ -1327,23 +1356,39 @@ private fun DashboardScreen(
                 }
                 val quotes = remember {
                     listOf(
-                        "Hope is a discipline. Keep showing up.",
-                        "The system may be broken; your next step still matters.",
-                        "Progress is rarely loud, but it is always real.",
-                        "No rescue is coming. Build anyway.",
-                        "Small consistency beats dramatic intention.",
-                        "You do not need certainty to start.",
-                        "Even in a bad timeline, meaning is handcrafted.",
-                        "Discipline is choosing future relief over present noise.",
+                        "Hope is a discipline. Keep showing up." to null,
+                        "The system may be broken; your next step still matters." to null,
+                        "Progress is rarely loud, but it is always real." to null,
+                        "Small consistency beats dramatic intention." to null,
+                        "You do not need certainty to start." to null,
+                        "Even in a bad timeline, meaning is handcrafted." to null,
+                        "First, solve the problem. Then, write the code." to "John Johnson",
+                        "Success is the sum of small efforts, repeated day in and day out." to "Robert Collier",
                     )
                 }
                 val quoteOfLaunch = remember { quotes.random() }
-                Text(
-                    "Quote: \"$quoteOfLaunch\"",
-                    color = Color(0xFF8E8E90),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
-                )
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color(0xFF1B1B1F),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2E2E33)),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                        Text(
+                            text = "\"${quoteOfLaunch.first}\"",
+                            color = Color(0xFFE6E6E8),
+                            fontSize = 20.sp,
+                            lineHeight = 28.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "— ${quoteOfLaunch.second ?: "Unknown"}",
+                            color = Color(0xFFAAAAAF),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                }
             }
         }
         AnimatedVisibility(
@@ -1456,7 +1501,7 @@ private fun DashboardHabitCompactCard(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    "${habit.title} · ${habit.dayPeriodCategory.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }}",
+                    "${habit.title} · ${habitCategoryLabel(habit.dayPeriodCategory)}",
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
                     maxLines = 2,
@@ -3085,7 +3130,7 @@ private fun HabitsListScreen(
                 ) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            "${habit.title} · ${habit.dayPeriodCategory.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }}",
+                            "${habit.title} · ${habitCategoryLabel(habit.dayPeriodCategory)}",
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White,
                             maxLines = 2,
@@ -3336,8 +3381,17 @@ private fun noteSearchHaystack(note: BoopNote): String {
 }
 
 private fun habitSearchHaystack(habit: BoopHabit): String {
-    return "${habit.title} ${habit.progress} ${habit.goal} ${habit.dayKeys} ${habit.quantityUnit} ${habit.quantityDailyTarget} ${habit.quantityDayValues}".lowercase(Locale.getDefault())
+    return "${habit.title} ${habit.progress} ${habit.goal} ${habit.dayKeys} ${habit.quantityUnit} ${habit.quantityDailyTarget} ${habit.quantityDayValues} ${habitCategoryLabel(habit.dayPeriodCategory)}"
+        .lowercase(Locale.getDefault())
 }
+
+private fun normalizeHabitCategory(raw: String): String = when (raw.lowercase(Locale.getDefault())) {
+    "night" -> "night"
+    else -> "day"
+}
+
+private fun habitCategoryLabel(raw: String): String =
+    normalizeHabitCategory(raw).replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
 
 @Composable
 private fun GlobalSearchResultsInline(
@@ -3425,7 +3479,7 @@ private fun GlobalSearchResultsInline(
                         ) {
                             Column(Modifier.padding(12.dp)) {
                                 Text(
-                                    "${habit.title} · ${habit.dayPeriodCategory.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }}",
+                                    "${habit.title} · ${habitCategoryLabel(habit.dayPeriodCategory)}",
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color.White,
                                     maxLines = 2,
@@ -4061,8 +4115,10 @@ private fun EventEditorSheet(
 @Composable
 private fun TaskEditorSheet(
     initial: ItemSheet.TaskSheet,
+    notes: List<BoopNote>,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
+    onSaveNote: (BoopNote) -> Unit,
     onSave: (BoopTask) -> Unit,
 ) {
     val sheetKey = initial.sessionKey
@@ -4070,6 +4126,9 @@ private fun TaskEditorSheet(
     var reminderAt by remember(sheetKey, initial.reminderAt) { mutableLongStateOf(initial.reminderAt) }
     var done by remember(sheetKey) { mutableStateOf(initial.done) }
     var repeatEveryDays by rememberSaveable(sheetKey) { mutableIntStateOf(initial.repeatEveryDays.coerceAtLeast(0)) }
+    var linkedNoteId by rememberSaveable(sheetKey) { mutableStateOf(initial.linkedNoteId) }
+    var newNoteTitle by rememberSaveable(sheetKey) { mutableStateOf("") }
+    var newNoteBody by rememberSaveable(sheetKey) { mutableStateOf("") }
     var customRepeatDays by rememberSaveable(sheetKey) {
         mutableStateOf(
             initial.repeatEveryDays.takeIf { it !in setOf(0, 1, 7, 30, 365) }?.toString().orEmpty(),
@@ -4093,6 +4152,7 @@ private fun TaskEditorSheet(
             reminderAt = outRem,
             done = outDone,
             repeatEveryDays = rep,
+            linkedNoteId = linkedNoteId,
             archived = initial.archived,
         )
     }
@@ -4208,6 +4268,61 @@ private fun TaskEditorSheet(
     Spacer(Modifier.height(4.dp))
     Text(repeatFrequencyLabel(repeatEveryDays), color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
     Spacer(Modifier.height(12.dp))
+    Text("Linked note", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+    Spacer(Modifier.height(6.dp))
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        val noneActive = linkedNoteId == null
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = if (noneActive) Color.White else Color(0xFF242426),
+            modifier = Modifier.clickable { linkedNoteId = null },
+        ) {
+            Text(
+                "None",
+                color = if (noneActive) Color.Black else Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            )
+        }
+        notes.take(20).forEach { note ->
+            val active = linkedNoteId == note.id
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = if (active) Color.White else Color(0xFF242426),
+                modifier = Modifier.clickable { linkedNoteId = note.id },
+            ) {
+                Text(
+                    note.title.ifBlank { "Untitled note" },
+                    color = if (active) Color.Black else Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    Text("Or create a note now", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+    Spacer(Modifier.height(6.dp))
+    BoopFilledTextField(
+        value = newNoteTitle,
+        onValueChange = { newNoteTitle = it },
+        label = { Text("New note title") },
+    )
+    Spacer(Modifier.height(6.dp))
+    BoopFilledTextField(
+        value = newNoteBody,
+        onValueChange = { newNoteBody = it },
+        label = { Text("New note body") },
+        minLines = 2,
+    )
+    Spacer(Modifier.height(12.dp))
     Surface(
         onClick = { showReminderPicker = true },
         shape = RoundedCornerShape(14.dp),
@@ -4250,14 +4365,36 @@ private fun TaskEditorSheet(
     Spacer(Modifier.height(20.dp))
     BoopWhiteButton("Save") {
         hasExplicitSave = true
-        buildTaskForSaveOrNull()?.let(onSave)
+        val taskCandidate = buildTaskForSaveOrNull() ?: return@BoopWhiteButton
+        val createFreshNote = newNoteTitle.isNotBlank() || newNoteBody.isNotBlank()
+        val resolvedTask = if (createFreshNote) {
+            val noteId = UUID.randomUUID().toString()
+            onSaveNote(
+                BoopNote(
+                    id = noteId,
+                    title = newNoteTitle.trim(),
+                    body = newNoteBody.trim(),
+                    attachmentUri = null,
+                    audioUri = null,
+                    tagsCsv = "",
+                    ocrText = "",
+                    linkedTaskId = taskCandidate.id,
+                    archived = false,
+                    createdAtMillis = System.currentTimeMillis(),
+                    updatedAtMillis = System.currentTimeMillis(),
+                ),
+            )
+            taskCandidate.copy(linkedNoteId = noteId)
+        } else {
+            taskCandidate
+        }
+        onSave(resolvedTask)
     }
 }
 
 @Composable
 private fun NoteEditorSheet(
     initial: ItemSheet.NoteSheet,
-    tasks: List<BoopTask>,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
     onSave: (BoopNote) -> Unit,
@@ -4266,7 +4403,6 @@ private fun NoteEditorSheet(
     val session = initial.sessionKey
     var title by rememberSaveable(session) { mutableStateOf(initial.title) }
     var tagsCsv by rememberSaveable(session) { mutableStateOf(initial.tagsCsv) }
-    var linkedTaskId by rememberSaveable(session) { mutableStateOf(initial.linkedTaskId) }
     var attachmentStored by remember(session) { mutableStateOf(parseNoteAttachments(initial.attachmentUri)) }
     var audioStored by remember(session) { mutableStateOf(initial.audioUri) }
     var bodyEdit by remember(session) { mutableStateOf<EditText?>(null) }
@@ -4295,7 +4431,7 @@ private fun NoteEditorSheet(
             audioUri = audioStored,
             tagsCsv = normalizeNoteTags(tagsCsv),
             ocrText = ocrText,
-            linkedTaskId = linkedTaskId,
+            linkedTaskId = initial.linkedTaskId,
             archived = initial.archived,
             createdAtMillis = initial.createdAtMillis,
             updatedAtMillis = System.currentTimeMillis(),
@@ -4381,7 +4517,7 @@ private fun NoteEditorSheet(
                                 audioUri = audioStored,
                                 tagsCsv = normalizeNoteTags(tagsCsv),
                                 ocrText = extractTextFromAttachment(context, serializedAttachments),
-                                linkedTaskId = linkedTaskId,
+                                linkedTaskId = initial.linkedTaskId,
                                 archived = !initial.archived,
                                 createdAtMillis = initial.createdAtMillis,
                                 updatedAtMillis = System.currentTimeMillis(),
@@ -4441,46 +4577,6 @@ private fun NoteEditorSheet(
         label = { Text("Tags") },
         placeholder = { Text("work, urgent, ideas", color = Color(0xFF8A8A8A)) },
     )
-    Spacer(Modifier.height(6.dp))
-    Text("Linked task reminder", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-    Spacer(Modifier.height(4.dp))
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        val noneActive = linkedTaskId == null
-        Surface(
-            shape = RoundedCornerShape(999.dp),
-            color = if (noneActive) Color.White else Color(0xFF242426),
-            modifier = Modifier.clickable { linkedTaskId = null },
-        ) {
-            Text(
-                "None",
-                color = if (noneActive) Color.Black else Color.White,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            )
-        }
-        tasks.filter { !it.archived }.sortedBy { it.reminderAt }.take(20).forEach { t ->
-            val active = linkedTaskId == t.id
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = if (active) Color.White else Color(0xFF242426),
-                modifier = Modifier.clickable { linkedTaskId = t.id },
-            ) {
-                Text(
-                    t.title.ifBlank { "Untitled task" },
-                    color = if (active) Color.Black else Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                )
-            }
-        }
-    }
     Spacer(Modifier.height(8.dp))
     Text("Note", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
     Spacer(Modifier.height(4.dp))
@@ -4670,13 +4766,14 @@ private fun HabitEditorSheet(
     onDelete: (() -> Unit)?,
     onSave: (BoopHabit) -> Unit,
 ) {
-    var label by rememberSaveable(initial.id) { mutableStateOf(initial.title) }
-    var dayPeriodCategory by rememberSaveable(initial.id) { mutableStateOf(initial.dayPeriodCategory) }
-    var goalText by rememberSaveable(initial.id) { mutableStateOf(initial.goal.toString()) }
-    var progress by remember(initial.id) { mutableIntStateOf(initial.progress) }
-    var quantityMode by rememberSaveable(initial.id) { mutableStateOf(initial.quantityMode) }
-    var quantityUnit by rememberSaveable(initial.id) { mutableStateOf(initial.quantityUnit) }
-    var quantityTarget by rememberSaveable(initial.id) { mutableStateOf(initial.quantityDailyTarget.toString()) }
+    val sheetKey = initial.sessionKey
+    var label by rememberSaveable(sheetKey) { mutableStateOf(initial.title) }
+    var dayPeriodCategory by rememberSaveable(sheetKey) { mutableStateOf(normalizeHabitCategory(initial.dayPeriodCategory)) }
+    var goalText by rememberSaveable(sheetKey) { mutableStateOf(initial.goal.toString()) }
+    var progress by remember(sheetKey) { mutableIntStateOf(initial.progress) }
+    var quantityMode by rememberSaveable(sheetKey) { mutableStateOf(initial.quantityMode) }
+    var quantityUnit by rememberSaveable(sheetKey) { mutableStateOf(initial.quantityUnit) }
+    var quantityTarget by rememberSaveable(sheetKey) { mutableStateOf(initial.quantityDailyTarget.toString()) }
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -4708,7 +4805,7 @@ private fun HabitEditorSheet(
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        listOf("day", "mid", "night").forEach { cat ->
+        listOf("day", "night").forEach { cat ->
             val active = dayPeriodCategory == cat
             Surface(
                 shape = RoundedCornerShape(999.dp),
@@ -4775,7 +4872,7 @@ private fun HabitEditorSheet(
                 BoopHabit(
                     id = initial.id ?: UUID.randomUUID().toString(),
                     title = label.trim(),
-                    dayPeriodCategory = dayPeriodCategory,
+                    dayPeriodCategory = normalizeHabitCategory(dayPeriodCategory),
                     goal = g,
                     progress = progress.coerceIn(0, g),
                     dayKeys = initial.dayKeys,
@@ -4808,6 +4905,7 @@ data class BoopTask(
     val reminderAt: Long,
     val done: Boolean,
     val repeatEveryDays: Int = 0,
+    val linkedNoteId: String? = null,
     /** Filed away from the main list (separate from [done]). */
     val archived: Boolean = false,
 )
@@ -4888,6 +4986,7 @@ private class BoopRepository(private val store: LocalStore) {
                 reminderAt = item.getLong("reminderAt"),
                 done = done,
                 repeatEveryDays = item.optInt("repeatEveryDays", 0),
+                linkedNoteId = item.optString("linkedNoteId").ifBlank { null },
                 archived = archived,
             )
         }.sortedBy { it.reminderAt }
@@ -4931,7 +5030,7 @@ private class BoopRepository(private val store: LocalStore) {
             BoopHabit(
                 item.getString("id"),
                 item.getString("title"),
-                item.optString("dayPeriodCategory", "day"),
+                normalizeHabitCategory(item.optString("dayPeriodCategory", "day")),
                 item.getInt("goal"),
                 item.getInt("progress"),
                 item.optString("dayKeys"),
@@ -5012,7 +5111,7 @@ private class BoopRepository(private val store: LocalStore) {
     fun saveHabit(habit: BoopHabit) {
         val updated = readHabits().toMutableList().apply {
             removeAll { it.id == habit.id }
-            add(0, habit)
+            add(0, habit.copy(dayPeriodCategory = normalizeHabitCategory(habit.dayPeriodCategory)))
         }
         val arr = JSONArray()
         updated.forEach {
@@ -5020,7 +5119,7 @@ private class BoopRepository(private val store: LocalStore) {
                 JSONObject()
                     .put("id", it.id)
                     .put("title", it.title)
-                    .put("dayPeriodCategory", it.dayPeriodCategory)
+                    .put("dayPeriodCategory", normalizeHabitCategory(it.dayPeriodCategory))
                     .put("goal", it.goal)
                     .put("progress", it.progress)
                     .put("dayKeys", it.dayKeys)
@@ -5042,7 +5141,7 @@ private class BoopRepository(private val store: LocalStore) {
                 JSONObject()
                     .put("id", it.id)
                     .put("title", it.title)
-                    .put("dayPeriodCategory", it.dayPeriodCategory)
+                    .put("dayPeriodCategory", normalizeHabitCategory(it.dayPeriodCategory))
                     .put("goal", it.goal)
                     .put("progress", it.progress)
                     .put("dayKeys", it.dayKeys)
@@ -5072,6 +5171,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("reminderAt", it.reminderAt)
                     .put("done", it.done)
                     .put("repeatEveryDays", it.repeatEveryDays)
+                    .put("linkedNoteId", it.linkedNoteId ?: "")
                     .put("archived", it.archived),
             )
         }
