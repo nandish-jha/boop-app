@@ -3387,8 +3387,7 @@ private fun FinanceScreen(
         LazyColumn(
             Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .padding(bottom = 92.dp),
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(accounts, key = { it.id }) { account ->
