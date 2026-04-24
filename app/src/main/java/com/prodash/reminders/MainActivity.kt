@@ -283,6 +283,11 @@ private sealed class ItemSheet {
         val notifyHoursBefore: Int,
         val repeatEveryDays: Int,
     ) : ItemSheet()
+
+    data class FinanceEntrySheet(
+        val sessionKey: String,
+        val type: String, // income | expense | transfer
+    ) : ItemSheet()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -381,6 +386,13 @@ private fun BoopApp() {
             quantityUnit = habit?.quantityUnit.orEmpty(),
             quantityDailyTarget = habit?.quantityDailyTarget ?: 30,
             quantityDayValues = habit?.quantityDayValues.orEmpty(),
+        )
+        speedDialExpanded = false
+    }
+    fun openFinanceEntrySheet(type: String) {
+        itemSheet = ItemSheet.FinanceEntrySheet(
+            sessionKey = UUID.randomUUID().toString(),
+            type = type,
         )
         speedDialExpanded = false
     }
@@ -508,6 +520,9 @@ private fun BoopApp() {
                         },
                         onOpenNote = { openNoteSheet(null) },
                         onOpenHabit = { openHabitSheet(null) },
+                        onOpenIncome = { openFinanceEntrySheet("income") },
+                        onOpenExpense = { openFinanceEntrySheet("expense") },
+                        onOpenTransfer = { openFinanceEntrySheet("transfer") },
                     )
                 },
                 floatingActionButtonPosition = androidx.compose.material3.FabPosition.End,
@@ -681,6 +696,16 @@ private fun BoopApp() {
                                     }
                                 },
                             )
+                            is ItemSheet.FinanceEntrySheet -> FinanceEntrySheet(
+                                initial = sheet,
+                                accounts = accounts,
+                                onDismiss = { itemSheet = null },
+                                onSave = { entry ->
+                                    repository.saveLedgerEntry(entry)
+                                    refresh()
+                                    itemSheet = null
+                                },
+                            )
                         }
                     }
                 }
@@ -747,6 +772,8 @@ private fun BoopPagerPage(
                 tasks = tasks,
                 notes = notes,
                 habits = habits,
+                accounts = accounts,
+                ledgerEntries = ledgerEntries,
                 onOpenTask = onEditTask,
                 onOpenNote = onEditNote,
                 onOpenHabit = onEditHabit,
@@ -791,8 +818,6 @@ private fun BoopPagerPage(
             else -> FinanceScreen(
                 accounts = accounts,
                 entries = ledgerEntries,
-                onSaveAccount = onSaveAccount,
-                onSaveEntry = onSaveLedgerEntry,
             )
         }
     }
@@ -890,6 +915,9 @@ private fun BoopSpeedDialFab(
     onOpenExternalCalendar: () -> Unit,
     onOpenNote: () -> Unit,
     onOpenHabit: () -> Unit,
+    onOpenIncome: () -> Unit,
+    onOpenExpense: () -> Unit,
+    onOpenTransfer: () -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.End,
@@ -902,12 +930,12 @@ private fun BoopSpeedDialFab(
             exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.End) {
-                SmallFloatingActionButton(
-                    onClick = { onOpenTask(); onExpandedChange(false) },
-                    containerColor = Color.White,
-                    contentColor = Color.Black,
-                ) { Icon(Icons.Outlined.Notifications, contentDescription = "Add task") }
                 if (selectedTab == 2) {
+                    SmallFloatingActionButton(
+                        onClick = { onOpenTask(); onExpandedChange(false) },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.Notifications, contentDescription = "Add task") }
                     SmallFloatingActionButton(
                         onClick = { onOpenEvent(); onExpandedChange(false) },
                         containerColor = Color.White,
@@ -923,7 +951,28 @@ private fun BoopSpeedDialFab(
                         containerColor = Color.White,
                         contentColor = Color.Black,
                     ) { Icon(Icons.Outlined.Link, contentDescription = "Add external calendar") }
+                } else if (selectedTab == 4) {
+                    SmallFloatingActionButton(
+                        onClick = { onOpenIncome(); onExpandedChange(false) },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.AttachMoney, contentDescription = "Add income") }
+                    SmallFloatingActionButton(
+                        onClick = { onOpenExpense(); onExpandedChange(false) },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.Notifications, contentDescription = "Add expense") }
+                    SmallFloatingActionButton(
+                        onClick = { onOpenTransfer(); onExpandedChange(false) },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.Sync, contentDescription = "Add transfer") }
                 } else {
+                    SmallFloatingActionButton(
+                        onClick = { onOpenTask(); onExpandedChange(false) },
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ) { Icon(Icons.Outlined.Notifications, contentDescription = "Add task") }
                     SmallFloatingActionButton(
                         onClick = { onOpenEvent(); onExpandedChange(false) },
                         containerColor = Color.White,
@@ -1223,6 +1272,8 @@ private fun DashboardScreen(
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
     habits: List<BoopHabit>,
+    accounts: List<BoopAccount>,
+    ledgerEntries: List<BoopLedgerEntry>,
     onOpenTask: (BoopTask) -> Unit,
     onOpenNote: (BoopNote) -> Unit,
     onOpenHabit: (BoopHabit) -> Unit,
@@ -1251,6 +1302,22 @@ private fun DashboardScreen(
         .filter { !it.archived }
         .sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
         .take(4)
+    val accountBalances = remember(accounts, ledgerEntries) {
+        accounts.associate { it.id to 0.0 }.toMutableMap().apply {
+            ledgerEntries.forEach { entry ->
+                when (entry.type) {
+                    "income" -> this[entry.accountId] = (this[entry.accountId] ?: 0.0) + entry.amount
+                    "expense" -> this[entry.accountId] = (this[entry.accountId] ?: 0.0) - entry.amount
+                    "transfer" -> {
+                        this[entry.accountId] = (this[entry.accountId] ?: 0.0) - entry.amount
+                        entry.toAccountId?.let { toId -> this[toId] = (this[toId] ?: 0.0) + entry.amount }
+                    }
+                }
+            }
+        }
+    }
+    val netBalance = accountBalances.values.sum()
+    val topAccounts = accounts.take(3)
     val activeHabits = habits.sortedBy { it.title.lowercase(Locale.getDefault()) }.take(8)
     val dayHabits = activeHabits.filter { normalizeHabitCategory(it.dayPeriodCategory) == "day" }
     val nightHabits = activeHabits.filter { normalizeHabitCategory(it.dayPeriodCategory) == "night" }
@@ -1259,6 +1326,7 @@ private fun DashboardScreen(
     var nightHabitsExpanded by rememberSaveable { mutableStateOf(true) }
     var upcomingExpanded by rememberSaveable { mutableStateOf(false) }
     var notesExpanded by rememberSaveable { mutableStateOf(false) }
+    var financeExpanded by rememberSaveable { mutableStateOf(false) }
     val greetingSecond = run {
         val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         when {
@@ -1368,6 +1436,30 @@ private fun DashboardScreen(
                                         Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                     }
                                     Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Color(0xFF8E8E90))
+                                }
+                            }
+                        }
+                    }
+                }
+                DashboardCompactSection(
+                    title = "Finance",
+                    summary = if (accounts.isEmpty()) "No accounts yet" else "${accounts.size} accounts · net CAD ${String.format(Locale.US, "%.2f", netBalance)}",
+                    expanded = financeExpanded,
+                    onToggle = { financeExpanded = !financeExpanded },
+                ) {
+                    if (accounts.isEmpty()) {
+                        Text("No finance accounts yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        topAccounts.forEach { account ->
+                            val bal = accountBalances[account.id] ?: 0.0
+                            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)), shape = RoundedCornerShape(12.dp)) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(account.name, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                                    Text("CAD ${String.format(Locale.US, "%.2f", bal)}", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
                                 }
                             }
                         }
@@ -3229,64 +3321,7 @@ private fun HabitsListScreen(
 private fun FinanceScreen(
     accounts: List<BoopAccount>,
     entries: List<BoopLedgerEntry>,
-    onSaveAccount: (BoopAccount) -> Unit,
-    onSaveEntry: (BoopLedgerEntry) -> Unit,
 ) {
-    var accountName by rememberSaveable { mutableStateOf("") }
-    var entryType by rememberSaveable { mutableStateOf("expense") }
-    var title by rememberSaveable { mutableStateOf("") }
-    var amountText by rememberSaveable { mutableStateOf("") }
-    var category by rememberSaveable { mutableStateOf("") }
-    var subcategory by rememberSaveable { mutableStateOf("") }
-    var note by rememberSaveable { mutableStateOf("") }
-    var dueAt by rememberSaveable { mutableLongStateOf(0L) }
-    var showDuePicker by rememberSaveable { mutableStateOf(false) }
-    var balanceAdjustAccountId by rememberSaveable { mutableStateOf("") }
-    var balanceAdjustText by rememberSaveable { mutableStateOf("") }
-    var renameAccountText by rememberSaveable { mutableStateOf("") }
-    var selectedAccountId by rememberSaveable { mutableStateOf(accounts.firstOrNull()?.id.orEmpty()) }
-    var selectedToAccountId by rememberSaveable { mutableStateOf(accounts.drop(1).firstOrNull()?.id.orEmpty()) }
-    val categorySuggestions = remember(entries, entryType) {
-        entries.filter { it.type == entryType }.map { it.category }.filter { it.isNotBlank() }.distinct().take(12)
-    }
-    val subcategorySuggestions = remember(entries, entryType, category) {
-        entries.filter { it.type == entryType && (category.isBlank() || it.category.equals(category, true)) }
-            .map { it.subcategory }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .take(12)
-    }
-    val monthStart = remember {
-        Calendar.getInstance().apply {
-            set(Calendar.DAY_OF_MONTH, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-    }
-    val monthEnd = remember {
-        Calendar.getInstance().apply {
-            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
-            set(Calendar.HOUR_OF_DAY, 23)
-            set(Calendar.MINUTE, 59)
-            set(Calendar.SECOND, 59)
-            set(Calendar.MILLISECOND, 999)
-        }.timeInMillis
-    }
-    val monthIncome = remember(entries, monthStart, monthEnd) {
-        entries.filter { it.createdAtMillis in monthStart..monthEnd && it.type == "income" }.sumOf { it.amount }
-    }
-    val monthExpense = remember(entries, monthStart, monthEnd) {
-        entries.filter { it.createdAtMillis in monthStart..monthEnd && it.type == "expense" }.sumOf { it.amount }
-    }
-    val upcomingDues = remember(entries) {
-        val now = System.currentTimeMillis()
-        entries
-            .filter { it.dueAtMillis != null && it.dueAtMillis > now }
-            .sortedBy { it.dueAtMillis }
-            .take(5)
-    }
     val balances = remember(accounts, entries) {
         accounts.associate { it.id to 0.0 }.toMutableMap().apply {
             entries.forEach { entry ->
@@ -3308,164 +3343,108 @@ private fun FinanceScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Finance", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.weight(1f),
-            ) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("This month", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-                    Text("Income: CAD ${String.format(Locale.US, "%.2f", monthIncome)}", color = Color(0xFFB8F1C9), style = MaterialTheme.typography.bodySmall)
-                    Text("Expense: CAD ${String.format(Locale.US, "%.2f", monthExpense)}", color = Color(0xFFFFB9B9), style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.weight(1f),
-            ) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("Upcoming dues", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-                    Text("${upcomingDues.size} scheduled", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        upcomingDues.firstOrNull()?.let { "${it.title} · ${SimpleDateFormat("MMM d", Locale.US).format(it.dueAtMillis!!)}" } ?: "No upcoming dues",
-                        color = Color(0xFFBFBFBF),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-        BoopFilledTextField(
-            value = accountName,
-            onValueChange = { accountName = it },
-            label = { Text("Add account") },
-            placeholder = { Text("Cash, Bank, Card...", color = Color(0xFF8A8A8A)) },
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(
-                onClick = {
-                    if (accountName.isNotBlank()) {
-                        onSaveAccount(BoopAccount(id = UUID.randomUUID().toString(), name = accountName.trim()))
-                        accountName = ""
-                    }
-                },
-            ) { Text("Save account", color = Color.White) }
-        }
         Text("Accounts", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
         if (accounts.isEmpty()) {
-            Text("No accounts yet.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
-        } else {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                accounts.forEach { account ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF1B1B1E),
-                        modifier = Modifier.clickable {
-                            balanceAdjustAccountId = account.id
-                            balanceAdjustText = String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)
-                            renameAccountText = account.name
-                        },
+            Text("No accounts yet. Use + menu on Finance tab.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
+            return
+        }
+        LazyColumn(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(bottom = 92.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(accounts, key = { it.id }) { account ->
+                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)), shape = RoundedCornerShape(14.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                            Text(account.name, color = Color.White, style = MaterialTheme.typography.labelLarge)
-                            Text(
-                                "CAD ${String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)}",
-                                color = Color(0xFFBFBFBF),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
-                    }
-                }
-            }
-            if (balanceAdjustAccountId.isNotBlank()) {
-                val adjustAccount = accounts.firstOrNull { it.id == balanceAdjustAccountId }
-                if (adjustAccount != null) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                "Set current balance for ${adjustAccount.name}",
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                            BoopFilledTextField(
-                                value = balanceAdjustText,
-                                onValueChange = { balanceAdjustText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(12) },
-                                label = { Text("Current real balance (CAD)") },
-                            )
-                            BoopFilledTextField(
-                                value = renameAccountText,
-                                onValueChange = { renameAccountText = it },
-                                label = { Text("Account name") },
-                            )
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                TextButton(onClick = {
-                                    balanceAdjustAccountId = ""
-                                    renameAccountText = ""
-                                }) {
-                                    Text("Cancel", color = Color(0xFFBFBFBF))
-                                }
-                                TextButton(
-                                    onClick = {
-                                        val target = balanceAdjustText.toDoubleOrNull() ?: return@TextButton
-                                        val current = balances[adjustAccount.id] ?: 0.0
-                                        val delta = target - current
-                                        if (kotlin.math.abs(delta) >= 0.005) {
-                                            onSaveEntry(
-                                                BoopLedgerEntry(
-                                                    id = UUID.randomUUID().toString(),
-                                                    type = if (delta >= 0) "income" else "expense",
-                                                    accountId = adjustAccount.id,
-                                                    amount = kotlin.math.abs(delta),
-                                                    title = "Balance adjustment",
-                                                    note = "Manual account reconciliation to CAD ${String.format(Locale.US, "%.2f", target)}",
-                                                ),
-                                            )
-                                        }
-                                        val trimmedName = renameAccountText.trim()
-                                        if (trimmedName.isNotBlank() && trimmedName != adjustAccount.name) {
-                                            onSaveAccount(adjustAccount.copy(name = trimmedName))
-                                        }
-                                        balanceAdjustAccountId = ""
-                                        balanceAdjustText = ""
-                                        renameAccountText = ""
-                                    },
-                                ) {
-                                    Text("Apply", color = Color.White)
-                                }
-                            }
-                        }
+                        Text(account.name, color = Color.White, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("CAD ${String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)}", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
         }
-        Text("Add transaction", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
+    }
+}
+
+@Composable
+private fun FinanceEntrySheet(
+    initial: ItemSheet.FinanceEntrySheet,
+    accounts: List<BoopAccount>,
+    onDismiss: () -> Unit,
+    onSave: (BoopLedgerEntry) -> Unit,
+) {
+    var title by rememberSaveable(initial.sessionKey) { mutableStateOf("") }
+    var amountText by rememberSaveable(initial.sessionKey) { mutableStateOf("") }
+    var category by rememberSaveable(initial.sessionKey) { mutableStateOf("") }
+    var subcategory by rememberSaveable(initial.sessionKey) { mutableStateOf("") }
+    var note by rememberSaveable(initial.sessionKey) { mutableStateOf("") }
+    var dueAt by rememberSaveable(initial.sessionKey) { mutableLongStateOf(0L) }
+    var showDuePicker by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
+    var fromAccountId by rememberSaveable(initial.sessionKey) { mutableStateOf(accounts.firstOrNull()?.id.orEmpty()) }
+    var toAccountId by rememberSaveable(initial.sessionKey) { mutableStateOf(accounts.drop(1).firstOrNull()?.id.orEmpty()) }
+
+    if (accounts.isEmpty()) {
+        Text("Add an account first from Finance page.", color = Color(0xFFBFBFBF))
+        Spacer(Modifier.height(12.dp))
+        BoopWhiteButton("Close") { onDismiss() }
+        return
+    }
+    BoopSheetHeaderTitle(
+        when (initial.type) {
+            "income" -> "Add income"
+            "transfer" -> "Add transfer"
+            else -> "Add expense"
+        },
+    )
+    Spacer(Modifier.height(12.dp))
+    Text("From account", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+    Spacer(Modifier.height(6.dp))
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        accounts.forEach { account ->
+            val active = fromAccountId == account.id
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = if (active) Color.White else Color(0xFF242426),
+                modifier = Modifier.clickable { fromAccountId = account.id },
+            ) {
+                Text(
+                    account.name,
+                    color = if (active) Color.Black else Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                )
+            }
+        }
+    }
+    if (initial.type == "transfer") {
+        Spacer(Modifier.height(8.dp))
+        Text("To account", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+        Spacer(Modifier.height(6.dp))
         Row(
             Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            listOf("expense", "income", "transfer").forEach { t ->
-                val active = entryType == t
+            accounts.filter { it.id != fromAccountId }.forEach { account ->
+                val active = toAccountId == account.id
                 Surface(
                     shape = RoundedCornerShape(999.dp),
                     color = if (active) Color.White else Color(0xFF242426),
-                    modifier = Modifier.clickable { entryType = t },
+                    modifier = Modifier.clickable { toAccountId = account.id },
                 ) {
                     Text(
-                        t.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                        account.name,
                         color = if (active) Color.Black else Color.White,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -3473,181 +3452,57 @@ private fun FinanceScreen(
                 }
             }
         }
-        if (accounts.isNotEmpty()) {
-            Text("From account", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                accounts.forEach { account ->
-                    val active = selectedAccountId == account.id
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = if (active) Color.White else Color(0xFF242426),
-                        modifier = Modifier.clickable { selectedAccountId = account.id },
-                    ) {
-                        Text(
-                            account.name,
-                            color = if (active) Color.Black else Color.White,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        )
-                    }
-                }
-            }
-            if (entryType == "transfer") {
-                Text("To account", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    accounts.filter { it.id != selectedAccountId }.forEach { account ->
-                        val active = selectedToAccountId == account.id
-                        Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = if (active) Color.White else Color(0xFF242426),
-                            modifier = Modifier.clickable { selectedToAccountId = account.id },
-                        ) {
-                            Text(
-                                account.name,
-                                color = if (active) Color.Black else Color.White,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                            )
-                        }
-                    }
-                }
-            }
+    }
+    Spacer(Modifier.height(8.dp))
+    BoopFilledTextField(value = title, onValueChange = { title = it }, label = { Text("Title") })
+    Spacer(Modifier.height(8.dp))
+    BoopFilledTextField(
+        value = amountText,
+        onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(10) },
+        label = { Text("Amount (CAD)") },
+    )
+    Spacer(Modifier.height(8.dp))
+    BoopFilledTextField(value = category, onValueChange = { category = it }, label = { Text("Category") })
+    Spacer(Modifier.height(8.dp))
+    BoopFilledTextField(value = subcategory, onValueChange = { subcategory = it }, label = { Text("Subcategory") })
+    Spacer(Modifier.height(8.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text("Due date (optional)", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+        TextButton(onClick = { showDuePicker = true }) {
+            Text(if (dueAt > 0L) SimpleDateFormat("MMM d, HH:mm", Locale.US).format(dueAt) else "Set due", color = Color.White)
         }
-        BoopFilledTextField(value = title, onValueChange = { title = it }, label = { Text("Title") })
-        BoopFilledTextField(
-            value = amountText,
-            onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(10) },
-            label = { Text("Amount") },
-        )
-        BoopFilledTextField(value = category, onValueChange = { category = it }, label = { Text("Category") })
-        if (categorySuggestions.isNotEmpty()) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                categorySuggestions.forEach { c ->
-                    Surface(shape = RoundedCornerShape(999.dp), color = Color(0xFF242426), modifier = Modifier.clickable { category = c }) {
-                        Text(c, color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
-                    }
-                }
-            }
-        }
-        BoopFilledTextField(value = subcategory, onValueChange = { subcategory = it }, label = { Text("Subcategory") })
-        if (subcategorySuggestions.isNotEmpty()) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                subcategorySuggestions.forEach { sc ->
-                    Surface(shape = RoundedCornerShape(999.dp), color = Color(0xFF242426), modifier = Modifier.clickable { subcategory = sc }) {
-                        Text(sc, color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
-                    }
-                }
-            }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Due date (optional)", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-            TextButton(onClick = { showDuePicker = true }) {
-                Text(
-                    if (dueAt > 0L) SimpleDateFormat("MMM d, HH:mm", Locale.US).format(dueAt) else "Set due",
-                    color = Color.White,
-                )
-            }
-        }
-        BoopFilledTextField(value = note, onValueChange = { note = it }, label = { Text("Note (optional)") })
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(
-                onClick = {
-                    val amount = amountText.toDoubleOrNull() ?: 0.0
-                    if (amount <= 0.0 || title.isBlank() || selectedAccountId.isBlank()) return@TextButton
-                    if (entryType == "transfer" && selectedToAccountId.isBlank()) return@TextButton
-                    onSaveEntry(
-                        BoopLedgerEntry(
-                            id = UUID.randomUUID().toString(),
-                            type = entryType,
-                            accountId = selectedAccountId,
-                            toAccountId = selectedToAccountId.takeIf { entryType == "transfer" },
-                            amount = amount,
-                            title = title.trim(),
-                            category = category.trim(),
-                            subcategory = subcategory.trim(),
-                            note = note.trim(),
-                            dueAtMillis = dueAt.takeIf { it > 0L },
-                        ),
-                    )
-                    title = ""
-                    amountText = ""
-                    category = ""
-                    subcategory = ""
-                    note = ""
-                    dueAt = 0L
-                },
-            ) { Text("Save entry", color = Color.White) }
-        }
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(entries.take(80), key = { it.id }) { entry ->
-                val fromName = accounts.firstOrNull { it.id == entry.accountId }?.name ?: "Unknown"
-                val toName = accounts.firstOrNull { it.id == entry.toAccountId }?.name.orEmpty()
-                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)), shape = RoundedCornerShape(14.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(entry.title, color = Color.White, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            when (entry.type) {
-                                "income" -> "Income · $fromName"
-                                "transfer" -> "Transfer · $fromName → $toName"
-                                else -> "Expense · $fromName"
-                            },
-                            color = Color(0xFFBFBFBF),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                        if (entry.category.isNotBlank() || entry.subcategory.isNotBlank()) {
-                            Text(
-                                listOf(entry.category, entry.subcategory).filter { it.isNotBlank() }.joinToString(" / "),
-                                color = Color(0xFF9EC2FF),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
-                        Text("CAD ${String.format(Locale.US, "%.2f", entry.amount)}", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                        entry.dueAtMillis?.let {
-                            Text("Due ${SimpleDateFormat("MMM d, HH:mm", Locale.US).format(it)}", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall)
-                        }
-                        if (entry.note.isNotBlank()) {
-                            Text(entry.note, color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-            }
-        }
-        ReminderPickerDialog(
-            visible = showDuePicker,
-            initialMillis = if (dueAt > 0L) dueAt else System.currentTimeMillis(),
-            onDismiss = { showDuePicker = false },
-            onConfirm = {
-                dueAt = it
-                showDuePicker = false
-            },
+    }
+    Spacer(Modifier.height(8.dp))
+    BoopFilledTextField(value = note, onValueChange = { note = it }, label = { Text("Note (optional)") })
+    Spacer(Modifier.height(16.dp))
+    BoopWhiteButton("Save transaction") {
+        val amount = amountText.toDoubleOrNull() ?: 0.0
+        if (title.isBlank() || amount <= 0.0 || fromAccountId.isBlank()) return@BoopWhiteButton
+        if (initial.type == "transfer" && toAccountId.isBlank()) return@BoopWhiteButton
+        onSave(
+            BoopLedgerEntry(
+                id = UUID.randomUUID().toString(),
+                type = initial.type,
+                accountId = fromAccountId,
+                toAccountId = toAccountId.takeIf { initial.type == "transfer" },
+                amount = amount,
+                title = title.trim(),
+                category = category.trim(),
+                subcategory = subcategory.trim(),
+                note = note.trim(),
+                dueAtMillis = dueAt.takeIf { it > 0L },
+            ),
         )
     }
+    ReminderPickerDialog(
+        visible = showDuePicker,
+        initialMillis = if (dueAt > 0L) dueAt else System.currentTimeMillis(),
+        onDismiss = { showDuePicker = false },
+        onConfirm = {
+            dueAt = it
+            showDuePicker = false
+        },
+    )
 }
 
 @Composable
