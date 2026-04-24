@@ -92,6 +92,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.AttachMoney
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Close
@@ -292,6 +293,8 @@ private fun BoopApp() {
     val tasks = remember { mutableStateListOf<BoopTask>() }
     val notes = remember { mutableStateListOf<BoopNote>() }
     val habits = remember { mutableStateListOf<BoopHabit>() }
+    val accounts = remember { mutableStateListOf<BoopAccount>() }
+    val ledgerEntries = remember { mutableStateListOf<BoopLedgerEntry>() }
 
     var itemSheet by remember { mutableStateOf<ItemSheet?>(null) }
     var habitCheckInOpen by remember { mutableStateOf(false) }
@@ -305,6 +308,10 @@ private fun BoopApp() {
         notes.addAll(repository.readNotes())
         habits.clear()
         habits.addAll(repository.readHabits())
+        accounts.clear()
+        accounts.addAll(repository.readAccounts())
+        ledgerEntries.clear()
+        ledgerEntries.addAll(repository.readLedgerEntries())
     }
 
     LaunchedEffect(Unit) {
@@ -530,6 +537,8 @@ private fun BoopApp() {
                             tasks = tasks,
                             notes = notes,
                             habits = habits,
+                            accounts = accounts,
+                            ledgerEntries = ledgerEntries,
                             calendarSyncRequest = calendarSyncRequest,
                             onPersistHabit = { habit ->
                                 repository.saveHabit(habit)
@@ -569,6 +578,14 @@ private fun BoopApp() {
                             onOpenHabitCheckIn = {
                                 itemSheet = null
                                 habitCheckInOpen = true
+                            },
+                            onSaveAccount = { account ->
+                                repository.saveAccount(account)
+                                refresh()
+                            },
+                            onSaveLedgerEntry = { entry ->
+                                repository.saveLedgerEntry(entry)
+                                refresh()
                             },
                         )
                     }
@@ -701,6 +718,8 @@ private fun BoopPagerPage(
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
     habits: List<BoopHabit>,
+    accounts: List<BoopAccount>,
+    ledgerEntries: List<BoopLedgerEntry>,
     calendarSyncRequest: Int,
     onPersistHabit: (BoopHabit) -> Unit,
     onSelectTab: (Int) -> Unit,
@@ -714,7 +733,10 @@ private fun BoopPagerPage(
     onCalendarSelectedDayChanged: (Long) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
     onOpenHabitCheckIn: () -> Unit,
+    onSaveAccount: (BoopAccount) -> Unit,
+    onSaveLedgerEntry: (BoopLedgerEntry) -> Unit,
 ) {
+    var showNotesInCombinedTab by rememberSaveable { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxSize()
@@ -730,17 +752,30 @@ private fun BoopPagerPage(
                 onOpenHabit = onEditHabit,
                 onOpenHabitCheckIn = onOpenHabitCheckIn,
                 onSearchPickTask = { onSelectTab(1); onEditTask(it) },
-                onSearchPickNote = { onSelectTab(3); onEditNote(it) },
-                onSearchPickHabit = { onSelectTab(4); onEditHabit(it) },
+                onSearchPickNote = { onSelectTab(1); onEditNote(it) },
+                onSearchPickHabit = { onSelectTab(3); onEditHabit(it) },
             )
-            1 -> TaskListScreen(
-                tasks = tasks,
-                onOpenTask = onEditTask,
-                onArchiveTask = onArchiveTask,
-                onCompleteTask = onCompleteTask,
-                onUnarchiveTask = onUnarchiveTask,
-                onRestoreCompletedTask = onRestoreCompletedTask,
-            )
+            1 -> {
+                if (showNotesInCombinedTab) {
+                    NotesListScreen(
+                        notes = notes,
+                        onOpenNote = onEditNote,
+                        title = "Notes",
+                        onHeaderTap = { showNotesInCombinedTab = false },
+                    )
+                } else {
+                    TaskListScreen(
+                        tasks = tasks,
+                        onOpenTask = onEditTask,
+                        onArchiveTask = onArchiveTask,
+                        onCompleteTask = onCompleteTask,
+                        onUnarchiveTask = onUnarchiveTask,
+                        onRestoreCompletedTask = onRestoreCompletedTask,
+                        title = "Tasks",
+                        onHeaderTap = { showNotesInCombinedTab = true },
+                    )
+                }
+            }
             2 -> CalendarScreen(
                 tasks = tasks,
                 syncRequest = calendarSyncRequest,
@@ -748,14 +783,16 @@ private fun BoopPagerPage(
                 onOpenEvent = onEditEvent,
                 onSelectedDayChanged = onCalendarSelectedDayChanged,
             )
-            3 -> NotesListScreen(
-                notes = notes,
-                onOpenNote = onEditNote,
-            )
-            else -> HabitsListScreen(
+            3 -> HabitsListScreen(
                 habits = habits,
                 onPersistHabit = onPersistHabit,
                 onOpenHabit = onEditHabit,
+            )
+            else -> FinanceScreen(
+                accounts = accounts,
+                entries = ledgerEntries,
+                onSaveAccount = onSaveAccount,
+                onSaveEntry = onSaveLedgerEntry,
             )
         }
     }
@@ -771,8 +808,8 @@ private fun BoopBottomNavBar(
         Triple(0, "Home", Icons.Outlined.Dashboard),
         Triple(1, "Tasks", Icons.Outlined.Notifications),
         Triple(2, "Calendar", Icons.Outlined.CalendarMonth),
-        Triple(3, "Notes", Icons.Outlined.EditNote),
-        Triple(4, "Habits", Icons.Outlined.Flag),
+        Triple(3, "Habits", Icons.Outlined.Flag),
+        Triple(4, "Finance", Icons.Outlined.AttachMoney),
     )
     BoxWithConstraints(
         Modifier
@@ -911,8 +948,8 @@ private fun BoopSpeedDialFab(
                     0 -> onExpandedChange(!expanded)
                     1 -> onOpenTask()
                     2 -> onExpandedChange(!expanded)
-                    3 -> onOpenNote()
-                    else -> onOpenHabit()
+                    3 -> onOpenHabit()
+                    else -> onExpandedChange(!expanded)
                 }
             },
             modifier = Modifier.pointerInput(selectedTab) {
@@ -2141,6 +2178,8 @@ private fun TaskListScreen(
     onCompleteTask: (BoopTask) -> Unit,
     onUnarchiveTask: (BoopTask) -> Unit,
     onRestoreCompletedTask: (BoopTask) -> Unit,
+    title: String = "Tasks",
+    onHeaderTap: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val activeTasks = tasks.filter { !it.done && !it.archived }.sortedBy { it.reminderAt }
@@ -2162,7 +2201,14 @@ private fun TaskListScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
-            Text("Tasks", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+            Text(
+                title,
+                fontSize = 58.sp,
+                lineHeight = 60.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White,
+                modifier = if (onHeaderTap != null) Modifier.clickable { onHeaderTap() } else Modifier,
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 FloatingActionButton(
                     onClick = { showCompleted = true },
@@ -2236,6 +2282,14 @@ private fun TaskListScreen(
                                         contentDescription = "Repeating task",
                                         tint = Color(0xFF9BC4FF),
                                         modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                if (!task.linkedNoteId.isNullOrBlank()) {
+                                    Icon(
+                                        Icons.Outlined.EditNote,
+                                        contentDescription = "Linked note",
+                                        tint = Color(0xFFB3D5FF),
+                                        modifier = Modifier.size(17.dp),
                                     )
                                 }
                             }
@@ -2925,6 +2979,8 @@ private fun CalendarScreen(
 private fun NotesListScreen(
     notes: List<BoopNote>,
     onOpenNote: (BoopNote) -> Unit,
+    title: String = "Notes",
+    onHeaderTap: (() -> Unit)? = null,
 ) {
     val activeNotes = notes.filter { !it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
     val archivedNotes = notes.filter { it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
@@ -2945,7 +3001,14 @@ private fun NotesListScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
-            Text("Notes", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+            Text(
+                title,
+                fontSize = 58.sp,
+                lineHeight = 60.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White,
+                modifier = if (onHeaderTap != null) Modifier.clickable { onHeaderTap() } else Modifier,
+            )
             FloatingActionButton(
                 onClick = { showArchive = true },
                 containerColor = Color.White,
@@ -3157,6 +3220,217 @@ private fun HabitsListScreen(
             Spacer(Modifier.height(92.dp))
             if (sortedHabits.isEmpty()) {
                 Text("No habits yet.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinanceScreen(
+    accounts: List<BoopAccount>,
+    entries: List<BoopLedgerEntry>,
+    onSaveAccount: (BoopAccount) -> Unit,
+    onSaveEntry: (BoopLedgerEntry) -> Unit,
+) {
+    var accountName by rememberSaveable { mutableStateOf("") }
+    var entryType by rememberSaveable { mutableStateOf("expense") }
+    var title by rememberSaveable { mutableStateOf("") }
+    var amountText by rememberSaveable { mutableStateOf("") }
+    var note by rememberSaveable { mutableStateOf("") }
+    var selectedAccountId by rememberSaveable { mutableStateOf(accounts.firstOrNull()?.id.orEmpty()) }
+    var selectedToAccountId by rememberSaveable { mutableStateOf(accounts.drop(1).firstOrNull()?.id.orEmpty()) }
+    val balances = remember(accounts, entries) {
+        accounts.associate { it.id to 0.0 }.toMutableMap().apply {
+            entries.forEach { entry ->
+                when (entry.type) {
+                    "income" -> this[entry.accountId] = (this[entry.accountId] ?: 0.0) + entry.amount
+                    "expense" -> this[entry.accountId] = (this[entry.accountId] ?: 0.0) - entry.amount
+                    "transfer" -> {
+                        this[entry.accountId] = (this[entry.accountId] ?: 0.0) - entry.amount
+                        entry.toAccountId?.let { toId -> this[toId] = (this[toId] ?: 0.0) + entry.amount }
+                    }
+                }
+            }
+        }
+    }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(top = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Finance", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+        BoopFilledTextField(
+            value = accountName,
+            onValueChange = { accountName = it },
+            label = { Text("Add account") },
+            placeholder = { Text("Cash, Bank, Card...", color = Color(0xFF8A8A8A)) },
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(
+                onClick = {
+                    if (accountName.isNotBlank()) {
+                        onSaveAccount(BoopAccount(id = UUID.randomUUID().toString(), name = accountName.trim()))
+                        accountName = ""
+                    }
+                },
+            ) { Text("Save account", color = Color.White) }
+        }
+        Text("Accounts", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
+        if (accounts.isEmpty()) {
+            Text("No accounts yet.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
+        } else {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                accounts.forEach { account ->
+                    Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF1B1B1E)) {
+                        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                            Text(account.name, color = Color.White, style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                "₹ ${String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)}",
+                                color = Color(0xFFBFBFBF),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Text("Add transaction", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf("expense", "income", "transfer").forEach { t ->
+                val active = entryType == t
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (active) Color.White else Color(0xFF242426),
+                    modifier = Modifier.clickable { entryType = t },
+                ) {
+                    Text(
+                        t.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                        color = if (active) Color.Black else Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    )
+                }
+            }
+        }
+        if (accounts.isNotEmpty()) {
+            Text("From account", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                accounts.forEach { account ->
+                    val active = selectedAccountId == account.id
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (active) Color.White else Color(0xFF242426),
+                        modifier = Modifier.clickable { selectedAccountId = account.id },
+                    ) {
+                        Text(
+                            account.name,
+                            color = if (active) Color.Black else Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        )
+                    }
+                }
+            }
+            if (entryType == "transfer") {
+                Text("To account", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    accounts.filter { it.id != selectedAccountId }.forEach { account ->
+                        val active = selectedToAccountId == account.id
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = if (active) Color.White else Color(0xFF242426),
+                            modifier = Modifier.clickable { selectedToAccountId = account.id },
+                        ) {
+                            Text(
+                                account.name,
+                                color = if (active) Color.Black else Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        BoopFilledTextField(value = title, onValueChange = { title = it }, label = { Text("Title") })
+        BoopFilledTextField(
+            value = amountText,
+            onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(10) },
+            label = { Text("Amount") },
+        )
+        BoopFilledTextField(value = note, onValueChange = { note = it }, label = { Text("Note (optional)") })
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(
+                onClick = {
+                    val amount = amountText.toDoubleOrNull() ?: 0.0
+                    if (amount <= 0.0 || title.isBlank() || selectedAccountId.isBlank()) return@TextButton
+                    if (entryType == "transfer" && selectedToAccountId.isBlank()) return@TextButton
+                    onSaveEntry(
+                        BoopLedgerEntry(
+                            id = UUID.randomUUID().toString(),
+                            type = entryType,
+                            accountId = selectedAccountId,
+                            toAccountId = selectedToAccountId.takeIf { entryType == "transfer" },
+                            amount = amount,
+                            title = title.trim(),
+                            note = note.trim(),
+                        ),
+                    )
+                    title = ""
+                    amountText = ""
+                    note = ""
+                },
+            ) { Text("Save entry", color = Color.White) }
+        }
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(entries.take(80), key = { it.id }) { entry ->
+                val fromName = accounts.firstOrNull { it.id == entry.accountId }?.name ?: "Unknown"
+                val toName = accounts.firstOrNull { it.id == entry.toAccountId }?.name.orEmpty()
+                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)), shape = RoundedCornerShape(14.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(entry.title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            when (entry.type) {
+                                "income" -> "Income · $fromName"
+                                "transfer" -> "Transfer · $fromName → $toName"
+                                else -> "Expense · $fromName"
+                            },
+                            color = Color(0xFFBFBFBF),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                        Text("₹ ${String.format(Locale.US, "%.2f", entry.amount)}", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                        if (entry.note.isNotBlank()) {
+                            Text(entry.note, color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
             }
         }
     }
@@ -4781,6 +5055,21 @@ data class BoopHabit(
     val quantityDailyTarget: Int = 30,
     val quantityDayValues: String = "",
 )
+data class BoopAccount(
+    val id: String,
+    val name: String,
+    val createdAtMillis: Long = System.currentTimeMillis(),
+)
+data class BoopLedgerEntry(
+    val id: String,
+    val type: String, // income | expense | transfer
+    val accountId: String,
+    val toAccountId: String? = null,
+    val amount: Double,
+    val title: String,
+    val note: String = "",
+    val createdAtMillis: Long = System.currentTimeMillis(),
+)
 
 private object AppContextHolder {
     lateinit var context: Context
@@ -4809,6 +5098,8 @@ private class BoopRepository(private val store: LocalStore) {
                 snap.getString("tasks")?.let { store.save("tasks", it) }
                 snap.getString("notes")?.let { store.save("notes", it) }
                 snap.getString("habits")?.let { store.save("habits", it) }
+                snap.getString("accounts")?.let { store.save("accounts", it) }
+                snap.getString("ledgerEntries")?.let { store.save("ledgerEntries", it) }
                 onRemoteLoaded()
             }
         }
@@ -4884,6 +5175,31 @@ private class BoopRepository(private val store: LocalStore) {
                 item.optString("quantityDayValues"),
             )
         }.sortedBy { it.title.lowercase(Locale.getDefault()) }
+    }
+
+    fun readAccounts(): List<BoopAccount> {
+        return parseArray(store.read("accounts")) { item ->
+            BoopAccount(
+                id = item.getString("id"),
+                name = item.optString("name"),
+                createdAtMillis = item.optLong("createdAt", System.currentTimeMillis()),
+            )
+        }.sortedBy { it.name.lowercase(Locale.getDefault()) }
+    }
+
+    fun readLedgerEntries(): List<BoopLedgerEntry> {
+        return parseArray(store.read("ledgerEntries")) { item ->
+            BoopLedgerEntry(
+                id = item.getString("id"),
+                type = item.optString("type", "expense"),
+                accountId = item.optString("accountId"),
+                toAccountId = item.optString("toAccountId").ifBlank { null },
+                amount = item.optDouble("amount", 0.0),
+                title = item.optString("title"),
+                note = item.optString("note"),
+                createdAtMillis = item.optLong("createdAt", System.currentTimeMillis()),
+            )
+        }.sortedByDescending { it.createdAtMillis }
     }
 
     fun saveTask(task: BoopTask) {
@@ -4997,6 +5313,44 @@ private class BoopRepository(private val store: LocalStore) {
         }
         store.save("habits", arr.toString())
         sync("habits", arr.toString())
+    }
+
+    fun saveAccount(account: BoopAccount) {
+        val updated = readAccounts().toMutableList().apply {
+            removeAll { it.id == account.id }
+            add(0, account)
+        }
+        val arr = JSONArray()
+        updated.forEach {
+            arr.put(
+                JSONObject()
+                    .put("id", it.id)
+                    .put("name", it.name)
+                    .put("createdAt", it.createdAtMillis),
+            )
+        }
+        store.save("accounts", arr.toString())
+        sync("accounts", arr.toString())
+    }
+
+    fun saveLedgerEntry(entry: BoopLedgerEntry) {
+        val updated = readLedgerEntries().toMutableList().apply { add(0, entry) }
+        val arr = JSONArray()
+        updated.forEach {
+            arr.put(
+                JSONObject()
+                    .put("id", it.id)
+                    .put("type", it.type)
+                    .put("accountId", it.accountId)
+                    .put("toAccountId", it.toAccountId ?: "")
+                    .put("amount", it.amount)
+                    .put("title", it.title)
+                    .put("note", it.note)
+                    .put("createdAt", it.createdAtMillis),
+            )
+        }
+        store.save("ledgerEntries", arr.toString())
+        sync("ledgerEntries", arr.toString())
     }
 
     private fun upsertTasks(tasks: List<BoopTask>, task: BoopTask?) {

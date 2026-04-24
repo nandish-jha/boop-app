@@ -13,8 +13,8 @@ android {
         applicationId = "com.prodash.reminders"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "4.9.14"
+        versionCode = 20
+        versionName = "4.9.15"
     }
 
     buildTypes {
