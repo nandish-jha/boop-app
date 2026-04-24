@@ -3411,48 +3411,49 @@ private fun FinanceScreen(
                 }
             }
         }
-        if (reconcileAccountId.isNotBlank()) {
-            val account = accounts.firstOrNull { it.id == reconcileAccountId }
-            if (account != null) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Set real balance · ${account.name}", color = Color.White, style = MaterialTheme.typography.titleSmall)
-                        BoopFilledTextField(
-                            value = reconcileBalanceText,
-                            onValueChange = { reconcileBalanceText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(12) },
-                            label = { Text("Current CAD balance") },
-                        )
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            TextButton(onClick = { reconcileAccountId = "" }) { Text("Cancel", color = Color(0xFFBFBFBF)) }
-                            TextButton(
-                                onClick = {
-                                    val target = reconcileBalanceText.toDoubleOrNull() ?: return@TextButton
-                                    val current = balances[account.id] ?: 0.0
-                                    val delta = target - current
-                                    if (kotlin.math.abs(delta) >= 0.005) {
-                                        onSaveEntry(
-                                            BoopLedgerEntry(
-                                                id = UUID.randomUUID().toString(),
-                                                type = if (delta >= 0) "income" else "expense",
-                                                accountId = account.id,
-                                                amount = kotlin.math.abs(delta),
-                                                title = "Balance adjustment",
-                                                note = "Reconciled to CAD ${String.format(Locale.US, "%.2f", target)}",
-                                            ),
-                                        )
-                                    }
-                                    reconcileAccountId = ""
-                                },
-                            ) { Text("Apply", color = Color.White) }
-                        }
-                    }
+    }
+    val reconcileAccount = accounts.firstOrNull { it.id == reconcileAccountId }
+    if (reconcileAccount != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { reconcileAccountId = "" },
+            title = { Text("Set real balance", color = Color.White) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(reconcileAccount.name, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+                    BoopFilledTextField(
+                        value = reconcileBalanceText,
+                        onValueChange = { reconcileBalanceText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(12) },
+                        label = { Text("Current CAD balance") },
+                    )
                 }
-            }
-        }
+            },
+            dismissButton = {
+                TextButton(onClick = { reconcileAccountId = "" }) { Text("Cancel", color = Color(0xFFBFBFBF)) }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val target = reconcileBalanceText.toDoubleOrNull() ?: return@TextButton
+                        val current = balances[reconcileAccount.id] ?: 0.0
+                        val delta = target - current
+                        if (kotlin.math.abs(delta) >= 0.005) {
+                            onSaveEntry(
+                                BoopLedgerEntry(
+                                    id = UUID.randomUUID().toString(),
+                                    type = if (delta >= 0) "income" else "expense",
+                                    accountId = reconcileAccount.id,
+                                    amount = kotlin.math.abs(delta),
+                                    title = "Balance adjustment",
+                                    note = "Reconciled to CAD ${String.format(Locale.US, "%.2f", target)}",
+                                ),
+                            )
+                        }
+                        reconcileAccountId = ""
+                    },
+                ) { Text("Apply", color = Color.White) }
+            },
+            containerColor = Color(0xFF151517),
+        )
     }
 }
 
