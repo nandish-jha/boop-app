@@ -818,6 +818,8 @@ private fun BoopPagerPage(
             else -> FinanceScreen(
                 accounts = accounts,
                 entries = ledgerEntries,
+                onSaveAccount = onSaveAccount,
+                onSaveEntry = onSaveLedgerEntry,
             )
         }
     }
@@ -3321,7 +3323,12 @@ private fun HabitsListScreen(
 private fun FinanceScreen(
     accounts: List<BoopAccount>,
     entries: List<BoopLedgerEntry>,
+    onSaveAccount: (BoopAccount) -> Unit,
+    onSaveEntry: (BoopLedgerEntry) -> Unit,
 ) {
+    var accountName by rememberSaveable { mutableStateOf("") }
+    var reconcileAccountId by rememberSaveable { mutableStateOf("") }
+    var reconcileBalanceText by rememberSaveable { mutableStateOf("") }
     val balances = remember(accounts, entries) {
         accounts.associate { it.id to 0.0 }.toMutableMap().apply {
             entries.forEach { entry ->
@@ -3343,6 +3350,22 @@ private fun FinanceScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Finance", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+        BoopFilledTextField(
+            value = accountName,
+            onValueChange = { accountName = it },
+            label = { Text("Add account") },
+            placeholder = { Text("Cash, Bank, Card...", color = Color(0xFF8A8A8A)) },
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(
+                onClick = {
+                    if (accountName.isNotBlank()) {
+                        onSaveAccount(BoopAccount(id = UUID.randomUUID().toString(), name = accountName.trim()))
+                        accountName = ""
+                    }
+                },
+            ) { Text("Save account", color = Color.White) }
+        }
         Text("Accounts", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
         if (accounts.isEmpty()) {
             Text("No accounts yet. Use + menu on Finance tab.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
@@ -3356,7 +3379,14 @@ private fun FinanceScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(accounts, key = { it.id }) { account ->
-                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)), shape = RoundedCornerShape(14.dp)) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.clickable {
+                        reconcileAccountId = account.id
+                        reconcileBalanceText = String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)
+                    },
+                ) {
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -3364,6 +3394,48 @@ private fun FinanceScreen(
                     ) {
                         Text(account.name, color = Color.White, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("CAD ${String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)}", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+        if (reconcileAccountId.isNotBlank()) {
+            val account = accounts.firstOrNull { it.id == reconcileAccountId }
+            if (account != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Set real balance · ${account.name}", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                        BoopFilledTextField(
+                            value = reconcileBalanceText,
+                            onValueChange = { reconcileBalanceText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(12) },
+                            label = { Text("Current CAD balance") },
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = { reconcileAccountId = "" }) { Text("Cancel", color = Color(0xFFBFBFBF)) }
+                            TextButton(
+                                onClick = {
+                                    val target = reconcileBalanceText.toDoubleOrNull() ?: return@TextButton
+                                    val current = balances[account.id] ?: 0.0
+                                    val delta = target - current
+                                    if (kotlin.math.abs(delta) >= 0.005) {
+                                        onSaveEntry(
+                                            BoopLedgerEntry(
+                                                id = UUID.randomUUID().toString(),
+                                                type = if (delta >= 0) "income" else "expense",
+                                                accountId = account.id,
+                                                amount = kotlin.math.abs(delta),
+                                                title = "Balance adjustment",
+                                                note = "Reconciled to CAD ${String.format(Locale.US, "%.2f", target)}",
+                                            ),
+                                        )
+                                    }
+                                    reconcileAccountId = ""
+                                },
+                            ) { Text("Apply", color = Color.White) }
+                        }
                     }
                 }
             }
