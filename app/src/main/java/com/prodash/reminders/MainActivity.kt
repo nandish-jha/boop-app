@@ -6,6 +6,7 @@
 package com.prodash.reminders
 
 import android.Manifest
+import android.app.Activity
 import android.app.AlarmManager
 import android.app.DatePickerDialog
 import android.app.NotificationChannel
@@ -116,6 +117,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -214,6 +216,11 @@ class MainActivity : ComponentActivity() {
         ReminderNotifier.createChannel(this)
         setContent { BoopApp() }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
 }
 
 private sealed class ItemSheet {
@@ -237,6 +244,7 @@ private sealed class ItemSheet {
         val attachmentUri: String?,
         val audioUri: String?,
         val tagsCsv: String,
+        val linkedTaskId: String? = null,
         val archived: Boolean = false,
         val createdAtMillis: Long = 0L,
         val updatedAtMillis: Long = 0L,
@@ -245,6 +253,7 @@ private sealed class ItemSheet {
     data class HabitSheet(
         val id: String?,
         val title: String,
+        val dayPeriodCategory: String,
         val goal: Int,
         val progress: Int,
         val dayKeys: String,
@@ -300,15 +309,15 @@ private fun BoopApp() {
     }
 
     val notificationPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { }
+                    ActivityResultContracts.RequestPermission(),
+                ) { }
 
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                LaunchedEffect(Unit) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = androidx.core.content.ContextCompat.checkSelfPermission(
                 AppContextHolder.context,
-                Manifest.permission.POST_NOTIFICATIONS,
-            ) == PackageManager.PERMISSION_GRANTED
+                            Manifest.permission.POST_NOTIFICATIONS,
+                        ) == PackageManager.PERMISSION_GRANTED
             if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
@@ -339,6 +348,7 @@ private fun BoopApp() {
             attachmentUri = note?.attachmentUri,
             audioUri = note?.audioUri,
             tagsCsv = note?.tagsCsv.orEmpty(),
+            linkedTaskId = note?.linkedTaskId,
             archived = note?.archived ?: false,
             createdAtMillis = note?.createdAtMillis ?: 0L,
             updatedAtMillis = note?.updatedAtMillis ?: 0L,
@@ -350,6 +360,7 @@ private fun BoopApp() {
         itemSheet = ItemSheet.HabitSheet(
             id = habit?.id,
             title = habit?.title.orEmpty(),
+            dayPeriodCategory = habit?.dayPeriodCategory ?: "day",
             goal = habit?.goal ?: 30,
             progress = habit?.progress ?: 0,
             dayKeys = habit?.dayKeys.orEmpty(),
@@ -362,9 +373,13 @@ private fun BoopApp() {
     }
 
     val context = LocalContext.current
+    val launchActivity = context as? Activity
+    var pendingOpenTaskId by rememberSaveable { mutableStateOf(launchActivity?.intent?.getStringExtra("openTaskId")) }
+    var pendingOpenEventId by rememberSaveable { mutableLongStateOf(launchActivity?.intent?.getLongExtra("openEventId", -1L) ?: -1L) }
+    var calendarCreateAtMillis by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
 
     fun openEventSheet(startAt: Long = System.currentTimeMillis(), existing: CalendarEventDetail? = null) {
-        val start = existing?.startAt ?: startAt
+        val start = existing?.startAt ?: (startOfDayMillis(startAt) + 9 * 60 * 60_000L)
         val endAt = existing?.endAt ?: (start + 60 * 60_000L)
         itemSheet = ItemSheet.EventSheet(
             eventId = existing?.eventId,
@@ -387,6 +402,20 @@ private fun BoopApp() {
     fun openEventSheetById(eventId: Long) {
         val detail = readCalendarEventDetail(context, eventId)
         openEventSheet(existing = detail)
+    }
+
+    LaunchedEffect(tasks, pendingOpenTaskId) {
+        val targetId = pendingOpenTaskId ?: return@LaunchedEffect
+        tasks.firstOrNull { it.id == targetId }?.let {
+            openTaskSheet(it)
+            pendingOpenTaskId = null
+        }
+    }
+    LaunchedEffect(pendingOpenEventId) {
+        if (pendingOpenEventId > 0L) {
+            openEventSheetById(pendingOpenEventId)
+            pendingOpenEventId = -1L
+        }
     }
 
     MaterialTheme(
@@ -456,7 +485,7 @@ private fun BoopApp() {
                             speedDialExpanded = false
                         },
                         onOpenTask = { openTaskSheet(null) },
-                        onOpenEvent = { openEventSheet() },
+                            onOpenEvent = { openEventSheet(startAt = calendarCreateAtMillis) },
                         onOpenExternalCalendar = {
                             try {
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://calendar.formula1.com/")))
@@ -509,6 +538,16 @@ private fun BoopApp() {
                                 ReminderScheduler.schedule(AppContextHolder.context, t.copy(archived = true))
                                 refresh()
                             },
+                            onCompleteTask = { t ->
+                                val updated = if (t.repeatEveryDays > 0) {
+                                    t.copy(reminderAt = nextRepeatReminderMillis(t.reminderAt, t.repeatEveryDays), done = false)
+                                } else {
+                                    t.copy(done = true)
+                                }
+                                repository.saveTask(updated)
+                                ReminderScheduler.schedule(AppContextHolder.context, updated)
+                                refresh()
+                            },
                             onUnarchiveTask = { t ->
                                 repository.saveTask(t.copy(archived = false))
                                 ReminderScheduler.schedule(AppContextHolder.context, t.copy(archived = false))
@@ -519,6 +558,7 @@ private fun BoopApp() {
                                 ReminderScheduler.schedule(AppContextHolder.context, t.copy(done = false))
                                 refresh()
                             },
+                            onCalendarSelectedDayChanged = { dayMillis -> calendarCreateAtMillis = dayMillis },
                             onEditHabit = { openHabitSheet(it) },
                             onOpenHabitCheckIn = {
                                 itemSheet = null
@@ -574,6 +614,7 @@ private fun BoopApp() {
                             )
                             is ItemSheet.NoteSheet -> NoteEditorSheet(
                                 initial = sheet,
+                                tasks = tasks.sortedBy { it.reminderAt },
                                 onDismiss = { itemSheet = null },
                                 onDelete = sheet.id?.let { id ->
                                     {
@@ -609,6 +650,7 @@ private fun BoopApp() {
                                 onDismiss = { itemSheet = null },
                                 onSave = { ok ->
                                     if (ok) {
+                                    calendarSyncRequest++
                                         itemSheet = null
                                     }
                                 },
@@ -657,8 +699,10 @@ private fun BoopPagerPage(
     onEditEvent: (Long) -> Unit,
     onEditNote: (BoopNote) -> Unit,
     onArchiveTask: (BoopTask) -> Unit,
+    onCompleteTask: (BoopTask) -> Unit,
     onUnarchiveTask: (BoopTask) -> Unit,
     onRestoreCompletedTask: (BoopTask) -> Unit,
+    onCalendarSelectedDayChanged: (Long) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
     onOpenHabitCheckIn: () -> Unit,
 ) {
@@ -684,6 +728,7 @@ private fun BoopPagerPage(
                 tasks = tasks,
                 onOpenTask = onEditTask,
                 onArchiveTask = onArchiveTask,
+                onCompleteTask = onCompleteTask,
                 onUnarchiveTask = onUnarchiveTask,
                 onRestoreCompletedTask = onRestoreCompletedTask,
             )
@@ -692,6 +737,7 @@ private fun BoopPagerPage(
                 syncRequest = calendarSyncRequest,
                 onOpenTask = onEditTask,
                 onOpenEvent = onEditEvent,
+                onSelectedDayChanged = onCalendarSelectedDayChanged,
             )
             3 -> NotesListScreen(
                 notes = notes,
@@ -1157,9 +1203,9 @@ private fun DashboardScreen(
         .sortedBy { it.reminderAt }
     val recentNotes = notes
         .filter { !it.archived }
-        .sortedByDescending { it.updatedAtMillis }
+        .sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
         .take(4)
-    val activeHabits = habits.take(6)
+    val activeHabits = habits.sortedBy { it.title.lowercase(Locale.getDefault()) }.take(6)
     var habitsExpanded by rememberSaveable { mutableStateOf(false) }
     var upcomingExpanded by rememberSaveable { mutableStateOf(false) }
     var notesExpanded by rememberSaveable { mutableStateOf(false) }
@@ -1279,6 +1325,25 @@ private fun DashboardScreen(
                         }
                     }
                 }
+                val quotes = remember {
+                    listOf(
+                        "Hope is a discipline. Keep showing up.",
+                        "The system may be broken; your next step still matters.",
+                        "Progress is rarely loud, but it is always real.",
+                        "No rescue is coming. Build anyway.",
+                        "Small consistency beats dramatic intention.",
+                        "You do not need certainty to start.",
+                        "Even in a bad timeline, meaning is handcrafted.",
+                        "Discipline is choosing future relief over present noise.",
+                    )
+                }
+                val quoteOfLaunch = remember { quotes.random() }
+                Text(
+                    "Quote: \"$quoteOfLaunch\"",
+                    color = Color(0xFF8E8E90),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+                )
             }
         }
         AnimatedVisibility(
@@ -1391,7 +1456,7 @@ private fun DashboardHabitCompactCard(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    habit.title,
+                    "${habit.title} · ${habit.dayPeriodCategory.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }}",
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
                     maxLines = 2,
@@ -1704,6 +1769,16 @@ private fun BoopNoteHtmlSnippet(html: String, maxLines: Int = 8) {
     )
 }
 
+private fun startOfDayMillis(timeMillis: Long): Long {
+    return Calendar.getInstance().apply {
+        timeInMillis = timeMillis
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
 private fun copyAttachmentToInternalFile(context: Context, source: Uri, baseName: String): String? {
     return try {
         val cr = context.contentResolver
@@ -2011,11 +2086,12 @@ private fun TaskListScreen(
     tasks: List<BoopTask>,
     onOpenTask: (BoopTask) -> Unit,
     onArchiveTask: (BoopTask) -> Unit,
+    onCompleteTask: (BoopTask) -> Unit,
     onUnarchiveTask: (BoopTask) -> Unit,
     onRestoreCompletedTask: (BoopTask) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val activeTasks = tasks.filter { !it.done && !it.archived }
+    val activeTasks = tasks.filter { !it.done && !it.archived }.sortedBy { it.reminderAt }
     val archivedTasks = tasks.filter { it.archived }.sortedByDescending { it.reminderAt }
     val completedTasks = tasks.filter { it.done && !it.archived }.sortedByDescending { it.reminderAt }
     var showArchive by rememberSaveable { mutableStateOf(false) }
@@ -2112,20 +2188,20 @@ private fun TaskListScreen(
                                 }
                             }
                         }
-                        IconButton(
+                        Checkbox(
+                            checked = false,
                             enabled = !isArchiving,
-                            onClick = {
-                                if (pendingArchiveTaskId != null) return@IconButton
-                                pendingArchiveTaskId = task.id
-                                scope.launch {
-                                    delay(180)
-                                    onArchiveTask(task)
-                                    pendingArchiveTaskId = null
+                            onCheckedChange = {
+                                if (pendingArchiveTaskId == null) {
+                                    pendingArchiveTaskId = task.id
+                                    scope.launch {
+                                        delay(180)
+                                        onCompleteTask(task)
+                                        pendingArchiveTaskId = null
+                                    }
                                 }
                             },
-                        ) {
-                            Icon(Icons.Outlined.Archive, contentDescription = "Archive task", tint = Color(0xFFFFD98A))
-                        }
+                        )
                     }
                 }
             }
@@ -2313,6 +2389,7 @@ private fun CalendarScreen(
     syncRequest: Int,
     onOpenTask: (BoopTask) -> Unit,
     onOpenEvent: (Long) -> Unit,
+    onSelectedDayChanged: (Long) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2348,6 +2425,9 @@ private fun CalendarScreen(
             set(Calendar.MILLISECOND, 0)
         }
     }
+    LaunchedEffect(selectedDay.timeInMillis) {
+        onSelectedDayChanged(selectedDay.timeInMillis)
+    }
     val todayNoon = remember {
         Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 12)
@@ -2362,8 +2442,26 @@ private fun CalendarScreen(
             .sortedBy { it.reminderAt }
     }
     val headerLabel = remember(selectedMillis) { SimpleDateFormat("EEE, MMM dd", Locale.US).format(selectedMillis) }
-    val syncRangeStart = remember { Calendar.getInstance().apply { add(Calendar.YEAR, -10); set(Calendar.MONTH, 0); set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis }
-    val syncRangeEnd = remember { Calendar.getInstance().apply { add(Calendar.YEAR, 10); set(Calendar.MONTH, 11); set(Calendar.DAY_OF_MONTH, 31); set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999) }.timeInMillis }
+    val syncRangeStart = remember(selectedMillis) {
+        Calendar.getInstance().apply {
+            timeInMillis = selectedMillis
+            add(Calendar.DAY_OF_MONTH, -120)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+    val syncRangeEnd = remember(selectedMillis) {
+        Calendar.getInstance().apply {
+            timeInMillis = selectedMillis
+            add(Calendar.DAY_OF_MONTH, 120)
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+    }
     var lastSyncStatus by rememberSaveable { mutableStateOf("Tap sync to load Google events into Calendar.") }
     var googleEventsCache by remember { mutableStateOf(emptyList<CalendarEventUi>()) }
     var calendarGranted by remember {
@@ -2401,6 +2499,11 @@ private fun CalendarScreen(
         if (calendarGranted && googleEventsCache.isEmpty()) {
             lastSyncStatus = "Syncing Google Calendar..."
             refreshGoogleEvents(true)
+        }
+    }
+    LaunchedEffect(calendarGranted, syncRangeStart, syncRangeEnd) {
+        if (calendarGranted) {
+            refreshGoogleEvents(false)
         }
     }
     LaunchedEffect(calendarGranted) {
@@ -2492,7 +2595,7 @@ private fun CalendarScreen(
     }
     val weekDays = remember(selectedMillis) {
         val start = (selectedDay.clone() as Calendar).apply {
-            val shift = (get(Calendar.DAY_OF_WEEK) + 5) % 7
+            val shift = (get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY + 7) % 7
             add(Calendar.DAY_OF_MONTH, -shift)
             set(Calendar.HOUR_OF_DAY, 12)
         }
@@ -2522,7 +2625,18 @@ private fun CalendarScreen(
                 },
             )
         }
-        Box(Modifier.fillMaxWidth().animateContentSize()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .animateContentSize()
+                .pointerInput(compactWeekMode) {
+                    detectVerticalDragGestures { _, dragAmount ->
+                        // Swipe up on month => week, swipe down on week => month.
+                        if (!compactWeekMode && dragAmount < -6f) compactWeekForced = true
+                        if (compactWeekMode && dragAmount > 6f) compactWeekForced = false
+                    }
+                },
+        ) {
             Crossfade(targetState = compactWeekMode, label = "month_week_smooth") { weekMode ->
                 if (!weekMode) {
                     HorizontalPager(
@@ -2533,7 +2647,7 @@ private fun CalendarScreen(
                             set(Calendar.DAY_OF_MONTH, 1)
                             add(Calendar.MONTH, page - basePage)
                         }
-                        val firstDayOffset = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
+                        val firstDayOffset = (cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY + 7) % 7
                         val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
                         val cells = mutableListOf<Int>().apply {
                             repeat(firstDayOffset) { add(0) }
@@ -2549,7 +2663,7 @@ private fun CalendarScreen(
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                listOf("M", "T", "W", "T", "F", "S", "S").forEach { label ->
+                                listOf("S", "M", "T", "W", "T", "F", "S").forEach { label ->
                                     Text(
                                         label,
                                         modifier = Modifier.weight(1f),
@@ -2749,8 +2863,8 @@ private fun NotesListScreen(
     notes: List<BoopNote>,
     onOpenNote: (BoopNote) -> Unit,
 ) {
-    val activeNotes = notes.filter { !it.archived }
-    val archivedNotes = notes.filter { it.archived }.sortedByDescending { it.updatedAtMillis }
+    val activeNotes = notes.filter { !it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
+    val archivedNotes = notes.filter { it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
     var showArchive by rememberSaveable { mutableStateOf(false) }
     var selectedTag by rememberSaveable { mutableStateOf("All") }
     val availableTags = activeNotes.flatMap { parseNoteTags(it.tagsCsv) }.distinctBy { it.lowercase(Locale.getDefault()) }
@@ -2939,6 +3053,7 @@ private fun HabitsListScreen(
     onOpenHabit: (BoopHabit) -> Unit,
 ) {
     val todayKey = todayHabitDayKey()
+    val sortedHabits = remember(habits) { habits.sortedBy { it.title.lowercase(Locale.getDefault()) } }
     Column(
         Modifier
             .fillMaxSize()
@@ -2953,7 +3068,7 @@ private fun HabitsListScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(habits, key = { it.id }) { habit ->
+            items(sortedHabits, key = { it.id }) { habit ->
                 val doneCount = parseHabitDayKeys(habit.dayKeys).size
                 val todayAmount = parseHabitDayValues(habit.quantityDayValues)[todayKey] ?: 0
                 val progressFraction = if (habit.quantityMode) {
@@ -2969,7 +3084,13 @@ private fun HabitsListScreen(
                         .clickable { onOpenHabit(habit) },
                 ) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(habit.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            "${habit.title} · ${habit.dayPeriodCategory.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }}",
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         Surface(
                             shape = RoundedCornerShape(999.dp),
                             color = Color(0xFF242426),
@@ -3303,7 +3424,13 @@ private fun GlobalSearchResultsInline(
                                 .clickable { onPickHabit(habit) },
                         ) {
                             Column(Modifier.padding(12.dp)) {
-                                Text(habit.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    "${habit.title} · ${habit.dayPeriodCategory.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }}",
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                                 Text("${habit.progress} / ${habit.goal} days", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                             }
                         }
@@ -3688,6 +3815,37 @@ private fun EventEditorSheet(
             Text("Tap to edit", color = Color(0xFF6E6E70), style = MaterialTheme.typography.labelSmall)
         }
     }
+    Spacer(Modifier.height(6.dp))
+    val todayRef = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 12)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+    val todayDateLabel = remember { SimpleDateFormat("EEE, MMM dd", Locale.US).format(todayRef) }
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = Color(0xFF151517),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFBFBF)),
+        modifier = Modifier.clickable {
+            val current = Calendar.getInstance().apply { timeInMillis = startAt }
+            val today = Calendar.getInstance().apply { timeInMillis = todayRef }
+            current.set(Calendar.YEAR, today.get(Calendar.YEAR))
+            current.set(Calendar.MONTH, today.get(Calendar.MONTH))
+            current.set(Calendar.DAY_OF_MONTH, today.get(Calendar.DAY_OF_MONTH))
+            startAt = current.timeInMillis
+            if (endAt <= startAt) endAt = startAt + 60 * 60_000L
+        },
+    ) {
+        Text(
+            "Today: $todayDateLabel",
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+    }
     Spacer(Modifier.height(8.dp))
     Surface(
         onClick = { pickEnd = true },
@@ -3954,6 +4112,20 @@ private fun TaskEditorSheet(
             BoopSheetHeaderTitle(if (initial.id == null) "New task" else "Edit task")
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
+            if (initial.id != null) {
+                IconButton(
+                    onClick = {
+                        hasExplicitSave = true
+                        buildTaskForSaveOrNull()?.let { onSave(it.copy(archived = !initial.archived)) }
+                    },
+                ) {
+                    if (initial.archived) {
+                        Icon(Icons.Outlined.Unarchive, contentDescription = "Restore task", tint = Color(0xFF9AE6B4))
+                    } else {
+                        Icon(Icons.Outlined.Archive, contentDescription = "Archive task", tint = Color(0xFFFFD98A))
+                    }
+                }
+            }
             if (onDelete != null) {
                 IconButton(
                     onClick = {
@@ -4085,6 +4257,7 @@ private fun TaskEditorSheet(
 @Composable
 private fun NoteEditorSheet(
     initial: ItemSheet.NoteSheet,
+    tasks: List<BoopTask>,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
     onSave: (BoopNote) -> Unit,
@@ -4093,6 +4266,7 @@ private fun NoteEditorSheet(
     val session = initial.sessionKey
     var title by rememberSaveable(session) { mutableStateOf(initial.title) }
     var tagsCsv by rememberSaveable(session) { mutableStateOf(initial.tagsCsv) }
+    var linkedTaskId by rememberSaveable(session) { mutableStateOf(initial.linkedTaskId) }
     var attachmentStored by remember(session) { mutableStateOf(parseNoteAttachments(initial.attachmentUri)) }
     var audioStored by remember(session) { mutableStateOf(initial.audioUri) }
     var bodyEdit by remember(session) { mutableStateOf<EditText?>(null) }
@@ -4121,6 +4295,7 @@ private fun NoteEditorSheet(
             audioUri = audioStored,
             tagsCsv = normalizeNoteTags(tagsCsv),
             ocrText = ocrText,
+            linkedTaskId = linkedTaskId,
             archived = initial.archived,
             createdAtMillis = initial.createdAtMillis,
             updatedAtMillis = System.currentTimeMillis(),
@@ -4206,6 +4381,7 @@ private fun NoteEditorSheet(
                                 audioUri = audioStored,
                                 tagsCsv = normalizeNoteTags(tagsCsv),
                                 ocrText = extractTextFromAttachment(context, serializedAttachments),
+                                linkedTaskId = linkedTaskId,
                                 archived = !initial.archived,
                                 createdAtMillis = initial.createdAtMillis,
                                 updatedAtMillis = System.currentTimeMillis(),
@@ -4265,6 +4441,46 @@ private fun NoteEditorSheet(
         label = { Text("Tags") },
         placeholder = { Text("work, urgent, ideas", color = Color(0xFF8A8A8A)) },
     )
+    Spacer(Modifier.height(6.dp))
+    Text("Linked task reminder", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+    Spacer(Modifier.height(4.dp))
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        val noneActive = linkedTaskId == null
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = if (noneActive) Color.White else Color(0xFF242426),
+            modifier = Modifier.clickable { linkedTaskId = null },
+        ) {
+            Text(
+                "None",
+                color = if (noneActive) Color.Black else Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            )
+        }
+        tasks.filter { !it.archived }.sortedBy { it.reminderAt }.take(20).forEach { t ->
+            val active = linkedTaskId == t.id
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = if (active) Color.White else Color(0xFF242426),
+                modifier = Modifier.clickable { linkedTaskId = t.id },
+            ) {
+                Text(
+                    t.title.ifBlank { "Untitled task" },
+                    color = if (active) Color.Black else Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                )
+            }
+        }
+    }
     Spacer(Modifier.height(8.dp))
     Text("Note", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
     Spacer(Modifier.height(4.dp))
@@ -4455,6 +4671,7 @@ private fun HabitEditorSheet(
     onSave: (BoopHabit) -> Unit,
 ) {
     var label by rememberSaveable(initial.id) { mutableStateOf(initial.title) }
+    var dayPeriodCategory by rememberSaveable(initial.id) { mutableStateOf(initial.dayPeriodCategory) }
     var goalText by rememberSaveable(initial.id) { mutableStateOf(initial.goal.toString()) }
     var progress by remember(initial.id) { mutableIntStateOf(initial.progress) }
     var quantityMode by rememberSaveable(initial.id) { mutableStateOf(initial.quantityMode) }
@@ -4482,6 +4699,31 @@ private fun HabitEditorSheet(
         onValueChange = { label = it },
         label = { Text("Habit / goal") },
     )
+    Spacer(Modifier.height(8.dp))
+    Text("Time category", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
+    Spacer(Modifier.height(6.dp))
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf("day", "mid", "night").forEach { cat ->
+            val active = dayPeriodCategory == cat
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = if (active) Color.White else Color(0xFF242426),
+                modifier = Modifier.clickable { dayPeriodCategory = cat },
+            ) {
+                Text(
+                    cat.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                    color = if (active) Color.Black else Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                )
+            }
+        }
+    }
     Spacer(Modifier.height(8.dp))
     BoopFilledTextField(
         value = goalText,
@@ -4533,6 +4775,7 @@ private fun HabitEditorSheet(
                 BoopHabit(
                     id = initial.id ?: UUID.randomUUID().toString(),
                     title = label.trim(),
+                    dayPeriodCategory = dayPeriodCategory,
                     goal = g,
                     progress = progress.coerceIn(0, g),
                     dayKeys = initial.dayKeys,
@@ -4576,6 +4819,7 @@ data class BoopNote(
     val audioUri: String? = null,
     val tagsCsv: String = "",
     val ocrText: String = "",
+    val linkedTaskId: String? = null,
     val archived: Boolean = false,
     /** First save time (local). */
     val createdAtMillis: Long = 0L,
@@ -4586,6 +4830,7 @@ data class BoopNote(
 data class BoopHabit(
     val id: String,
     val title: String,
+    val dayPeriodCategory: String = "day",
     val goal: Int,
     val progress: Int,
     val dayKeys: String = "",
@@ -4645,7 +4890,7 @@ private class BoopRepository(private val store: LocalStore) {
                 repeatEveryDays = item.optInt("repeatEveryDays", 0),
                 archived = archived,
             )
-        }
+        }.sortedBy { it.reminderAt }
     }
 
     fun readNotes(): List<BoopNote> {
@@ -4671,13 +4916,14 @@ private class BoopRepository(private val store: LocalStore) {
                     audioUri = item.optString("audioUri").ifBlank { null },
                     tagsCsv = item.optString("tags"),
                     ocrText = item.optString("ocrText"),
+                    linkedTaskId = item.optString("linkedTaskId").ifBlank { null },
                     archived = item.optBoolean("archived", false),
                     createdAtMillis = createdAt,
                     updatedAtMillis = u,
                 ),
             )
         }
-        return out
+        return out.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
     }
 
     fun readHabits(): List<BoopHabit> {
@@ -4685,6 +4931,7 @@ private class BoopRepository(private val store: LocalStore) {
             BoopHabit(
                 item.getString("id"),
                 item.getString("title"),
+                item.optString("dayPeriodCategory", "day"),
                 item.getInt("goal"),
                 item.getInt("progress"),
                 item.optString("dayKeys"),
@@ -4693,7 +4940,7 @@ private class BoopRepository(private val store: LocalStore) {
                 item.optInt("quantityDailyTarget", 30),
                 item.optString("quantityDayValues"),
             )
-        }
+        }.sortedBy { it.title.lowercase(Locale.getDefault()) }
     }
 
     fun saveTask(task: BoopTask) {
@@ -4729,6 +4976,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("audioUri", it.audioUri ?: "")
                     .put("tags", it.tagsCsv)
                     .put("ocrText", it.ocrText)
+                    .put("linkedTaskId", it.linkedTaskId ?: "")
                     .put("archived", it.archived)
                     .put("createdAt", it.createdAtMillis)
                     .put("updatedAt", it.updatedAtMillis),
@@ -4751,6 +4999,7 @@ private class BoopRepository(private val store: LocalStore) {
                     .put("audioUri", it.audioUri ?: "")
                     .put("tags", it.tagsCsv)
                     .put("ocrText", it.ocrText)
+                    .put("linkedTaskId", it.linkedTaskId ?: "")
                     .put("archived", it.archived)
                     .put("createdAt", it.createdAtMillis)
                     .put("updatedAt", it.updatedAtMillis),
@@ -4771,6 +5020,7 @@ private class BoopRepository(private val store: LocalStore) {
                 JSONObject()
                     .put("id", it.id)
                     .put("title", it.title)
+                    .put("dayPeriodCategory", it.dayPeriodCategory)
                     .put("goal", it.goal)
                     .put("progress", it.progress)
                     .put("dayKeys", it.dayKeys)
@@ -4792,6 +5042,7 @@ private class BoopRepository(private val store: LocalStore) {
                 JSONObject()
                     .put("id", it.id)
                     .put("title", it.title)
+                    .put("dayPeriodCategory", it.dayPeriodCategory)
                     .put("goal", it.goal)
                     .put("progress", it.progress)
                     .put("dayKeys", it.dayKeys)
@@ -4871,6 +5122,7 @@ object ReminderScheduler {
             putExtra("title", task.title)
             putExtra("id", task.id.hashCode())
             putExtra("taskId", task.id)
+            putExtra("eventId", -1L)
         }
         val pending = PendingIntent.getBroadcast(
             context,
@@ -4951,6 +5203,7 @@ object EventReminderScheduler {
                 putExtra("title", "Event: $title")
                 putExtra("id", requestCode)
                 putExtra("taskId", "")
+                putExtra("eventId", eventId)
             }
             val pending = PendingIntent.getBroadcast(
                 context,
@@ -4984,6 +5237,7 @@ object EventReminderScheduler {
                 putExtra("subtitle", source)
                 putExtra("id", requestCode)
                 putExtra("taskId", "")
+                putExtra("eventId", event.id)
             }
             val pending = PendingIntent.getBroadcast(
                 context,
@@ -5019,7 +5273,8 @@ class TaskReminderReceiver : BroadcastReceiver() {
         val id = intent.getIntExtra("id", 1)
         val taskId = intent.getStringExtra("taskId").orEmpty()
         val subtitle = intent.getStringExtra("subtitle").orEmpty()
-        ReminderNotifier.show(context, id, title, taskId, subtitle)
+        val eventId = intent.getLongExtra("eventId", -1L)
+        ReminderNotifier.show(context, id, title, taskId, subtitle, eventId)
     }
 }
 
@@ -5037,7 +5292,7 @@ object ReminderNotifier {
         LocalStore.init(context)
     }
 
-    fun show(context: Context, id: Int, title: String, taskId: String, subtitle: String = "") {
+    fun show(context: Context, id: Int, title: String, taskId: String, subtitle: String = "", eventId: Long = -1L) {
         val completeIntent = Intent(context, TaskReminderReceiver::class.java).apply {
             action = ACTION_COMPLETE_TASK
             putExtra("id", id)
@@ -5055,6 +5310,18 @@ object ReminderNotifier {
             .setContentText(title)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+        val launchIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            if (taskId.isNotBlank()) putExtra("openTaskId", taskId)
+            if (eventId > 0L) putExtra("openEventId", eventId)
+        }
+        val launchPending = PendingIntent.getActivity(
+            context,
+            id + 20_000,
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        builder.setContentIntent(launchPending)
         if (subtitle.isNotBlank()) {
             builder.setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText("$title\n$subtitle"))
         }
