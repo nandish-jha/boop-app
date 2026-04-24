@@ -1528,7 +1528,6 @@ private fun DashboardScreen(
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = Color(0xFF151517),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF26262B)),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
@@ -3385,11 +3384,22 @@ private fun FinanceScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Accounts", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
-        if (viewMode == "overview") {
-            Text("Overview", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleSmall)
-        } else {
-            TextButton(onClick = { viewMode = "overview" }) {
-                Text("Back to overview", color = Color(0xFFBFBFBF))
+        if (viewMode != "overview") {
+            val backInteraction = remember { MutableInteractionSource() }
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = Color(0xFF1D1D20),
+                modifier = Modifier.clickable(
+                    interactionSource = backInteraction,
+                    indication = null,
+                ) { viewMode = "overview" },
+            ) {
+                Text(
+                    "Back",
+                    color = Color(0xFFD8D8DA),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                )
             }
         }
         when (viewMode) {
@@ -3519,7 +3529,7 @@ private fun FinanceScreen(
                                     Text("Accounts list", color = Color.White, style = MaterialTheme.typography.titleSmall)
                                     Text("${accounts.size} accounts", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                 }
-                                Text(">", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleMedium)
+                                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, tint = Color(0xFFBFBFBF))
                             }
                         }
                     }
@@ -3534,7 +3544,7 @@ private fun FinanceScreen(
                                     Text("Transaction history", color = Color.White, style = MaterialTheme.typography.titleSmall)
                                     Text("${entries.size} records", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                 }
-                                Text(">", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.titleMedium)
+                                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, tint = Color(0xFFBFBFBF))
                             }
                         }
                     }
