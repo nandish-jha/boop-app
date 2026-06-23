@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Boop</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --surface2: #22222f;
+    --border: #2e2e40;
+    --accent: #7c6cfc;
+    --accent2: #a78bfa;
+    --text: #e8e8f0;
+    --muted: #7878a0;
+    --task: #60a5fa;
+    --note: #34d399;
+    --journal: #f472b6;
+    --quote: #fbbf24;
+    --home: #818cf8;
+    --work: #fb923c;
+    --health: #4ade80;
+    --finance: #38bdf8;
+    --personal: #e879f9;
+    --red: #f87171;
+    --green: #4ade80;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+  }
+  header h1 { font-size: 20px; font-weight: 700; color: var(--accent2); letter-spacing: -0.5px; }
+  header .subtitle { font-size: 12px; color: var(--muted); }
+
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 57px); }
+
+  /* Sidebar */
+  aside {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .nav-btn {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 8px; border: none;
+    background: none; color: var(--muted); cursor: pointer;
+    font-size: 14px; text-align: left; width: 100%;
+    transition: all 0.15s;
+  }
+  .nav-btn:hover { background: var(--surface2); color: var(--text); }
+  .nav-btn.active { background: var(--surface2); color: var(--accent2); }
+  .nav-btn .icon { font-size: 16px; width: 20px; text-align: center; }
+  .nav-section { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; padding: 16px 14px 6px; }
+
+  /* Main */
+  main { padding: 24px; overflow-y: auto; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Capture bar */
+  .capture-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .capture-bar h2 { font-size: 14px; font-weight: 600; color: var(--muted); }
+  .capture-input-row { display: flex; gap: 10px; }
+  textarea#captureText {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); font-size: 14px;
+    padding: 12px 14px; resize: none; height: 64px;
+    font-family: inherit; transition: border-color 0.15s;
+    line-height: 1.5;
+  }
+  textarea#captureText:focus { outline: none; border-color: var(--accent); }
+  textarea#captureText::placeholder { color: var(--muted); }
+  .btn-group { display: flex; flex-direction: column; gap: 8px; }
+
+  button {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 6px; padding: 10px 16px; border-radius: 8px; border: none;
+    cursor: pointer; font-size: 13px; font-weight: 600;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent2); }
+  .btn-mic { background: var(--surface2); color: var(--text); border: 1px solid var(--border); min-width: 46px; padding: 10px; }
+  .btn-mic.recording { background: #7f1d1d; border-color: var(--red); color: var(--red); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+  /* Status banner */
+  #statusBanner {
+    font-size: 13px; padding: 10px 14px; border-radius: 8px;
+    display: none; margin-bottom: 16px;
+  }
+  #statusBanner.show { display: block; }
+  #statusBanner.success { background: #052e16; border: 1px solid #16a34a; color: var(--green); }
+  #statusBanner.error { background: #2d0a0a; border: 1px solid #dc2626; color: var(--red); }
+  #statusBanner.info { background: #1e1b4b; border: 1px solid var(--accent); color: var(--accent2); }
+
+  /* Items list */
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .filter-chip {
+    padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--muted); font-size: 12px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .filter-chip:hover { border-color: var(--accent); color: var(--text); }
+  .filter-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .items-grid { display: flex; flex-direction: column; gap: 10px; }
+  .item-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    gap: 12px;
+    transition: border-color 0.15s;
+    cursor: default;
+  }
+  .item-card:hover { border-color: var(--accent); }
+  .item-card.done { opacity: 0.5; }
+
+  .type-dot {
+    width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0;
+  }
+  .type-dot.task { background: var(--task); }
+  .type-dot.note { background: var(--note); }
+  .type-dot.journal { background: var(--journal); }
+  .type-dot.quote { background: var(--quote); }
+
+  .item-body { flex: 1; min-width: 0; }
+  .item-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; line-height: 1.3; }
+  .item-content { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 8px; }
+  .item-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500;
+  }
+  .badge.type-task { background: #1e3a5f; color: var(--task); }
+  .badge.type-note { background: #064e3b; color: var(--note); }
+  .badge.type-journal { background: #500724; color: var(--journal); }
+  .badge.type-quote { background: #451a03; color: var(--quote); }
+  .badge.area { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+  .badge.priority-high { background: #450a0a; color: var(--red); }
+  .badge.priority-medium { background: #1c1917; color: var(--quote); }
+  .badge.priority-low { background: #1a2e1a; color: var(--green); }
+  .badge.due { background: var(--surface2); color: var(--muted); }
+  .badge.done-badge { background: #064e3b; color: var(--green); }
+
+  .item-actions { display: flex; gap: 6px; align-items: flex-start; flex-shrink: 0; }
+  .icon-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    padding: 4px 6px; border-radius: 6px; font-size: 14px;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { background: var(--surface2); color: var(--text); }
+  .icon-btn.done-btn:hover { color: var(--green); }
+  .icon-btn.del-btn:hover { color: var(--red); }
+
+  /* Stats cards */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .stat-card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; color: var(--accent2); }
+
+  /* Recent activity */
+  .section-title { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty p { font-size: 14px; }
+
+  /* Spinner */
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 24px; width: 480px; max-width: 95vw;
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 20px; }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px; padding: 10px 12px;
+    font-family: inherit;
+  }
+  .form-group textarea { height: 80px; resize: vertical; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none; border-color: var(--accent);
+  }
+  .form-group select option { background: var(--surface); }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  .mic-status {
+    font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px;
+  }
+  .mic-status.active { color: var(--red); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>⚡ Boop</h1>
+    <div class="subtitle">Your personal capture system</div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="nav-section">Views</div>
+    <button class="nav-btn active" data-view="dashboard" onclick="showView('dashboard')">
+      <span class="icon">🏠</span> Dashboard
+    </button>
+    <button class="nav-btn" data-view="capture" onclick="showView('capture')">
+      <span class="icon">✨</span> Capture
+    </button>
+    <button class="nav-btn" data-view="tasks" onclick="showView('tasks'); loadItems('task')">
+      <span class="icon">✅</span> Tasks
+    </button>
+    <button class="nav-btn" data-view="notes" onclick="showView('notes'); loadItems('note')">
+      <span class="icon">📝</span> Notes
+    </button>
+    <button class="nav-btn" data-view="journal" onclick="showView('journal'); loadItems('journal')">
+      <span class="icon">📖</span> Journal
+    </button>
+    <button class="nav-btn" data-view="quotes" onclick="showView('quotes'); loadItems('quote')">
+      <span class="icon">💬</span> Quotes
+    </button>
+    <div class="nav-section">All</div>
+    <button class="nav-btn" data-view="all" onclick="showView('all'); loadItems()">
+      <span class="icon">📋</span> Everything
+    </button>
+  </aside>
+
+  <main>
+    <div id="statusBanner"></div>
+
+    <!-- Dashboard -->
+    <div class="view active" id="view-dashboard">
+      <div class="stats-grid" id="statsGrid"></div>
+      <div class="section-title">Recent captures</div>
+      <div class="items-grid" id="recentItems"></div>
+    </div>
+
+    <!-- Capture -->
+    <div class="view" id="view-capture">
+      <div class="capture-bar">
+        <h2>✨ What's on your mind?</h2>
+        <div class="capture-input-row">
+          <textarea id="captureText" placeholder="Say or type anything — a task, thought, journal entry, quote… Claude will figure out what it is and organize it for you."></textarea>
+          <div class="btn-group">
+            <button class="btn-mic" id="micBtn" onclick="toggleMic()" title="Voice input">🎤</button>
+          </div>
+        </div>
+        <div class="mic-status" id="micStatus" style="display:none">
+          <span>●</span> <span id="micStatusText">Listening…</span>
+        </div>
+        <div id="transcriptPreview" style="font-size:13px; color:var(--muted); display:none"></div>
+        <button class="btn-primary" id="captureBtn" onclick="capture()">
+          <span>Send to Claude ✦</span>
+        </button>
+      </div>
+      <div class="section-title">How it works</div>
+      <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:24px;margin-bottom:8px">🎙️</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">Speak or type</div>
+          <div style="font-size:12px;color:var(--muted)">Use voice (browser mic) or just type. Say it naturally — don't worry about structure.</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:24px;margin-bottom:8px">✦</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">Claude organizes</div>
+          <div style="font-size:12px;color:var(--muted)">Haiku classifies it as a task, note, journal, or quote — and extracts area, due date, priority.</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:24px;margin-bottom:8px">💾</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">Stored locally</div>
+          <div style="font-size:12px;color:var(--muted)">Everything saves to a local SQLite database on your machine. No cloud, no subscription.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tasks -->
+    <div class="view" id="view-tasks">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h2 style="font-size:18px;font-weight:700">Tasks</h2>
+        <button class="btn-secondary" onclick="showView('capture')">+ Capture new</button>
+      </div>
+      <div class="filters" id="taskFilters">
+        <span class="filter-chip active" data-status="" onclick="setFilter(this,'taskStatus','')">All</span>
+        <span class="filter-chip" data-status="open" onclick="setFilter(this,'taskStatus','open')">Open</span>
+        <span class="filter-chip" data-status="done" onclick="setFilter(this,'taskStatus','done')">Done</span>
+      </div>
+      <div class="items-grid" id="taskItems"></div>
+    </div>
+
+    <!-- Notes -->
+    <div class="view" id="view-notes">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h2 style="font-size:18px;font-weight:700">Notes</h2>
+        <button class="btn-secondary" onclick="showView('capture')">+ Capture new</button>
+      </div>
+      <div class="items-grid" id="noteItems"></div>
+    </div>
+
+    <!-- Journal -->
+    <div class="view" id="view-journal">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h2 style="font-size:18px;font-weight:700">Journal</h2>
+        <button class="btn-secondary" onclick="showView('capture')">+ Add entry</button>
+      </div>
+      <div class="items-grid" id="journalItems"></div>
+    </div>
+
+    <!-- Quotes -->
+    <div class="view" id="view-quotes">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h2 style="font-size:18px;font-weight:700">Quotes</h2>
+        <button class="btn-secondary" onclick="showView('capture')">+ Add quote</button>
+      </div>
+      <div class="items-grid" id="quoteItems"></div>
+    </div>
+
+    <!-- All -->
+    <div class="view" id="view-all">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h2 style="font-size:18px;font-weight:700">Everything</h2>
+        <button class="btn-secondary" onclick="showView('capture')">+ Capture new</button>
+      </div>
+      <div class="items-grid" id="allItems"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h3>Edit item</h3>
+    <input type="hidden" id="editId">
+    <div class="form-group">
+      <label>Title</label>
+      <input type="text" id="editTitle">
+    </div>
+    <div class="form-group">
+      <label>Content</label>
+      <textarea id="editContent"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Type</label>
+      <select id="editType">
+        <option value="task">Task</option>
+        <option value="note">Note</option>
+        <option value="journal">Journal</option>
+        <option value="quote">Quote</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Area</label>
+      <select id="editArea">
+        <option value="">None</option>
+        <option value="home">Home</option>
+        <option value="work">Work</option>
+        <option value="health">Health</option>
+        <option value="finance">Finance</option>
+        <option value="personal">Personal</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Priority</label>
+      <select id="editPriority">
+        <option value="">None</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Due date</label>
+      <input type="datetime-local" id="editDue">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// State
+const filters = { taskStatus: '' };
+let recognition = null;
+let isRecording = false;
+
+// View switching
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelector(`[data-view="${name}"]`).classList.add('active');
+  if (name === 'dashboard') loadDashboard();
+}
+
+// Status banner
+function showStatus(msg, type = 'info', duration = 3000) {
+  const b = document.getElementById('statusBanner');
+  b.textContent = msg;
+  b.className = 'show ' + type;
+  if (duration) setTimeout(() => { b.className = ''; }, duration);
+}
+
+// Capture
+async function capture() {
+  const text = document.getElementById('captureText').value.trim();
+  if (!text) { showStatus('Please enter something first.', 'error'); return; }
+
+  const btn = document.getElementById('captureBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Claude is organizing…';
+  showStatus('Sending to Claude…', 'info', 0);
+
+  try {
+    const res = await fetch('/api/capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Server error');
+
+    document.getElementById('captureText').value = '';
+    document.getElementById('transcriptPreview').style.display = 'none';
+    showStatus(`✓ Saved as ${data.item.type}: "${data.item.title}"`, 'success');
+  } catch (err) {
+    showStatus('Error: ' + err.message, 'error', 5000);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span>Send to Claude ✦</span>';
+  }
+}
+
+// Voice recognition
+function toggleMic() {
+  if (isRecording) { stopMic(); return; }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showStatus('Voice not supported in this browser. Try Chrome.', 'error');
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  let finalTranscript = '';
+
+  recognition.onstart = () => {
+    isRecording = true;
+    document.getElementById('micBtn').classList.add('recording');
+    document.getElementById('micBtn').textContent = '⏹';
+    document.getElementById('micStatus').style.display = 'flex';
+    document.getElementById('micStatusText').textContent = 'Listening… (click to stop)';
+  };
+
+  recognition.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    const preview = document.getElementById('transcriptPreview');
+    preview.style.display = 'block';
+    preview.textContent = (finalTranscript + interim) || '…';
+    document.getElementById('captureText').value = finalTranscript + interim;
+  };
+
+  recognition.onerror = (e) => {
+    showStatus('Mic error: ' + e.error, 'error');
+    stopMic();
+  };
+
+  recognition.onend = () => { if (isRecording) stopMic(); };
+
+  recognition.start();
+}
+
+function stopMic() {
+  if (recognition) recognition.stop();
+  isRecording = false;
+  document.getElementById('micBtn').classList.remove('recording');
+  document.getElementById('micBtn').textContent = '🎤';
+  document.getElementById('micStatus').style.display = 'none';
+}
+
+// Keyboard shortcut: Cmd/Ctrl + Enter to capture
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') capture();
+});
+
+// Load items
+async function loadItems(type, containerId, extra = {}) {
+  const containerMap = { task: 'taskItems', note: 'noteItems', journal: 'journalItems', quote: 'quoteItems' };
+  const id = containerId || containerMap[type] || 'allItems';
+  const container = document.getElementById(id);
+  if (!container) return;
+
+  container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px">Loading…</div>';
+
+  const params = new URLSearchParams();
+  if (type) params.set('type', type);
+  if (extra.status) params.set('status', extra.status);
+
+  try {
+    const items = await fetch('/api/items?' + params).then(r => r.json());
+    renderItems(items, container);
+  } catch {
+    container.innerHTML = '<div style="color:var(--red);font-size:13px;padding:20px">Failed to load</div>';
+  }
+}
+
+function renderItems(items, container) {
+  if (!items.length) {
+    container.innerHTML = `<div class="empty"><div class="icon">🌿</div><p>Nothing here yet.<br>Capture something!</p></div>`;
+    return;
+  }
+  container.innerHTML = items.map(item => itemCard(item)).join('');
+}
+
+function itemCard(item) {
+  const doneClass = item.status === 'done' ? 'done' : '';
+  const doneIcon = item.status === 'done' ? '↩' : '✓';
+  const doneTitle = item.status === 'done' ? 'Mark open' : 'Mark done';
+
+  const badgeArea = item.area ? `<span class="badge area">${item.area}</span>` : '';
+  const badgePri = item.priority ? `<span class="badge priority-${item.priority}">${item.priority}</span>` : '';
+  const badgeDue = item.due_date ? `<span class="badge due">📅 ${item.due_date}</span>` : '';
+  const badgeDone = item.status === 'done' ? `<span class="badge done-badge">done</span>` : '';
+
+  return `
+    <div class="item-card ${doneClass}" id="card-${item.id}">
+      <div class="type-dot ${item.type}"></div>
+      <div class="item-body">
+        <div class="item-title">${esc(item.title || item.content.slice(0, 60))}</div>
+        ${item.content && item.content !== item.title ? `<div class="item-content">${esc(item.content)}</div>` : ''}
+        <div class="item-meta">
+          <span class="badge type-${item.type}">${item.type}</span>
+          ${badgeArea}${badgePri}${badgeDue}${badgeDone}
+          <span style="font-size:11px;color:var(--muted);margin-left:auto">${timeAgo(item.created_at)}</span>
+        </div>
+      </div>
+      <div class="item-actions">
+        ${item.type === 'task' ? `<button class="icon-btn done-btn" onclick="toggleDone(${item.id},'${item.status}')" title="${doneTitle}">${doneIcon}</button>` : ''}
+        <button class="icon-btn" onclick="openEdit(${JSON.stringify(item).replace(/"/g,'&quot;')})" title="Edit">✎</button>
+        <button class="icon-btn del-btn" onclick="deleteItem(${item.id})" title="Delete">✕</button>
+      </div>
+    </div>`;
+}
+
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function timeAgo(dateStr) {
+  const d = new Date(dateStr);
+  const diff = Date.now() - d.getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h/24)}d ago`;
+}
+
+// Toggle task done
+async function toggleDone(id, currentStatus) {
+  const newStatus = currentStatus === 'done' ? 'open' : 'done';
+  await fetch('/api/items/' + id, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: newStatus })
+  });
+  refreshCurrentView();
+}
+
+// Delete
+async function deleteItem(id) {
+  if (!confirm('Delete this item?')) return;
+  await fetch('/api/items/' + id, { method: 'DELETE' });
+  refreshCurrentView();
+}
+
+// Edit modal
+function openEdit(item) {
+  document.getElementById('editId').value = item.id;
+  document.getElementById('editTitle').value = item.title || '';
+  document.getElementById('editContent').value = item.content || '';
+  document.getElementById('editType').value = item.type || 'note';
+  document.getElementById('editArea').value = item.area || '';
+  document.getElementById('editPriority').value = item.priority || '';
+  document.getElementById('editDue').value = item.due_date ? item.due_date.replace(' ', 'T') : '';
+  document.getElementById('editModal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('editModal').classList.remove('show');
+}
+
+async function saveEdit() {
+  const id = document.getElementById('editId').value;
+  const due = document.getElementById('editDue').value;
+  await fetch('/api/items/' + id, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: document.getElementById('editTitle').value,
+      content: document.getElementById('editContent').value,
+      area: document.getElementById('editArea').value || null,
+      priority: document.getElementById('editPriority').value || null,
+      due_date: due ? due.replace('T', ' ') : null
+    })
+  });
+  closeModal();
+  refreshCurrentView();
+}
+
+// Dashboard
+async function loadDashboard() {
+  try {
+    const data = await fetch('/api/stats').then(r => r.json());
+
+    // Stats
+    const totals = { task: 0, note: 0, journal: 0, quote: 0 };
+    let done = 0;
+    data.counts.forEach(c => {
+      totals[c.type] = (totals[c.type] || 0) + c.count;
+      if (c.status === 'done') done += c.count;
+    });
+    const total = Object.values(totals).reduce((a,b)=>a+b,0);
+
+    document.getElementById('statsGrid').innerHTML = `
+      <div class="stat-card"><div class="label">Total items</div><div class="value">${total}</div></div>
+      <div class="stat-card"><div class="label">Tasks</div><div class="value" style="color:var(--task)">${totals.task||0}</div></div>
+      <div class="stat-card"><div class="label">Notes</div><div class="value" style="color:var(--note)">${totals.note||0}</div></div>
+      <div class="stat-card"><div class="label">Journal</div><div class="value" style="color:var(--journal)">${totals.journal||0}</div></div>
+      <div class="stat-card"><div class="label">Quotes</div><div class="value" style="color:var(--quote)">${totals.quote||0}</div></div>
+      <div class="stat-card"><div class="label">Completed</div><div class="value" style="color:var(--green)">${done}</div></div>
+    `;
+    renderItems(data.recent, document.getElementById('recentItems'));
+  } catch {
+    document.getElementById('statsGrid').innerHTML = '<div style="color:var(--red)">Failed to load stats</div>';
+  }
+}
+
+// Filter chips
+function setFilter(chip, key, val) {
+  chip.closest('.filters').querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  filters[key] = val;
+  // Reload current type
+  const view = document.querySelector('.view.active');
+  if (view.id === 'view-tasks') loadItems('task', 'taskItems', { status: val });
+}
+
+function refreshCurrentView() {
+  const view = document.querySelector('.view.active');
+  if (view.id === 'view-dashboard') loadDashboard();
+  else if (view.id === 'view-tasks') loadItems('task', 'taskItems', { status: filters.taskStatus });
+  else if (view.id === 'view-notes') loadItems('note');
+  else if (view.id === 'view-journal') loadItems('journal');
+  else if (view.id === 'view-quotes') loadItems('quote');
+  else if (view.id === 'view-all') loadItems();
+}
+
+// Close modal on overlay click
+document.getElementById('editModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Init
+loadDashboard();
+</script>
+</body>
+</html>
