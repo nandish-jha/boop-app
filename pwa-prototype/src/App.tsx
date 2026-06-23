@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import VoiceCaptureScreen from './VoiceCaptureScreen'
+import type { ParsedCapture } from './parseCapture'
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
 import {
   addDoc,
@@ -34,7 +36,7 @@ function App() {
   const [loadingAuth, setLoadingAuth] = useState(true)
   const [reminders, setReminders] = useState<Reminder[]>(() => readStore('boop-reminders', defaultReminders))
   const [notes, setNotes] = useState<Note[]>(() => readStore('boop-notes', defaultNotes))
-  const fullFocus = location.pathname === '/new-note' || location.pathname === '/new-reminder'
+  const fullFocus = location.pathname === '/new-note' || location.pathname === '/new-reminder' || location.pathname === '/voice-capture'
   const showHomeFab = location.pathname === '/home'
   const incompleteReminders = useMemo(() => reminders.filter((r) => !r.completed), [reminders])
   const completedReminders = useMemo(() => reminders.filter((r) => r.completed), [reminders])
@@ -113,6 +115,21 @@ function App() {
     await deleteDoc(doc(db, 'users', user.uid, 'reminders', id))
   }
 
+  const addCapture = async (parsed: ParsedCapture) => {
+    if (!user) return
+    await addDoc(collection(db, 'users', user.uid, 'reminders'), {
+      type: parsed.type,
+      title: parsed.title,
+      body: parsed.body,
+      imageUri: null,
+      dueEpochMillis: parsed.dueEpochMillis ?? Date.now() + 3600000,
+      completed: false,
+      createdEpochMillis: Date.now(),
+      area: parsed.area ?? null,
+      priority: parsed.priority ?? null,
+    })
+  }
+
   if (loadingAuth) return <div className="app-shell"><div className="phone-shell"><main className="content"><p className="muted">Loading...</p></main></div></div>
   if (!user) return <SignInScreen />
 
@@ -142,6 +159,7 @@ function App() {
             <Route path="/create" element={<CreateScreen />} />
             <Route path="/new-note" element={<NewNoteScreen onCreate={addNote} />} />
             <Route path="/new-reminder" element={<NewReminderScreen onCreate={addReminder} />} />
+            <Route path="/voice-capture" element={<VoiceCaptureScreen onSave={addCapture} />} />
           </Routes>
         </main>
         {showHomeFab && (
@@ -379,6 +397,15 @@ function CreateScreen() {
     <section className="stack">
       <h1 className="title">Create New Item</h1>
       <p className="muted">Select a format to capture your thoughts and tasks.</p>
+      <NavLink to="/voice-capture" className="card action-card" style={{ textDecoration: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="material-symbols-outlined">mic</span>
+          <div>
+            <h3>Quick Capture</h3>
+            <p className="muted">Speak or type — auto-organised into a task or note.</p>
+          </div>
+        </div>
+      </NavLink>
       <NavLink to="/new-note" className="card action-card">
         <h3>New Note</h3>
         <p className="muted">Architectural thoughts and long-form archive.</p>
@@ -387,7 +414,6 @@ function CreateScreen() {
         <h3>New Reminder</h3>
         <p className="muted">Set precision alerts and temporal triggers.</p>
       </NavLink>
-      <button className="btn-primary">QUICK CAPTURE VOICE</button>
     </section>
   )
 }
