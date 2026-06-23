@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -33,16 +36,9 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Capacitor CLI
+      - name: Copy web assets into Android project
         working-directory: pwa-prototype
-        run: npm install -g @capacitor/cli
-
-      - name: Sync Capacitor
-        working-directory: pwa-prototype
-        run: npx cap sync android
+        run: npx cap copy android
 
       - name: Make Gradle executable
         working-directory: pwa-prototype/android
@@ -50,31 +46,24 @@ jobs:
 
       - name: Build debug APK
         working-directory: pwa-prototype/android
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
         run: ./gradlew assembleDebug --no-daemon
-
-      - name: Rename APK
-        run: |
-          mkdir -p dist
-          cp pwa-prototype/android/app/build/outputs/apk/debug/app-debug.apk dist/boop-debug.apk
 
       - name: Get short SHA
         id: sha
         run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Release
+      - name: Upload APK to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ steps.sha.outputs.short }}
-          name: Boop ${{ steps.sha.outputs.short }}
+          name: "Boop ${{ steps.sha.outputs.short }}"
           body: |
-            Debug APK built from commit ${{ github.sha }}
+            Debug APK — built from `${{ github.sha }}`
 
             **Install on Android:**
             1. Download `boop-debug.apk` below
-            2. On your phone: Settings → Security → allow "Install unknown apps"
-            3. Open the downloaded file and install
-          files: dist/boop-debug.apk
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            2. Settings → Security → enable "Install unknown apps"
+            3. Open the file and tap Install
+          files: pwa-prototype/android/app/build/outputs/apk/debug/app-debug.apk
