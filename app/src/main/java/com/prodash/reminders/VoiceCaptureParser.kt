@@ -59,8 +59,18 @@ object VoiceCaptureParser {
     )
 
     private val noteTriggers = listOf(
-        "add note", "new note", "create note", "write note", "take note", "make a note",
-        "note to self", "jot down", "journal entry", "voice note",
+        "add note", "new note", "create note", "write note", "take note", "take note of",
+        "make a note", "note to self", "jot down", "journal entry", "voice note",
+    )
+
+    private val noteCommandPatterns = listOf(
+        Regex("""^take (a )?note (of|about|that) (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^take note[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^(please )?(add|create|write|make) (a )?(new )?note (about|that|of|to self)? (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^note (to self )?(that|about|of)? (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^jot down (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^(please )?remember (that|this)[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^voice note[,:]?\s*""", RegexOption.IGNORE_CASE),
     )
 
     private val fillerPatterns = listOf(
@@ -86,7 +96,11 @@ object VoiceCaptureParser {
         val (fromAccount, toAccount) = matchAccounts(lower, accounts)
         val type = detectType(lower, amount, fromAccount, toAccount, dueAt)
         val cleaned = cleanText(text)
-        val title = extractTitle(cleaned, type)
+        val (title, body) = if (type == VoiceCaptureType.NOTE) {
+            extractNoteTitleAndBody(text)
+        } else {
+            extractTitle(cleaned, type) to cleaned
+        }
         val category = extractCategory(lower, type)
         val location = extractLocation(lower)
         val repeatDays = extractRepeatDays(lower)
@@ -104,7 +118,7 @@ object VoiceCaptureParser {
         return ParsedVoiceCapture(
             type = type,
             title = title,
-            body = cleaned,
+            body = body,
             dueAtMillis = start,
             endAtMillis = end,
             allDay = allDay,
@@ -418,6 +432,44 @@ object VoiceCaptureParser {
             result = result.replace(pattern, " ")
         }
         return result.replace(Regex("""\s{2,}"""), " ").trim()
+    }
+
+    private fun stripNoteCommandPhrases(text: String): String {
+        var result = text.trim()
+        for (pattern in noteCommandPatterns) {
+            result = pattern.replace(result, "").trim()
+        }
+        for (pattern in fillerPatterns) {
+            result = pattern.replace(result, " ").trim()
+        }
+        return result.replace(Regex("""\s{2,}"""), " ").trim()
+    }
+
+    private fun extractNoteTitleAndBody(raw: String): Pair<String, String> {
+        var content = stripNoteCommandPhrases(raw)
+        if (content.isNotEmpty()) {
+            content = content.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+        }
+        if (content.isBlank()) return "New note" to ""
+
+        val sentenceBreak = content.indexOfFirst { it == '.' || it == '!' || it == '?' }
+        val title = when {
+            sentenceBreak in 8..70 -> content.substring(0, sentenceBreak + 1).trim()
+            content.length > 52 -> {
+                val chunk = content.take(49)
+                val lastSpace = chunk.lastIndexOf(' ')
+                if (lastSpace > 12) chunk.substring(0, lastSpace).trim() + "…" else chunk.trim() + "…"
+            }
+            else -> {
+                val words = content.split(Regex("""\s+""")).filter { it.isNotBlank() }
+                when {
+                    words.size > 5 -> words.take(4).joinToString(" ")
+                    words.size > 3 -> words.take(3).joinToString(" ")
+                    else -> content
+                }
+            }
+        }
+        return title.ifBlank { "New note" } to content
     }
 
     private fun extractTitle(cleaned: String, type: VoiceCaptureType): String {
