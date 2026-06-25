@@ -59,22 +59,34 @@ object VoiceCaptureParser {
     )
 
     private val noteTriggers = listOf(
-        "add note", "new note", "create note", "write note",
-        "take a note", "take note", "take note of",
-        "make a note", "note to self", "jot down", "journal entry", "voice note",
+        "add note", "add a note", "new note", "create note", "create a note",
+        "write note", "write a note", "write down",
+        "take a note", "take note", "take notes", "take note of", "take notes of",
+        "make a note", "make note", "make notes",
+        "note to self", "note that", "note about",
+        "jot down", "journal entry", "voice note", "voice notes",
+        "remember that", "remember this",
     )
 
     private val noteIntentPattern = Regex(
-        """\b(?:take\s+(?:a\s+)?note(?:\s+(?:of|about|that))?|""" +
-            """(?:add|create|write|make)\s+(?:a\s+)?(?:new\s+)?note|""" +
-            """jot\s+down|voice\s+note|note\s+to\s+self)\b""",
+        """\b(?:""" +
+            """tak(?:e|ing)\s+(?:a\s+)?notes?(?:\s+(?:of|about|that))?|""" +
+            """mak(?:e|ing)\s+(?:a\s+)?notes?(?:\s+(?:of|about|that))?|""" +
+            """writ(?:e|ing)\s+(?:a\s+)?notes?(?:\s+(?:of|about|that|down))?|""" +
+            """creat(?:e|ing)\s+(?:a\s+)?(?:new\s+)?notes?|""" +
+            """add(?:ing)?\s+(?:a\s+)?(?:new\s+)?notes?|""" +
+            """notes?\s+(?:to\s+self|that|about)|""" +
+            """jot\s+down|voice\s+notes?|""" +
+            """write\s+down|remember\s+(?:that|this)""" +
+            """)\b""",
         RegexOption.IGNORE_CASE,
     )
 
     private val noteCommandPatterns = listOf(
         Regex("""^take\s+a\s+note\s+(?:of|about|that)?\s*(?:this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
-        Regex("""^take\s+(?:a\s+)?note\s+(?:of|about|that)?\s*(?:this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
-        Regex("""^(please )?(add|create|write|make) (a )?(new )?note (about|that|of|to self)? (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^take\s+(?:a\s+)?notes?\s*(?:of|about|that)?\s*(?:this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^(?:tak(?:e|ing)|mak(?:e|ing)|writ(?:e|ing)|creat(?:e|ing)|add(?:ing)?)\s+(?:a\s+)?notes?\s*(?:of|about|that)?\s*(?:this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^(please )?(?:add|create|write|make)\s+(?:a )?(?:new )?notes? (?:about|that|of|to self)? ?(?:this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
         Regex("""^note (to self )?(that|about|of)? (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
         Regex("""^jot down (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
         Regex("""^(please )?remember (that|this)[,:]?\s*""", RegexOption.IGNORE_CASE),
@@ -102,7 +114,10 @@ object VoiceCaptureParser {
         val amount = extractAmount(lower)
         val dueAt = extractDueDate(lower)
         val (fromAccount, toAccount) = matchAccounts(lower, accounts)
-        val type = detectType(lower, amount, fromAccount, toAccount, dueAt)
+        val type = when {
+            isNoteIntent(lower) -> VoiceCaptureType.NOTE
+            else -> detectTypeNonNote(lower, amount, fromAccount, toAccount, dueAt)
+        }
         val cleaned = cleanText(text)
         val (title, body) = if (type == VoiceCaptureType.NOTE) {
             extractNoteTitleAndBody(text)
@@ -143,7 +158,7 @@ object VoiceCaptureParser {
         )
     }
 
-    private fun detectType(
+    private fun detectTypeNonNote(
         lower: String,
         amount: Double?,
         fromAccount: BoopAccount?,
@@ -153,23 +168,31 @@ object VoiceCaptureParser {
         if (transferTriggers.any { lower.contains(it) } || (fromAccount != null && toAccount != null)) {
             return VoiceCaptureType.TRANSFER
         }
-        if (incomeTriggers.any { lower.contains(it) }) return VoiceCaptureType.INCOME
+        if (incomeTriggers.any { containsWord(lower, it) }) return VoiceCaptureType.INCOME
         if (expenseTriggers.any { lower.contains(it) } || (amount != null && lower.contains("dollar"))) {
             return VoiceCaptureType.EXPENSE
         }
-        if (habitTriggers.any { lower.contains(it) } || lower.contains("habit")) {
+        if (habitTriggers.any { lower.contains(it) } || containsWord(lower, "habit")) {
             return VoiceCaptureType.HABIT
         }
         if (eventTriggers.any { lower.contains(it) }) return VoiceCaptureType.EVENT
-        if (isNoteIntent(lower)) return VoiceCaptureType.NOTE
         if (taskTriggers.any { lower.contains(it) }) return VoiceCaptureType.TASK
         if (dueAt != null) return VoiceCaptureType.TASK
         return VoiceCaptureType.TASK
     }
 
+    private fun containsWord(text: String, word: String): Boolean {
+        return Regex("""\b${Regex.escape(word)}\b""", RegexOption.IGNORE_CASE).containsMatchIn(text)
+    }
+
     private fun isNoteIntent(lower: String): Boolean {
         if (noteTriggers.any { lower.contains(it) }) return true
-        return noteIntentPattern.containsMatchIn(lower)
+        if (noteIntentPattern.containsMatchIn(lower)) return true
+        if (Regex("""^(?:please\s+)?(?:tak(?:e|ing)|mak(?:e|ing)|writ(?:e|ing)|creat(?:e|ing)|add(?:ing)?)\s+(?:a\s+)?notes?\b""", RegexOption.IGNORE_CASE)
+                .containsMatchIn(lower.trim())) {
+            return true
+        }
+        return false
     }
 
     private fun extractAmount(lower: String): Double? {
