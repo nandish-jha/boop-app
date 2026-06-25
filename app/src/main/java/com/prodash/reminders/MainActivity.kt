@@ -43,6 +43,7 @@ import android.view.Gravity
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -337,27 +338,27 @@ private data class BoopPalette(
 )
 
 private fun boopDarkPalette() = BoopPalette(
-    background = Color(0xFF12141A),
-    surface = Color(0xFF1C1F28),
-    onBackground = Color(0xFFE8E9EE),
-    muted = Color(0xFF9498A3),
-    accent = Color(0xFFF0F1F5),
-    accentOn = Color(0xFF12141A),
-    navPill = Color(0xFFE8E9EE),
-    navSelected = Color(0xFF12141A),
-    navUnselected = Color(0xFF6E7380),
+    background = Color(0xFF16181E),
+    surface = Color(0xFF21242C),
+    onBackground = Color(0xFFE2E4EA),
+    muted = Color(0xFF9A9EA8),
+    accent = Color(0xFFEBEDF2),
+    accentOn = Color(0xFF16181E),
+    navPill = Color(0xFFEBEDF2),
+    navSelected = Color(0xFF16181E),
+    navUnselected = Color(0xFF757A88),
 )
 
 private fun boopLightPalette() = BoopPalette(
-    background = Color(0xFFF4F3F0),
-    surface = Color(0xFFFFFCF8),
-    onBackground = Color(0xFF23252C),
-    muted = Color(0xFF727682),
-    accent = Color(0xFF23252C),
-    accentOn = Color(0xFFFFFCF8),
-    navPill = Color(0xFF23252C),
-    navSelected = Color(0xFFFFFCF8),
-    navUnselected = Color(0xFFA8ABB4),
+    background = Color(0xFFF7F5F2),
+    surface = Color(0xFFFFFCF9),
+    onBackground = Color(0xFF2A2C33),
+    muted = Color(0xFF6E727C),
+    accent = Color(0xFF2A2C33),
+    accentOn = Color(0xFFFFFCF9),
+    navPill = Color(0xFF2A2C33),
+    navSelected = Color(0xFFFFFCF9),
+    navUnselected = Color(0xFFA4A8B0),
 )
 
 private val LocalBoopPalette = staticCompositionLocalOf { boopDarkPalette() }
@@ -382,6 +383,8 @@ private fun BoopApp() {
     var voiceStopSignal by remember { mutableIntStateOf(0) }
     var calendarSyncRequest by rememberSaveable { mutableIntStateOf(0) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var dashboardSearchOpen by rememberSaveable { mutableStateOf(false) }
+    var tasksTabShowNotes by rememberSaveable { mutableStateOf(false) }
     var themeMode by remember { mutableStateOf(LocalStore.readThemeMode()) }
 
     val systemDark = isSystemInDarkTheme()
@@ -642,7 +645,7 @@ private fun BoopApp() {
         darkColorScheme(
             background = palette.background,
             surface = palette.surface,
-            surfaceVariant = Color(0xFF242833),
+            surfaceVariant = Color(0xFF2A2E38),
             onBackground = palette.onBackground,
             onSurface = palette.onBackground,
             onSurfaceVariant = palette.muted,
@@ -654,7 +657,7 @@ private fun BoopApp() {
         lightColorScheme(
             background = palette.background,
             surface = palette.surface,
-            surfaceVariant = Color(0xFFECEAE6),
+            surfaceVariant = Color(0xFFEDEAE6),
             onBackground = palette.onBackground,
             onSurface = palette.onBackground,
             onSurfaceVariant = palette.muted,
@@ -709,6 +712,25 @@ private fun BoopApp() {
         LaunchedEffect(selectedTab) {
             if (pagerState.currentPage != selectedTab) {
                 pagerState.animateScrollToPage(selectedTab)
+            }
+        }
+        BackHandler {
+            when {
+                settingsOpen -> settingsOpen = false
+                voiceCaptureOpen -> {
+                    voiceListening = false
+                    voiceCaptureOpen = false
+                }
+                habitCheckInOpen -> habitCheckInOpen = false
+                itemSheet != null -> itemSheet = null
+                speedDialExpanded -> speedDialExpanded = false
+                dashboardSearchOpen -> dashboardSearchOpen = false
+                tasksTabShowNotes -> tasksTabShowNotes = false
+                selectedTab != 0 -> {
+                    selectedTab = 0
+                    scope.launch { pagerState.animateScrollToPage(0) }
+                }
+                else -> launchActivity?.finish()
             }
         }
         Surface(Modifier.fillMaxSize()) {
@@ -836,6 +858,10 @@ private fun BoopApp() {
                                 speedDialExpanded = false
                                 settingsOpen = true
                             },
+                            dashboardSearchOpen = dashboardSearchOpen,
+                            onDashboardSearchOpenChange = { dashboardSearchOpen = it },
+                            tasksTabShowNotes = tasksTabShowNotes,
+                            onTasksTabShowNotesChange = { tasksTabShowNotes = it },
                         )
                     }
                     if (settingsOpen) {
@@ -1047,8 +1073,11 @@ private fun BoopPagerPage(
     onDeleteAccount: (String) -> Unit,
     onSaveLedgerEntry: (BoopLedgerEntry) -> Unit,
     onOpenSettings: () -> Unit,
+    dashboardSearchOpen: Boolean,
+    onDashboardSearchOpenChange: (Boolean) -> Unit,
+    tasksTabShowNotes: Boolean,
+    onTasksTabShowNotesChange: (Boolean) -> Unit,
 ) {
-    var showNotesInCombinedTab by rememberSaveable { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxSize()
@@ -1069,14 +1098,16 @@ private fun BoopPagerPage(
                 onSearchPickNote = { onSelectTab(1); onEditNote(it) },
                 onSearchPickHabit = { onSelectTab(3); onEditHabit(it) },
                 onOpenSettings = onOpenSettings,
+                searchExpanded = dashboardSearchOpen,
+                onSearchExpandedChange = onDashboardSearchOpenChange,
             )
             1 -> {
-                if (showNotesInCombinedTab) {
+                if (tasksTabShowNotes) {
                     NotesListScreen(
                         notes = notes,
                         onOpenNote = onEditNote,
                         title = "Notes",
-                        onHeaderTap = { showNotesInCombinedTab = false },
+                        onHeaderTap = { onTasksTabShowNotesChange(false) },
                     )
                 } else {
                     TaskListScreen(
@@ -1087,7 +1118,7 @@ private fun BoopPagerPage(
                         onUnarchiveTask = onUnarchiveTask,
                         onRestoreCompletedTask = onRestoreCompletedTask,
                         title = "Tasks",
-                        onHeaderTap = { showNotesInCombinedTab = true },
+                        onHeaderTap = { onTasksTabShowNotesChange(true) },
                     )
                 }
             }
@@ -1678,10 +1709,11 @@ private fun DashboardScreen(
     onSearchPickNote: (BoopNote) -> Unit,
     onSearchPickHabit: (BoopHabit) -> Unit,
     onOpenSettings: () -> Unit,
+    searchExpanded: Boolean,
+    onSearchExpandedChange: (Boolean) -> Unit,
 ) {
     val scroll = rememberScrollState()
     val searchScroll = rememberScrollState()
-    var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val searchFocus = remember { FocusRequester() }
     LaunchedEffect(searchExpanded) {
@@ -1759,7 +1791,7 @@ private fun DashboardScreen(
                     }
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         FloatingActionButton(
-                            onClick = { searchExpanded = true },
+                            onClick = { onSearchExpandedChange(true) },
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
                         ) {
@@ -1966,7 +1998,7 @@ private fun DashboardScreen(
                     )
                     IconButton(
                         onClick = {
-                            searchExpanded = false
+                            onSearchExpandedChange(false)
                             searchQuery = ""
                         },
                     ) {
@@ -1985,17 +2017,17 @@ private fun DashboardScreen(
                     notes = notes,
                     habits = habits,
                     onPickTask = {
-                        searchExpanded = false
+                        onSearchExpandedChange(false)
                         searchQuery = ""
                         onSearchPickTask(it)
                     },
                     onPickNote = {
-                        searchExpanded = false
+                        onSearchExpandedChange(false)
                         searchQuery = ""
                         onSearchPickNote(it)
                     },
                     onPickHabit = {
-                        searchExpanded = false
+                        onSearchExpandedChange(false)
                         searchQuery = ""
                         onSearchPickHabit(it)
                     },

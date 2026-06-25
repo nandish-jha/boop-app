@@ -59,13 +59,21 @@ object VoiceCaptureParser {
     )
 
     private val noteTriggers = listOf(
-        "add note", "new note", "create note", "write note", "take note", "take note of",
+        "add note", "new note", "create note", "write note",
+        "take a note", "take note", "take note of",
         "make a note", "note to self", "jot down", "journal entry", "voice note",
     )
 
+    private val noteIntentPattern = Regex(
+        """\b(?:take\s+(?:a\s+)?note(?:\s+(?:of|about|that))?|""" +
+            """(?:add|create|write|make)\s+(?:a\s+)?(?:new\s+)?note|""" +
+            """jot\s+down|voice\s+note|note\s+to\s+self)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+
     private val noteCommandPatterns = listOf(
-        Regex("""^take (a )?note (of|about|that) (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
-        Regex("""^take note[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^take\s+a\s+note\s+(?:of|about|that)?\s*(?:this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^take\s+(?:a\s+)?note\s+(?:of|about|that)?\s*(?:this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
         Regex("""^(please )?(add|create|write|make) (a )?(new )?note (about|that|of|to self)? (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
         Regex("""^note (to self )?(that|about|of)? (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
         Regex("""^jot down (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
@@ -107,7 +115,10 @@ object VoiceCaptureParser {
         val habitPeriod = extractHabitDayPeriod(lower)
         val allDay = lower.contains("all day") || lower.contains("all-day")
 
-        val start = dueAt ?: defaultDueMillis(type)
+        val start = when (type) {
+            VoiceCaptureType.NOTE -> null
+            else -> dueAt ?: defaultDueMillis(type)
+        }
         val end = when {
             start == null -> null
             allDay -> start + 24 * 60 * 60_000L
@@ -150,10 +161,15 @@ object VoiceCaptureParser {
             return VoiceCaptureType.HABIT
         }
         if (eventTriggers.any { lower.contains(it) }) return VoiceCaptureType.EVENT
-        if (noteTriggers.any { lower.contains(it) }) return VoiceCaptureType.NOTE
+        if (isNoteIntent(lower)) return VoiceCaptureType.NOTE
         if (taskTriggers.any { lower.contains(it) }) return VoiceCaptureType.TASK
         if (dueAt != null) return VoiceCaptureType.TASK
         return VoiceCaptureType.TASK
+    }
+
+    private fun isNoteIntent(lower: String): Boolean {
+        if (noteTriggers.any { lower.contains(it) }) return true
+        return noteIntentPattern.containsMatchIn(lower)
     }
 
     private fun extractAmount(lower: String): Double? {
