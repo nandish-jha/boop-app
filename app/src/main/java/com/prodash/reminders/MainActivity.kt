@@ -319,6 +319,9 @@ private fun BoopApp() {
     var habitCheckInOpen by remember { mutableStateOf(false) }
     var speedDialExpanded by remember { mutableStateOf(false) }
     var voiceCaptureOpen by remember { mutableStateOf(false) }
+    var voiceListening by remember { mutableStateOf(false) }
+    var voiceStartSignal by remember { mutableIntStateOf(0) }
+    var voiceStopSignal by remember { mutableIntStateOf(0) }
     var calendarSyncRequest by rememberSaveable { mutableIntStateOf(0) }
 
     fun refresh() {
@@ -468,6 +471,7 @@ private fun BoopApp() {
 
     fun applyVoiceCapture(parsed: ParsedVoiceCapture) {
         voiceCaptureOpen = false
+        voiceListening = false
         when (parsed.type) {
             VoiceCaptureType.TASK -> {
                 itemSheet = ItemSheet.TaskSheet(
@@ -648,9 +652,15 @@ private fun BoopApp() {
                         onOpenTransfer = { openFinanceEntrySheet("transfer") },
                         onOpenAccount = { openAccountSheet(null) },
                         onOpenVoiceCapture = {
-                            voiceCaptureOpen = true
                             speedDialExpanded = false
+                            if (voiceListening) {
+                                voiceStopSignal++
+                            } else {
+                                voiceCaptureOpen = true
+                                voiceStartSignal++
+                            }
                         },
+                        voiceListening = voiceListening,
                     )
                 },
                 floatingActionButtonPosition = androidx.compose.material3.FabPosition.End,
@@ -889,8 +899,15 @@ private fun BoopApp() {
                     ) {
                         VoiceCaptureSheet(
                             accounts = accounts,
-                            onDismiss = { voiceCaptureOpen = false },
+                            autoStart = false,
+                            startSignal = voiceStartSignal,
+                            stopSignal = voiceStopSignal,
+                            onDismiss = {
+                                voiceListening = false
+                                voiceCaptureOpen = false
+                            },
                             onParsed = { applyVoiceCapture(it) },
+                            onListeningChanged = { voiceListening = it },
                         )
                     }
                 }
@@ -1073,6 +1090,7 @@ private fun BoopSpeedDialFab(
     onOpenTransfer: () -> Unit,
     onOpenAccount: () -> Unit,
     onOpenVoiceCapture: () -> Unit,
+    voiceListening: Boolean,
 ) {
     Column(
         horizontalAlignment = Alignment.End,
@@ -1164,11 +1182,14 @@ private fun BoopSpeedDialFab(
         ) {
             FloatingActionButton(
                 onClick = onOpenVoiceCapture,
-                containerColor = Color(0xFFE8E8EA),
-                contentColor = Color.Black,
+                containerColor = if (voiceListening) Color(0xFF3A1414) else Color(0xFFE8E8EA),
+                contentColor = if (voiceListening) Color(0xFFFF8A8A) else Color.Black,
                 elevation = FloatingActionButtonDefaults.elevation(),
             ) {
-                Icon(Icons.Outlined.Mic, contentDescription = "Voice capture")
+                Icon(
+                    imageVector = if (voiceListening) Icons.Outlined.Stop else Icons.Outlined.Mic,
+                    contentDescription = if (voiceListening) "Stop recording" else "Voice capture",
+                )
             }
             FloatingActionButton(
                 onClick = {
