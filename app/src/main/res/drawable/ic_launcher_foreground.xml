@@ -4,13 +4,16 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Same motif as ic_notification_minimal: ring + center dot (scaled to adaptive-icon viewport). -->
+    <!-- WHOOP-puck style geometric B: thick angular strokes, chevron terminals. -->
     <path
-        android:fillColor="#00000000"
-        android:pathData="M54,54m-31.5,0a31.5,31.5 0 1,1 63,0a31.5,31.5 0 1,1 -63,0"
-        android:strokeColor="#F4F4F5"
-        android:strokeWidth="9" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M26,18 h12 v72 h-12 z" />
     <path
-        android:fillColor="#F4F4F5"
-        android:pathData="M54,54m-9,0a9,9 0 1,1 18,0a9,9 0 1,1 -18,0" />
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M38,18 h36 l9,9 v18 l-9,9 h-36 z M38,29 h26 l5,5 v6 l-5,5 h-26 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M38,54 h40 l9,9 v22 l-9,9 h-40 z M38,65 h28 l5,5 v8 l-5,5 h-28 z" />
 </vector>
