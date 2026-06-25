@@ -111,6 +111,9 @@ import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.Button
@@ -126,6 +129,10 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -140,6 +147,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -154,6 +162,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -304,6 +313,55 @@ private sealed class ItemSheet {
     ) : ItemSheet()
 }
 
+private enum class ThemeMode(val storageKey: String, val label: String) {
+    DARK("dark", "Dark"),
+    LIGHT("light", "Light"),
+    SYSTEM("system", "System"),
+    ;
+
+    companion object {
+        fun fromStorage(value: String?) = entries.find { it.storageKey == value } ?: SYSTEM
+    }
+}
+
+private data class BoopPalette(
+    val background: Color,
+    val surface: Color,
+    val onBackground: Color,
+    val muted: Color,
+    val accent: Color,
+    val accentOn: Color,
+    val navPill: Color,
+    val navSelected: Color,
+    val navUnselected: Color,
+)
+
+private fun boopDarkPalette() = BoopPalette(
+    background = Color(0xFF0C0C0D),
+    surface = Color(0xFF151517),
+    onBackground = Color(0xFFF3F3F3),
+    muted = Color(0xFF9A9A9A),
+    accent = Color(0xFFFFFFFF),
+    accentOn = Color(0xFF000000),
+    navPill = Color(0xFFFFFFFF),
+    navSelected = Color(0xFF000000),
+    navUnselected = Color(0xFF7E7E82),
+)
+
+private fun boopLightPalette() = BoopPalette(
+    background = Color(0xFFF2F2F7),
+    surface = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF1C1C1E),
+    muted = Color(0xFF6E6E73),
+    accent = Color(0xFF1C1C1E),
+    accentOn = Color(0xFFFFFFFF),
+    navPill = Color(0xFF1C1C1E),
+    navSelected = Color(0xFFFFFFFF),
+    navUnselected = Color(0xFFAEAEB2),
+)
+
+private val LocalBoopPalette = staticCompositionLocalOf { boopDarkPalette() }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BoopApp() {
@@ -323,6 +381,16 @@ private fun BoopApp() {
     var voiceStartSignal by remember { mutableIntStateOf(0) }
     var voiceStopSignal by remember { mutableIntStateOf(0) }
     var calendarSyncRequest by rememberSaveable { mutableIntStateOf(0) }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var themeMode by remember { mutableStateOf(LocalStore.readThemeMode()) }
+
+    val systemDark = isSystemInDarkTheme()
+    val useDarkTheme = when (themeMode) {
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+        ThemeMode.SYSTEM -> systemDark
+    }
+    val palette = if (useDarkTheme) boopDarkPalette() else boopLightPalette()
 
     fun refresh() {
         tasks.clear()
@@ -356,9 +424,9 @@ private fun BoopApp() {
         }
     }
 
-    val darkBg = Color(0xFF0C0C0D)
-    val darkSurface = Color(0xFF151517)
-    val accent = Color(0xFFFFFFFF)
+    val darkBg = palette.background
+    val darkSurface = palette.surface
+    val accent = palette.accent
 
     fun openTaskSheet(task: BoopTask? = null) {
         itemSheet = ItemSheet.TaskSheet(
@@ -570,15 +638,31 @@ private fun BoopApp() {
         }
     }
 
+    val colorScheme = if (useDarkTheme) {
+        darkColorScheme(
+            background = palette.background,
+            surface = palette.surface,
+            onBackground = palette.onBackground,
+            onSurface = palette.onBackground,
+            onSurfaceVariant = palette.muted,
+            primary = palette.accent,
+            onPrimary = palette.accentOn,
+        )
+    } else {
+        lightColorScheme(
+            background = palette.background,
+            surface = palette.surface,
+            onBackground = palette.onBackground,
+            onSurface = palette.onBackground,
+            onSurfaceVariant = palette.muted,
+            primary = palette.accent,
+            onPrimary = palette.accentOn,
+        )
+    }
+
+    CompositionLocalProvider(LocalBoopPalette provides palette) {
     MaterialTheme(
-        colorScheme = MaterialTheme.colorScheme.copy(
-            background = darkBg,
-            surface = darkSurface,
-            primary = accent,
-            onSurface = Color(0xFFF3F3F3),
-            onBackground = Color(0xFFF3F3F3),
-            onPrimary = Color.Black,
-        ),
+        colorScheme = colorScheme,
         typography = MaterialTheme.typography.copy(
             titleLarge = MaterialTheme.typography.titleLarge.copy(
                 fontFamily = FontFamily.SansSerif,
@@ -666,7 +750,7 @@ private fun BoopApp() {
                 floatingActionButtonPosition = androidx.compose.material3.FabPosition.End,
                 bottomBar = {
                     BoopBottomNavBar(
-                        darkSurface = darkSurface,
+                        palette = palette,
                         pagerScrollPosition = pagerScrollPosition,
                         onSelectTab = {
                             selectedTab = it
@@ -740,6 +824,17 @@ private fun BoopApp() {
                                 repository.saveLedgerEntry(entry)
                                 refresh()
                             },
+                            onOpenSettings = { settingsOpen = true },
+                        )
+                    }
+                    if (settingsOpen) {
+                        SettingsScreen(
+                            themeMode = themeMode,
+                            onThemeModeChange = { mode ->
+                                themeMode = mode
+                                LocalStore.saveThemeMode(mode)
+                            },
+                            onBack = { settingsOpen = false },
                         )
                     }
                     PullRefreshIndicator(
@@ -914,6 +1009,7 @@ private fun BoopApp() {
             }
         }
     }
+    }
 }
 
 @Composable
@@ -939,6 +1035,7 @@ private fun BoopPagerPage(
     onOpenHabitCheckIn: () -> Unit,
     onDeleteAccount: (String) -> Unit,
     onSaveLedgerEntry: (BoopLedgerEntry) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     var showNotesInCombinedTab by rememberSaveable { mutableStateOf(false) }
     Column(
@@ -960,6 +1057,7 @@ private fun BoopPagerPage(
                 onSearchPickTask = { onSelectTab(1); onEditTask(it) },
                 onSearchPickNote = { onSelectTab(1); onEditNote(it) },
                 onSearchPickHabit = { onSelectTab(3); onEditHabit(it) },
+                onOpenSettings = onOpenSettings,
             )
             1 -> {
                 if (showNotesInCombinedTab) {
@@ -1005,8 +1103,94 @@ private fun BoopPagerPage(
 }
 
 @Composable
+private fun SettingsScreen(
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    onBack: () -> Unit,
+) {
+    val palette = LocalBoopPalette.current
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(palette.background)
+            .padding(horizontal = 16.dp)
+            .padding(top = 12.dp, bottom = 24.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "Back",
+                    tint = palette.onBackground,
+                )
+            }
+            Text(
+                "Settings",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = palette.onBackground,
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            "Appearance",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = palette.onBackground,
+        )
+        Spacer(Modifier.height(8.dp))
+        ThemeMode.entries.forEach { mode ->
+            val selected = themeMode == mode
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clickable { onThemeModeChange(mode) },
+                shape = RoundedCornerShape(14.dp),
+                color = if (selected) palette.surface else palette.background,
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = selected,
+                        onClick = { onThemeModeChange(mode) },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = palette.onBackground,
+                            unselectedColor = palette.muted,
+                        ),
+                    )
+                    Column(Modifier.padding(start = 4.dp)) {
+                        Text(
+                            mode.label,
+                            color = palette.onBackground,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        )
+                        Text(
+                            when (mode) {
+                                ThemeMode.DARK -> "Always use dark theme"
+                                ThemeMode.LIGHT -> "Always use light theme"
+                                ThemeMode.SYSTEM -> "Match your device setting"
+                            },
+                            color = palette.muted,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun BoopBottomNavBar(
-    darkSurface: Color,
+    palette: BoopPalette,
     pagerScrollPosition: Float,
     onSelectTab: (Int) -> Unit,
 ) {
@@ -1020,7 +1204,7 @@ private fun BoopBottomNavBar(
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
-            .background(darkSurface)
+            .background(palette.surface)
             .navigationBarsPadding()
             .padding(horizontal = 6.dp, vertical = 8.dp),
     ) {
@@ -1039,7 +1223,7 @@ private fun BoopBottomNavBar(
                     .fillMaxHeight(0.88f)
                     .align(Alignment.CenterStart),
                 shape = RoundedCornerShape(16.dp),
-                color = Color.White,
+                color = palette.navPill,
                 shadowElevation = 2.dp,
             ) {}
             Row(
@@ -1062,7 +1246,7 @@ private fun BoopBottomNavBar(
                         Icon(
                             icon,
                             contentDescription = label,
-                            tint = if (selected) Color.Black else Color(0xFF7E7E82),
+                            tint = if (selected) palette.navSelected else palette.navUnselected,
                             modifier = Modifier
                                 .size(22.dp)
                                 .graphicsLayer { alpha = if (selected) 1f else 0.5f },
@@ -1381,11 +1565,11 @@ private fun DashboardHabitsSectionHeader(onOpenWeekView: () -> Unit) {
                     .background(Color.White),
             )
             Column {
-                Text("Your habits", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("Your habits", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                 Text(
                     "Open week view",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF9A9A9A),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -1409,7 +1593,7 @@ private fun DashboardSectionLabel(title: String) {
                 .clip(RoundedCornerShape(2.dp))
                 .background(Color.White),
         )
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
     }
 }
 
@@ -1445,8 +1629,8 @@ private fun DashboardCompactSection(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(title, color = Color.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
-                    Text(summary, color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(title, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                    Text(summary, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 Icon(
                     Icons.AutoMirrored.Outlined.ArrowForward,
@@ -1482,6 +1666,7 @@ private fun DashboardScreen(
     onSearchPickTask: (BoopTask) -> Unit,
     onSearchPickNote: (BoopNote) -> Unit,
     onSearchPickHabit: (BoopHabit) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val scroll = rememberScrollState()
     val searchScroll = rememberScrollState()
@@ -1558,15 +1743,25 @@ private fun DashboardScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Good", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
-                        Text(greetingSecond, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+                        Text("Good", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
+                        Text(greetingSecond, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
                     }
-                    FloatingActionButton(
-                        onClick = { searchExpanded = true },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
-                    ) {
-                        Icon(Icons.Outlined.Search, contentDescription = "Search")
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FloatingActionButton(
+                            onClick = { searchExpanded = true },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ) {
+                            Icon(Icons.Outlined.Search, contentDescription = "Search")
+                        }
+                        FloatingActionButton(
+                            onClick = onOpenSettings,
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onBackground,
+                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 2.dp),
+                        ) {
+                            Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                        }
                     }
                 }
                 Spacer(Modifier.height(2.dp))
@@ -1578,11 +1773,11 @@ private fun DashboardScreen(
                 ) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = onOpenHabitCheckIn) {
-                            Text("Open week view", color = Color.White)
+                            Text("Open week view", color = MaterialTheme.colorScheme.onBackground)
                         }
                     }
                     if (activeHabits.isEmpty()) {
-                        Text("No habits yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                        Text("No habits yet — add one from the + menu.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                     } else {
                         DashboardCompactSection(
                             title = "Day",
@@ -1613,7 +1808,7 @@ private fun DashboardScreen(
                     onToggle = { upcomingExpanded = !upcomingExpanded },
                 ) {
                     if (upcomingTasks.isEmpty()) {
-                        Text("Nothing scheduled in the next day.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                        Text("Nothing scheduled in the next day.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                     } else {
                         upcomingTasks.forEach { task ->
                             val taskInteraction = remember(task.id) { MutableInteractionSource() }
@@ -1633,7 +1828,7 @@ private fun DashboardScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Column(Modifier.weight(1f)) {
-                                        Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Text(task.title, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                         Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                     }
                                     Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Color(0xFF8E8E90))
@@ -1649,7 +1844,7 @@ private fun DashboardScreen(
                     onToggle = { financeExpanded = !financeExpanded },
                 ) {
                     if (accounts.isEmpty()) {
-                        Text("No accounts yet — add one from the + menu.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                        Text("No accounts yet — add one from the + menu.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                     } else {
                         topAccounts.forEach { account ->
                             val bal = accountBalances[account.id] ?: 0.0
@@ -1659,7 +1854,7 @@ private fun DashboardScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text(account.name, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                                    Text(account.name, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyMedium)
                                     Text("CAD ${String.format(Locale.US, "%.2f", bal)}", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
                                 }
                             }
@@ -1673,7 +1868,7 @@ private fun DashboardScreen(
                     onToggle = { notesExpanded = !notesExpanded },
                 ) {
                     if (recentNotes.isEmpty()) {
-                        Text("No notes yet.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                        Text("No notes yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                     } else {
                         recentNotes.chunked(2).forEach { rowNotes ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1706,7 +1901,7 @@ private fun DashboardScreen(
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
                         Text(
                             text = "\"${quoteOfLaunch.first}\"",
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onBackground,
                             fontSize = 22.sp,
                             lineHeight = 30.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -1764,7 +1959,7 @@ private fun DashboardScreen(
                             searchQuery = ""
                         },
                     ) {
-                        Icon(Icons.Outlined.Close, contentDescription = "Close search", tint = Color.White)
+                        Icon(Icons.Outlined.Close, contentDescription = "Close search", tint = MaterialTheme.colorScheme.onBackground)
                     }
                 }
                 Text(
@@ -1834,7 +2029,7 @@ private fun DashboardHabitCompactCard(
                 Text(
                     "${habit.title} · ${habitCategoryLabel(habit.dayPeriodCategory)}",
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1877,7 +2072,7 @@ private fun DashboardNoteTile(note: BoopNote, modifier: Modifier = Modifier, onC
             Text(
                 note.title.ifBlank { "Untitled" },
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.titleSmall,
@@ -2070,28 +2265,28 @@ private fun NoteRichTextToolbar(editText: EditText?, context: Context) {
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         IconButton(onClick = { noteEditApplySpan(editText, StyleSpan(Typeface.BOLD)) }) {
-            Icon(Icons.Outlined.FormatBold, contentDescription = "Bold", tint = Color.White)
+            Icon(Icons.Outlined.FormatBold, contentDescription = "Bold", tint = MaterialTheme.colorScheme.onBackground)
         }
         IconButton(onClick = { noteEditApplySpan(editText, StyleSpan(Typeface.ITALIC)) }) {
-            Icon(Icons.Outlined.FormatItalic, contentDescription = "Italic", tint = Color.White)
+            Icon(Icons.Outlined.FormatItalic, contentDescription = "Italic", tint = MaterialTheme.colorScheme.onBackground)
         }
         IconButton(onClick = { noteEditApplySpan(editText, UnderlineSpan()) }) {
-            Text("U", color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text("U", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
         }
         IconButton(onClick = { noteEditInsertBulletLine(editText) }) {
-            Text("•", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("•", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
         }
         IconButton(onClick = { noteEditInsertNumberedLine(editText) }) {
-            Text("1.", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("1.", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
         }
         TextButton(onClick = { noteEditApplySpan(editText, AbsoluteSizeSpan(noteEditSpToPx(22f, context), true)) }) {
-            Text("H1", color = Color.White)
+            Text("H1", color = MaterialTheme.colorScheme.onBackground)
         }
         TextButton(onClick = { noteEditApplySpan(editText, AbsoluteSizeSpan(noteEditSpToPx(18f, context), true)) }) {
-            Text("H2", color = Color.White)
+            Text("H2", color = MaterialTheme.colorScheme.onBackground)
         }
         TextButton(onClick = { noteEditApplySpan(editText, AbsoluteSizeSpan(noteEditSpToPx(15f, context), true)) }) {
-            Text("H3", color = Color.White)
+            Text("H3", color = MaterialTheme.colorScheme.onBackground)
         }
         Row(
             Modifier
@@ -2495,7 +2690,7 @@ private fun TaskListScreen(
                 fontSize = 58.sp,
                 lineHeight = 60.sp,
                 fontWeight = FontWeight.Black,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = if (onHeaderTap != null) Modifier.clickable { onHeaderTap() } else Modifier,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -2562,7 +2757,7 @@ private fun TaskListScreen(
                                 .clickable { onOpenTask(task) }
                                 .padding(14.dp),
                         ) {
-                            Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Text(task.title, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
                                 if (task.repeatEveryDays > 0) {
@@ -2629,7 +2824,7 @@ private fun TaskListScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text("Archived tasks", fontWeight = FontWeight.Bold, color = Color.White, style = MaterialTheme.typography.titleLarge)
+                Text("Archived tasks", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleLarge)
                 if (archivedTasks.isEmpty()) {
                     Text("No archived tasks yet.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
                 } else {
@@ -2675,7 +2870,7 @@ private fun TaskListScreen(
                                             }
                                             .padding(12.dp),
                                     ) {
-                                        Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                        Text(task.title, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
                                         Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                     }
                                     IconButton(
@@ -2716,7 +2911,7 @@ private fun TaskListScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text("Completed tasks", fontWeight = FontWeight.Bold, color = Color.White, style = MaterialTheme.typography.titleLarge)
+                Text("Completed tasks", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleLarge)
                 if (completedTasks.isEmpty()) {
                     Text("No completed tasks yet.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
                 } else {
@@ -2762,7 +2957,7 @@ private fun TaskListScreen(
                                             }
                                             .padding(12.dp),
                                     ) {
-                                        Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                        Text(task.title, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
                                         Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                     }
                                     IconButton(
@@ -3072,7 +3267,7 @@ private fun CalendarScreen(
                 fontSize = 58.sp,
                 lineHeight = 60.sp,
                 fontWeight = FontWeight.Black,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.clickable {
                     selectedMillis = todayNoon
                     scope.launch { monthPager.animateScrollToPage(basePage) }
@@ -3231,7 +3426,7 @@ private fun CalendarScreen(
                     ) {
                         Text(
                             text = event.title.ifBlank { "All-day event" },
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onBackground,
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                             maxLines = 1,
@@ -3319,7 +3514,7 @@ private fun CalendarScreen(
                                     .fillMaxWidth(0.78f),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                Text(item.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(item.title, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text(item.kindLabel, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(item.sourceLabel, color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
@@ -3363,7 +3558,7 @@ private fun NotesListScreen(
                 fontSize = 58.sp,
                 lineHeight = 60.sp,
                 fontWeight = FontWeight.Black,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = if (onHeaderTap != null) Modifier.clickable { onHeaderTap() } else Modifier,
             )
             FloatingActionButton(
@@ -3418,7 +3613,7 @@ private fun NotesListScreen(
                     val hasImage = images.isNotEmpty()
                     val hasAudio = !note.audioUri.isNullOrBlank()
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
                         Text(
                             formatNoteCardTime(note),
                             color = Color(0xFF8E8E90),
@@ -3495,7 +3690,7 @@ private fun NotesListScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text("Archived notes", fontWeight = FontWeight.Bold, color = Color.White, style = MaterialTheme.typography.titleLarge)
+                Text("Archived notes", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleLarge)
                 if (archivedNotes.isEmpty()) {
                     Text("No archived notes yet.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
                 } else {
@@ -3517,7 +3712,7 @@ private fun NotesListScreen(
                                     },
                             ) {
                                 Column(Modifier.padding(12.dp)) {
-                                    Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                    Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
                                     Text(plainNoteSnippet(note.body, 80), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                 }
                             }
@@ -3546,7 +3741,7 @@ private fun HabitsListScreen(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Habits", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+        Text("Habits", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
         Column(
             Modifier
                 .weight(1f)
@@ -3621,7 +3816,7 @@ private fun FinanceScreen(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Accounts", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = Color.White)
+        Text("Accounts", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
         if (viewMode != "overview") {
             val backInteraction = remember { MutableInteractionSource() }
             Surface(
@@ -3665,7 +3860,7 @@ private fun FinanceScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text(account.name, color = Color.White, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(account.name, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text("CAD ${String.format(Locale.US, "%.2f", balances[account.id] ?: 0.0)}", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
                                         IconButton(onClick = { pendingDeleteAccountId = account.id }) {
@@ -3692,7 +3887,7 @@ private fun FinanceScreen(
                         items(entries, key = { it.id }) { entry ->
                             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)), shape = RoundedCornerShape(14.dp)) {
                                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text(entry.title.ifBlank { entry.type.replaceFirstChar { it.uppercase() } }, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                                    Text(entry.title.ifBlank { entry.type.replaceFirstChar { it.uppercase() } }, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge)
                                     when (entry.type) {
                                         "income" -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text(accountNames[entry.accountId] ?: "Account", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
@@ -3733,7 +3928,7 @@ private fun FinanceScreen(
                     item {
                         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)), shape = RoundedCornerShape(14.dp)) {
                             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text("Money flow", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                                Text("Money flow", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleMedium)
                                 val maxFlow = maxOf(totalIncome, totalExpense, 1.0)
                                 val incomeRatio = (totalIncome / maxFlow).toFloat().coerceIn(0f, 1f)
                                 val expenseRatio = (totalExpense / maxFlow).toFloat().coerceIn(0f, 1f)
@@ -3750,7 +3945,7 @@ private fun FinanceScreen(
                                     Text("CAD ${String.format(Locale.US, "%.2f", totalExpense)}", color = Color(0xFFEF5350), style = MaterialTheme.typography.bodyMedium)
                                 }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Net", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                                    Text("Net", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleSmall)
                                     Text("CAD ${String.format(Locale.US, "%.2f", netTotal)}", color = if (netTotal >= 0) Color(0xFF66BB6A) else Color(0xFFEF5350), style = MaterialTheme.typography.titleSmall)
                                 }
                             }
@@ -3764,7 +3959,7 @@ private fun FinanceScreen(
                         ) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column {
-                                    Text("Accounts list", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                                    Text("Accounts list", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleSmall)
                                     Text("${accounts.size} accounts", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                 }
                                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, tint = Color(0xFFBFBFBF))
@@ -3779,7 +3974,7 @@ private fun FinanceScreen(
                         ) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column {
-                                    Text("Transaction history", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                                    Text("Transaction history", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleSmall)
                                     Text("${entries.size} records", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                                 }
                                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, tint = Color(0xFFBFBFBF))
@@ -3795,7 +3990,7 @@ private fun FinanceScreen(
     if (reconcileAccount != null) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { reconcileAccountId = "" },
-            title = { Text("Set real balance", color = Color.White) },
+            title = { Text("Set real balance", color = MaterialTheme.colorScheme.onBackground) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(reconcileAccount.name, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
@@ -3829,7 +4024,7 @@ private fun FinanceScreen(
                         }
                         reconcileAccountId = ""
                     },
-                ) { Text("Apply", color = Color.White) }
+                ) { Text("Apply", color = MaterialTheme.colorScheme.onBackground) }
             },
             containerColor = Color(0xFF151517),
         )
@@ -3838,7 +4033,7 @@ private fun FinanceScreen(
     if (pendingDeleteAccount != null) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { pendingDeleteAccountId = "" },
-            title = { Text("Delete account", color = Color.White) },
+            title = { Text("Delete account", color = MaterialTheme.colorScheme.onBackground) },
             text = { Text("Delete ${pendingDeleteAccount.name}? This also removes related transactions.", color = Color(0xFFBFBFBF)) },
             dismissButton = {
                 TextButton(onClick = { pendingDeleteAccountId = "" }) { Text("Cancel", color = Color(0xFFBFBFBF)) }
@@ -3990,7 +4185,7 @@ private fun FinanceEntrySheet(
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text("Due date (optional)", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
         TextButton(onClick = { showDuePicker = true }) {
-            Text(if (dueAt > 0L) SimpleDateFormat("MMM d, HH:mm", Locale.US).format(dueAt) else "Set due", color = Color.White)
+            Text(if (dueAt > 0L) SimpleDateFormat("MMM d, HH:mm", Locale.US).format(dueAt) else "Set due", color = MaterialTheme.colorScheme.onBackground)
         }
     }
     Spacer(Modifier.height(8.dp))
@@ -4140,14 +4335,14 @@ private fun GlobalSearchResultsInline(
     ) {
         when {
             q.isEmpty() -> {
-                Text("Start typing to search across the app.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                Text("Start typing to search across the app.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
             !anyMatch -> {
-                Text("No matches.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodyMedium)
+                Text("No matches.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
             else -> {
                 if (matchTasks.isNotEmpty()) {
-                    Text("Tasks", fontWeight = FontWeight.SemiBold, color = Color.White, modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
+                    Text("Tasks", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
                     matchTasks.take(12).forEach { task ->
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
@@ -4157,14 +4352,14 @@ private fun GlobalSearchResultsInline(
                                 .clickable { onPickTask(task) },
                         ) {
                             Column(Modifier.padding(12.dp)) {
-                                Text(task.title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(task.title, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text(formatTaskReminderLine(task.reminderAt), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
                 }
                 if (matchNotes.isNotEmpty()) {
-                    Text("Notes", fontWeight = FontWeight.SemiBold, color = Color.White, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                    Text("Notes", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
                     matchNotes.take(12).forEach { note ->
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
@@ -4174,7 +4369,7 @@ private fun GlobalSearchResultsInline(
                                 .clickable { onPickNote(note) },
                         ) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(note.title.ifBlank { "Untitled note" }, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 val snip = plainNoteSnippet(note.body, 96)
                                 if (snip.isNotBlank()) {
                                     Text(snip, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -4184,7 +4379,7 @@ private fun GlobalSearchResultsInline(
                     }
                 }
                 if (matchHabits.isNotEmpty()) {
-                    Text("Habits", fontWeight = FontWeight.SemiBold, color = Color.White, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                    Text("Habits", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
                     matchHabits.take(12).forEach { habit ->
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
@@ -4197,7 +4392,7 @@ private fun GlobalSearchResultsInline(
                                 Text(
                                     "${habit.title} · ${habitCategoryLabel(habit.dayPeriodCategory)}",
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onBackground,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -4237,14 +4432,14 @@ private fun HabitWeekStripCard(
                         .weight(1f)
                         .clickable { onOpenHabit(habit) },
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     "${habit.progress}/${habit.goal}",
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color(0xFF9A9A9A),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Row(
@@ -4296,12 +4491,12 @@ private fun HabitWeekStripCard(
                             if (habit.quantityMode) {
                                 Text(
                                     if (dayAmount == 0) dayNum else dayAmount.toString(),
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onBackground,
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.Bold,
                                 )
                             } else {
-                                Text(dayNum, color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                Text(dayNum, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -4333,7 +4528,7 @@ private fun HabitWeekStripCard(
                         ) {
                             Text(
                                 "+$delta",
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             )
@@ -4375,12 +4570,12 @@ private fun HabitTodayCheckInSheet(
             Column(Modifier.weight(1f)) {
                 BoopSheetHeaderTitle("Habits week")
                 Spacer(Modifier.height(4.dp))
-                Text("Check-off habits toggle today; quantity habits let you add minutes/mL with +/-.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodySmall)
+                Text("Check-off habits toggle today; quantity habits let you add minutes/mL with +/-.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         }
         Spacer(Modifier.height(12.dp))
         if (habits.isEmpty()) {
-            Text("No habits yet.", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.bodySmall)
+            Text("No habits yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         } else {
             habits.forEach { habit ->
                 HabitWeekStripCard(
@@ -4401,7 +4596,7 @@ private fun BoopSheetHeaderTitle(text: String) {
         fontSize = 42.sp,
         lineHeight = 44.sp,
         fontWeight = FontWeight.Bold,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.onBackground,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
     )
@@ -4581,7 +4776,7 @@ private fun EventEditorSheet(
     ) {
         Column(Modifier.padding(12.dp)) {
             Text("Starts", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-            Text(SimpleDateFormat("EEE, MMM dd · HH:mm", Locale.US).format(startAt), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+            Text(SimpleDateFormat("EEE, MMM dd · HH:mm", Locale.US).format(startAt), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyMedium)
             Text("Tap to edit", color = Color(0xFF6E6E70), style = MaterialTheme.typography.labelSmall)
         }
     }
@@ -4611,7 +4806,7 @@ private fun EventEditorSheet(
     ) {
         Text(
             "Today: $todayDateLabel",
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onBackground,
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
         )
@@ -4625,7 +4820,7 @@ private fun EventEditorSheet(
     ) {
         Column(Modifier.padding(12.dp)) {
             Text("Ends", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-            Text(SimpleDateFormat("EEE, MMM dd · HH:mm", Locale.US).format(endAt), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+            Text(SimpleDateFormat("EEE, MMM dd · HH:mm", Locale.US).format(endAt), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyMedium)
         }
     }
     ReminderPickerDialog(
@@ -5056,9 +5251,9 @@ private fun TaskEditorSheet(
         ) {
             Column {
                 Text("Set a reminder", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelMedium)
-                Text(formatTaskReminderLine(reminderAt), color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                Text(formatTaskReminderLine(reminderAt), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge)
             }
-            Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Color.White)
+            Icon(Icons.Outlined.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.onBackground)
         }
     }
     ReminderPickerDialog(
@@ -5286,7 +5481,7 @@ private fun NoteEditorSheet(
         placeholder = { Text("work, urgent, ideas", color = Color(0xFF8A8A8A)) },
     )
     Spacer(Modifier.height(8.dp))
-    Text("Note", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
+    Text("Note", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
     Spacer(Modifier.height(4.dp))
     AndroidView(
         modifier = Modifier
@@ -5343,7 +5538,7 @@ private fun NoteEditorSheet(
     Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { picker.launch("image/*") }) {
-            Icon(Icons.Outlined.Image, contentDescription = "Attach image", tint = Color.White)
+            Icon(Icons.Outlined.Image, contentDescription = "Attach image", tint = MaterialTheme.colorScheme.onBackground)
         }
         IconButton(
             onClick = {
@@ -5370,7 +5565,7 @@ private fun NoteEditorSheet(
                     .show()
             },
         ) {
-            Icon(Icons.Outlined.Link, contentDescription = "Insert link", tint = Color.White)
+            Icon(Icons.Outlined.Link, contentDescription = "Insert link", tint = MaterialTheme.colorScheme.onBackground)
         }
         IconButton(
             onClick = {
@@ -5413,7 +5608,7 @@ private fun NoteEditorSheet(
                     }
                 },
             ) {
-                Icon(Icons.Outlined.PlayArrow, contentDescription = "Play audio", tint = Color.White)
+                Icon(Icons.Outlined.PlayArrow, contentDescription = "Play audio", tint = MaterialTheme.colorScheme.onBackground)
             }
         }
     }
@@ -5425,7 +5620,7 @@ private fun NoteEditorSheet(
     }
     if (previewLinks.isNotEmpty()) {
         Spacer(Modifier.height(8.dp))
-        Text("Links", color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
+        Text("Links", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
         Spacer(Modifier.height(6.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             previewLinks.forEach { link ->
@@ -5677,6 +5872,9 @@ private object LocalStore {
 
     fun save(key: String, payload: String) = pref().edit().putString(key, payload).apply()
     fun read(key: String): String = pref().getString(key, "[]").orEmpty()
+
+    fun readThemeMode(): ThemeMode = ThemeMode.fromStorage(pref().getString("theme_mode", null))
+    fun saveThemeMode(mode: ThemeMode) = pref().edit().putString("theme_mode", mode.storageKey).apply()
 }
 
 private class BoopRepository(private val store: LocalStore) {
