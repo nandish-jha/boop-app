@@ -1,190 +1,272 @@
-import { useEffect, useMemo, useState } from 'react'
-import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import VoiceCaptureScreen from './VoiceCaptureScreen'
-import type { ParsedCapture } from './parseCapture'
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  updateDoc,
+  addDoc, collection, deleteDoc, doc,
+  onSnapshot, orderBy, query, updateDoc,
 } from 'firebase/firestore'
 import { auth, db, googleProvider } from './firebase'
+import VoiceCaptureScreen from './VoiceCaptureScreen'
+import type { ParsedCapture } from './parseCapture'
 
-type Reminder = { id: string; title: string; dueEpochMillis: number; completed: boolean; context?: string }
-type Note = { id: string; title: string; text: string }
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 
-const defaultReminders: Reminder[] = [
-  { id: '1', title: 'Review architectural drafts', dueEpochMillis: Date.now() + 3600000, completed: false },
-  { id: '2', title: 'Synchronize database nodes', dueEpochMillis: Date.now() + 5400000, completed: false },
-  { id: '3', title: 'Gallery opening reception', dueEpochMillis: Date.now() + 7200000, completed: false },
-]
+type ItemType = 'TASK' | 'NOTE' | 'JOURNAL' | 'QUOTE'
+type Priority = 'low' | 'medium' | 'high'
+type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'anytime'
 
-const defaultNotes: Note[] = [
-  { id: 'n1', title: 'The Brutalist Agenda: Form follows failure', text: 'Architecture should not apologize for its existence...' },
-  { id: 'n2', title: 'Visual Anchors', text: 'Research on verticality and light compression.' },
-  { id: 'n3', title: 'Project Zero', text: 'Review monochromatic palette constraints.' },
-]
+interface Item {
+  id: string
+  type: ItemType
+  title: string
+  body: string
+  area: string | null
+  priority: Priority | null
+  dueEpochMillis: number | null
+  completed: boolean
+  pinned: boolean
+  createdEpochMillis: number
+}
 
-function App() {
-  const location = useLocation()
+interface Routine {
+  id: string
+  name: string
+  timeOfDay: TimeOfDay
+  streak: number
+  lastCheckedDate: string
+  completedToday: boolean
+}
+
+interface Ctx {
+  items: Item[]
+  routines: Routine[]
+  addCapture(p: ParsedCapture): Promise<void>
+  toggleItem(id: string, completed: boolean): Promise<void>
+  pinItem(id: string, pinned: boolean): Promise<void>
+  deleteItem(id: string): Promise<void>
+  addRoutine(name: string, timeOfDay: TimeOfDay): Promise<void>
+  toggleRoutine(r: Routine): Promise<void>
+  deleteRoutine(id: string): Promise<void>
+}
+
+const AppCtx = createContext<Ctx | null>(null)
+const useCtx = () => useContext(AppCtx)!
+
+// ─── UTILITIES ───────────────────────────────────────────────────────────────
+
+const todayStr = () => new Date().toISOString().slice(0, 10)
+
+function greeting() {
+  const h = new Date().getHours()
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+}
+
+function currentTOD(): TimeOfDay {
+  const h = new Date().getHours()
+  return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'
+}
+
+const formatDue = (ms: number) =>
+  new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+const formatDate = (ms: number) =>
+  new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+
+const TYPE_ICON: Record<ItemType, string> = {
+  TASK: 'task_alt', NOTE: 'description', JOURNAL: 'book', QUOTE: 'format_quote',
+}
+const TYPE_COLOR: Record<ItemType, string> = {
+  TASK: '#818cf8', NOTE: '#4ade80', JOURNAL: '#fbbf24', QUOTE: '#f472b6',
+}
+
+// ─── APP ─────────────────────────────────────────────────────────────────────
+
+export default function App() {
   const [user, setUser] = useState<User | null>(null)
-  const [loadingAuth, setLoadingAuth] = useState(true)
-  const [reminders, setReminders] = useState<Reminder[]>(() => readStore('boop-reminders', defaultReminders))
-  const [notes, setNotes] = useState<Note[]>(() => readStore('boop-notes', defaultNotes))
-  const fullFocus = location.pathname === '/new-note' || location.pathname === '/new-reminder' || location.pathname === '/voice-capture'
-  const showHomeFab = location.pathname === '/home'
-  const incompleteReminders = useMemo(() => reminders.filter((r) => !r.completed), [reminders])
-  const completedReminders = useMemo(() => reminders.filter((r) => r.completed), [reminders])
+  const [authLoading, setAuthLoading] = useState(true)
+  const [items, setItems] = useState<Item[]>([])
+  const [routines, setRoutines] = useState<Routine[]>([])
 
-  useEffect(() => onAuthStateChanged(auth, (next) => {
-    setUser(next)
-    setLoadingAuth(false)
-  }), [])
+  useEffect(() => onAuthStateChanged(auth, u => { setUser(u); setAuthLoading(false) }), [])
 
   useEffect(() => {
     if (!user) return
-    const q = query(collection(db, 'users', user.uid, 'reminders'), orderBy('dueEpochMillis', 'asc'))
-    return onSnapshot(q, (snap) => {
-      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-      setReminders(
-        rows
-          .filter((r: any) => r.type === 'TASK')
-          .map((r: any) => ({
-            id: r.id,
-            title: r.title ?? 'Untitled reminder',
-            dueEpochMillis: r.dueEpochMillis ?? Date.now(),
-            completed: !!r.completed,
-            context: r.body ?? '',
-          })),
-      )
-      setNotes(
-        rows
-          .filter((r: any) => r.type === 'NOTE')
-          .map((r: any) => ({
-            id: r.id,
-            title: r.title ?? 'Untitled note',
-            text: r.body ?? '',
-          })),
-      )
-    })
+    const q = query(collection(db, 'users', user.uid, 'items'), orderBy('createdEpochMillis', 'desc'))
+    return onSnapshot(q, snap => setItems(snap.docs.map(d => ({ id: d.id, ...d.data() } as Item))))
   }, [user])
 
-  const addNote = async (title: string, text: string) => {
+  useEffect(() => {
     if (!user) return
-    await addDoc(collection(db, 'users', user.uid, 'reminders'), {
-      type: 'NOTE',
-      title,
-      body: text,
-      imageUri: null,
-      dueEpochMillis: Date.now(),
-      completed: false,
-      createdEpochMillis: Date.now(),
-    })
-  }
+    const today = todayStr()
+    return onSnapshot(query(collection(db, 'users', user.uid, 'routines'), orderBy('name')), snap =>
+      setRoutines(snap.docs.map(d => {
+        const data = d.data()
+        return { id: d.id, ...data, completedToday: data.lastCheckedDate === today && !!data.completedToday } as Routine
+      }))
+    )
+  }, [user])
 
-  const deleteNote = async (id: string) => {
-    if (!user) return
-    await deleteDoc(doc(db, 'users', user.uid, 'reminders', id))
-  }
-
-  const addReminder = async (title: string, dueEpochMillis: number, context: string) => {
-    if (!user) return
-    await addDoc(collection(db, 'users', user.uid, 'reminders'), {
-      type: 'TASK',
-      title,
-      body: context,
-      imageUri: null,
-      dueEpochMillis,
-      completed: false,
-      createdEpochMillis: Date.now(),
-    })
-  }
-
-  const toggleReminder = async (id: string, completed: boolean) => {
-    if (!user) return
-    await updateDoc(doc(db, 'users', user.uid, 'reminders', id), { completed: !completed })
-  }
-
-  const deleteReminder = async (id: string) => {
-    if (!user) return
-    await deleteDoc(doc(db, 'users', user.uid, 'reminders', id))
-  }
-
-  const addCapture = async (parsed: ParsedCapture) => {
-    if (!user) return
-    await addDoc(collection(db, 'users', user.uid, 'reminders'), {
-      type: parsed.type,
-      title: parsed.title,
-      body: parsed.body,
-      imageUri: null,
-      dueEpochMillis: parsed.dueEpochMillis ?? Date.now() + 3600000,
-      completed: false,
-      createdEpochMillis: Date.now(),
-      area: parsed.area ?? null,
-      priority: parsed.priority ?? null,
-    })
-  }
-
-  if (loadingAuth) return <div className="app-shell"><div className="phone-shell"><main className="content"><p className="muted">Loading...</p></main></div></div>
+  if (authLoading) return <Splash />
   if (!user) return <SignInScreen />
 
+  const itemsCol = () => collection(db, 'users', user.uid, 'items')
+  const routinesCol = () => collection(db, 'users', user.uid, 'routines')
+  const itemRef = (id: string) => doc(db, 'users', user.uid, 'items', id)
+  const routineRef = (id: string) => doc(db, 'users', user.uid, 'routines', id)
+
+  const ctx: Ctx = {
+    items,
+    routines,
+
+    async addCapture(p) {
+      await addDoc(itemsCol(), {
+        type: p.type,
+        title: p.title,
+        body: p.body,
+        area: p.area ?? null,
+        priority: p.priority ?? null,
+        dueEpochMillis: p.dueEpochMillis ?? null,
+        completed: false,
+        pinned: false,
+        createdEpochMillis: Date.now(),
+      })
+    },
+
+    async toggleItem(id, completed) {
+      await updateDoc(itemRef(id), { completed: !completed })
+    },
+
+    async pinItem(id, pinned) {
+      await updateDoc(itemRef(id), { pinned: !pinned })
+    },
+
+    async deleteItem(id) {
+      await deleteDoc(itemRef(id))
+    },
+
+    async addRoutine(name, timeOfDay) {
+      await addDoc(routinesCol(), { name, timeOfDay, streak: 0, lastCheckedDate: '', completedToday: false })
+    },
+
+    async toggleRoutine(r) {
+      const today = todayStr()
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+      if (r.completedToday) {
+        await updateDoc(routineRef(r.id), {
+          completedToday: false,
+          streak: Math.max(0, r.streak - 1),
+          lastCheckedDate: yesterday,
+        })
+      } else {
+        const newStreak = r.lastCheckedDate === yesterday ? r.streak + 1 : 1
+        await updateDoc(routineRef(r.id), { completedToday: true, streak: newStreak, lastCheckedDate: today })
+      }
+    },
+
+    async deleteRoutine(id) {
+      await deleteDoc(routineRef(id))
+    },
+  }
+
+  return (
+    <AppCtx.Provider value={ctx}>
+      <div className="app-shell">
+        <div className="phone-shell">
+          <Routes>
+            <Route path="/" element={<Navigate to="/today" replace />} />
+            <Route path="/today" element={<Layout user={user}><TodayScreen /></Layout>} />
+            <Route path="/tasks" element={<Layout user={user}><TasksScreen /></Layout>} />
+            <Route path="/library" element={<Layout user={user}><LibraryScreen /></Layout>} />
+            <Route path="/habits" element={<Layout user={user}><HabitsScreen /></Layout>} />
+            <Route path="/account" element={<Layout user={user}><AccountScreen onSignOut={() => signOut(auth)} /></Layout>} />
+            <Route path="/capture" element={
+              <main className="content focus">
+                <VoiceCaptureScreen onSave={ctx.addCapture} />
+              </main>
+            } />
+          </Routes>
+        </div>
+      </div>
+    </AppCtx.Provider>
+  )
+}
+
+// ─── SCAFFOLDING ─────────────────────────────────────────────────────────────
+
+function Splash() {
   return (
     <div className="app-shell">
       <div className="phone-shell">
-        {!fullFocus && <TopBar />}
-        <main className={fullFocus ? 'content focus' : 'content'}>
-          <Routes>
-            <Route path="/" element={<Navigate to="/home" replace />} />
-            <Route path="/home" element={<HomeScreen reminders={incompleteReminders} notes={notes} />} />
-            <Route
-              path="/reminders"
-              element={
-                <RemindersScreen
-                  reminders={incompleteReminders}
-                  completedReminders={completedReminders}
-                  onToggle={toggleReminder}
-                  onDelete={deleteReminder}
-                />
-              }
-            />
-            <Route path="/notes" element={<NotesScreen notes={notes} onDelete={deleteNote} />} />
-            <Route path="/calendar" element={<CalendarScreen reminders={incompleteReminders} />} />
-            <Route path="/account" element={<AccountScreen onSignOut={() => signOut(auth)} />} />
-            <Route path="/profile" element={<ProfileScreen />} />
-            <Route path="/create" element={<CreateScreen />} />
-            <Route path="/new-note" element={<NewNoteScreen onCreate={addNote} />} />
-            <Route path="/new-reminder" element={<NewReminderScreen onCreate={addReminder} />} />
-            <Route path="/voice-capture" element={<VoiceCaptureScreen onSave={addCapture} />} />
-          </Routes>
-        </main>
-        {showHomeFab && (
-          <NavLink to="/create" className="fab" aria-label="Add item">
-            <span className="material-symbols-outlined">add</span>
-          </NavLink>
-        )}
-        {!fullFocus && <BottomNav />}
+        <main className="content"><p className="muted" style={{ marginTop: 40, textAlign: 'center' }}>Loading…</p></main>
       </div>
     </div>
   )
 }
 
+function Layout({ user, children }: { user: User; children: React.ReactNode }) {
+  return (
+    <>
+      <TopBar user={user} />
+      <main className="content">{children}</main>
+      <BottomNav />
+    </>
+  )
+}
+
+function TopBar({ user }: { user: User }) {
+  return (
+    <header className="topbar">
+      <div className="brand">BOOP</div>
+      <NavLink to="/account" className="icon-button avatar" aria-label="Account" style={{ background: 'none', border: 'none' }}>
+        {user.photoURL
+          ? <img src={user.photoURL} alt="" style={{ width: 28, height: 28, borderRadius: '50%', display: 'block' }} />
+          : <span className="material-symbols-outlined">person</span>
+        }
+      </NavLink>
+    </header>
+  )
+}
+
+function BottomNav() {
+  return (
+    <nav className="bottomnav-5">
+      <NavItem to="/today" icon="home" label="Today" />
+      <NavItem to="/tasks" icon="task_alt" label="Tasks" />
+      <NavLink to="/capture" className={({ isActive }) => isActive ? 'capture-fab active' : 'capture-fab'} aria-label="Quick Capture">
+        <span className="material-symbols-outlined">mic</span>
+      </NavLink>
+      <NavItem to="/library" icon="library_books" label="Library" />
+      <NavItem to="/habits" icon="repeat" label="Habits" />
+    </nav>
+  )
+}
+
+function NavItem({ to, icon, label }: { to: string; icon: string; label: string }) {
+  return (
+    <NavLink to={to} className={({ isActive }) => isActive ? 'navitem5 active' : 'navitem5'}>
+      <span className="material-symbols-outlined" aria-hidden="true">{icon}</span>
+      <span className="navitem-label">{label}</span>
+    </NavLink>
+  )
+}
+
+// ─── SIGN IN ─────────────────────────────────────────────────────────────────
+
 function SignInScreen() {
   return (
     <div className="app-shell">
       <div className="phone-shell">
-        <main className="content">
-          <section className="stack">
-            <h1 className="title">BOOP</h1>
-            <p className="muted">Sign in to sync your reminders and notes.</p>
-            <button
-              className="btn-primary"
-              onClick={() => signInWithPopup(auth, googleProvider)}
-            >
+        <main className="content" style={{ display: 'flex', alignItems: 'center', minHeight: '100%' }}>
+          <section className="stack" style={{ width: '100%' }}>
+            <div style={{ textAlign: 'center', padding: '32px 0 24px' }}>
+              <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(129,140,248,0.12)', border: '1px solid rgba(129,140,248,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 36, color: '#818cf8' }}>mic</span>
+              </div>
+              <h1 style={{ fontFamily: 'Manrope, Inter, sans-serif', fontSize: 42, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>Boop</h1>
+              <p className="muted" style={{ marginTop: 10 }}>Speak it. Capture it. Organise it.</p>
+              <p className="muted" style={{ fontSize: 12, marginTop: 6, opacity: 0.6 }}>100% free — no API keys needed</p>
+            </div>
+            <button className="btn-primary" onClick={() => signInWithPopup(auth, googleProvider)}>
               CONTINUE WITH GOOGLE
             </button>
           </section>
@@ -194,341 +276,386 @@ function SignInScreen() {
   )
 }
 
-function readStore<T>(key: string, fallback: T): T {
-  const raw = window.localStorage.getItem(key)
-  if (!raw) return fallback
-  try {
-    return JSON.parse(raw) as T
-  } catch {
-    return fallback
-  }
-}
+// ─── TODAY ────────────────────────────────────────────────────────────────────
 
-function TopBar() {
-  return (
-    <header className="topbar">
-      <NavLink to="/profile" className="icon-button avatar" aria-label="Profile">
-        <span className="material-symbols-outlined">person</span>
-      </NavLink>
-      <div className="brand center">BOOP</div>
-      <NavLink to="/account" className="icon-button" aria-label="Settings">
-        <span className="material-symbols-outlined">settings</span>
-      </NavLink>
-    </header>
+function TodayScreen() {
+  const { items, routines, toggleItem, pinItem, deleteItem, toggleRoutine } = useCtx()
+
+  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999)
+  const pinned = items.filter(i => i.type === 'TASK' && i.pinned && !i.completed).slice(0, 3)
+  const todayTasks = items.filter(i =>
+    i.type === 'TASK' && !i.completed && !i.pinned &&
+    i.dueEpochMillis !== null && i.dueEpochMillis <= todayEnd.getTime()
   )
-}
+  const tod = currentTOD()
+  const todRoutines = routines.filter(r => r.timeOfDay === tod || r.timeOfDay === 'anytime').slice(0, 4)
 
-function HomeScreen({ reminders, notes }: { reminders: Reminder[]; notes: Note[] }) {
+  const resurfaced = useMemo(() => {
+    const lib = items.filter(i => i.type === 'NOTE' || i.type === 'JOURNAL' || i.type === 'QUOTE')
+    return lib.length > 0 ? lib[Math.floor(Math.random() * lib.length)] : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally static per visit — shows a different item each time you open the app
+
+  const isEmpty = pinned.length === 0 && todayTasks.length === 0
+
   return (
     <section className="stack">
-      <h1 className="hero">Good Morning.</h1>
-      <p className="muted">{reminders.length} reminders pending today</p>
-      <section className="card">
-        <div className="row-between">
-          <h3>Urgent Priority</h3>
-          <span className="tiny">VIEW ALL</span>
+      <div>
+        <p className="muted" style={{ fontSize: 12 }}>
+          {new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+        </p>
+        <h1 className="hero">{greeting()}.</h1>
+      </div>
+
+      {pinned.length > 0 && (
+        <div className="today-section">
+          <p className="section-label" style={{ marginBottom: 2 }}>⭐ Top 3 Focus</p>
+          {pinned.map(i => <TaskRow key={i.id} item={i} onToggle={toggleItem} onPin={pinItem} onDelete={deleteItem} />)}
         </div>
-        {reminders.slice(0, 3).map((item) => (
-          <article key={item.id} className="list-item">
-            <div>
-              <h4>{item.title}</h4>
-              <p className="tiny">{formatDue(item.dueEpochMillis)}</p>
-            </div>
-          </article>
-        ))}
-      </section>
-      <div className="row-between">
-        <h2>Recent Notes</h2>
-        <span className="tiny">GRID</span>
+      )}
+
+      <div className="today-section">
+        <div className="row-between">
+          <p className="section-label">Due Today</p>
+          {todayTasks.length > 0 && <span className="tiny">{todayTasks.length} open</span>}
+        </div>
+        {isEmpty
+          ? <p className="muted" style={{ fontSize: 13 }}>Nothing due. Tap the 🎤 button to add a task.</p>
+          : todayTasks.slice(0, 6).map(i => <TaskRow key={i.id} item={i} onToggle={toggleItem} onPin={pinItem} onDelete={deleteItem} />)
+        }
       </div>
-      {notes.slice(0, 4).map((n) => (
-        <article key={n.id} className="note-card">
-          <h4>{n.title}</h4>
-          <p className="muted">{n.text}</p>
-        </article>
-      ))}
+
+      {todRoutines.length > 0 && (
+        <div className="today-section">
+          <p className="section-label" style={{ marginBottom: 2 }}>{tod} habits</p>
+          {todRoutines.map(r => (
+            <RoutineRow key={r.id} routine={r} onToggle={toggleRoutine} onDelete={() => {}} compact />
+          ))}
+        </div>
+      )}
+
+      {resurfaced && (
+        <div className="today-section">
+          <p className="section-label" style={{ marginBottom: 2 }}>Resurfaced</p>
+          <div className="card">
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: TYPE_COLOR[resurfaced.type] }}>
+              {resurfaced.type}
+            </span>
+            <p style={{ marginTop: 8, fontSize: 14, lineHeight: 1.6, color: 'var(--muted)' }}>
+              {resurfaced.body.length > 200 ? resurfaced.body.slice(0, 200) + '…' : resurfaced.body}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div style={{ height: 24 }} />
     </section>
   )
 }
 
-function RemindersScreen({
-  reminders,
-  completedReminders,
-  onToggle,
-  onDelete,
-}: {
-  reminders: Reminder[]
-  completedReminders: Reminder[]
-  onToggle: (id: string, completed: boolean) => void
-  onDelete: (id: string) => void
-}) {
+// ─── TASKS ────────────────────────────────────────────────────────────────────
+
+function TasksScreen() {
+  const { items, toggleItem, pinItem, deleteItem } = useCtx()
+  const [filter, setFilter] = useState<'open' | 'done' | 'all'>('open')
+  const [areaFilter, setAreaFilter] = useState<string | null>(null)
+
+  const areas = useMemo(() => {
+    const s = new Set<string>()
+    items.filter(i => i.type === 'TASK' && i.area).forEach(i => s.add(i.area!))
+    return [...s]
+  }, [items])
+
+  const visible = items.filter(i => {
+    if (i.type !== 'TASK') return false
+    if (filter === 'open' && i.completed) return false
+    if (filter === 'done' && !i.completed) return false
+    if (areaFilter && i.area !== areaFilter) return false
+    return true
+  })
+
   return (
     <section className="stack">
-      <h1 className="title">Reminders</h1>
-      <p className="muted">THE MONOLITHIC ARCHIVE / SYSTEM_01</p>
-      <h5 className="section-label">TODAY</h5>
-      {reminders.length === 0 && <p className="muted">No pending reminders.</p>}
-      {reminders.map((item) => (
-        <article key={item.id} className="list-item">
-          <button className="checkbox btn-ghost" onClick={() => onToggle(item.id, item.completed)} aria-label="Mark completed" />
-          <div>
-            <h4>{item.title}</h4>
-            <p className="tiny">{formatDue(item.dueEpochMillis)}</p>
-          </div>
-          <button className="icon-button small ml-auto" aria-label="Delete reminder" onClick={() => onDelete(item.id)}>
-            <span className="material-symbols-outlined">delete</span>
+      <h1 className="title">Tasks</h1>
+
+      <div className="tab-row">
+        {(['open', 'done', 'all'] as const).map(f => (
+          <button key={f} className={`tab-btn${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
+            {f.toUpperCase()}
           </button>
-        </article>
-      ))}
-      <h5 className="section-label">COMPLETED</h5>
-      {completedReminders.length === 0 && <p className="muted">No completed reminders yet.</p>}
-      {completedReminders.map((item) => (
-        <article key={item.id} className="list-item dimmed">
-          <button className="checkbox done btn-ghost" onClick={() => onToggle(item.id, item.completed)} aria-label="Mark not completed" />
-          <div>
-            <p>{item.title}</p>
-            <p className="tiny">{formatDue(item.dueEpochMillis)}</p>
-          </div>
-        </article>
-      ))}
-    </section>
-  )
-}
-
-function NotesScreen({ notes, onDelete }: { notes: Note[]; onDelete: (id: string) => void }) {
-  return (
-    <section className="stack">
-      <h1 className="title">NOTES</h1>
-      <p className="muted">A monolithic archive of observations.</p>
-      {notes.length === 0 && <p className="muted">No notes yet. Tap + and create one.</p>}
-      {notes.map((n) => (
-        <article key={n.id} className="note-card">
-          <div className="row-between">
-            <h4>{n.title}</h4>
-            <button className="icon-button small" aria-label="Delete note" onClick={() => onDelete(n.id)}>
-              <span className="material-symbols-outlined">delete</span>
-            </button>
-          </div>
-          <p className="muted">{n.text}</p>
-        </article>
-      ))}
-    </section>
-  )
-}
-
-function CalendarScreen({ reminders }: { reminders: Reminder[] }) {
-  return (
-    <section className="stack">
-      <h1 className="title">October</h1>
-      <div className="calendar-grid">
-        {Array.from({ length: 31 }).map((_, i) => (
-          <div key={i} className={i + 1 === 12 ? 'day active' : 'day'}>{String(i + 1).padStart(2, '0')}</div>
         ))}
       </div>
-      <h3>Today's Focus</h3>
-      {reminders.slice(0, 2).map((r) => (
-        <article key={r.id} className="list-item">
-          <div className="time">{formatHour(r.dueEpochMillis)}</div>
-          <div>
-            <h4>{r.title}</h4>
-            <p className="muted">Task block</p>
-          </div>
-        </article>
-      ))}
+
+      {areas.length > 0 && (
+        <div className="chip-row">
+          <button className={`area-filter${!areaFilter ? ' active' : ''}`} onClick={() => setAreaFilter(null)}>All</button>
+          {areas.map(a => (
+            <button key={a} className={`area-filter${areaFilter === a ? ' active' : ''}`} onClick={() => setAreaFilter(areaFilter === a ? null : a)}>
+              {a}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {visible.length === 0 && (
+        <p className="muted" style={{ fontSize: 13 }}>
+          {filter === 'done' ? 'No completed tasks yet.' : 'No tasks here. Tap 🎤 to add one.'}
+        </p>
+      )}
+      {visible.map(i => <TaskRow key={i.id} item={i} onToggle={toggleItem} onPin={pinItem} onDelete={deleteItem} />)}
+      <div style={{ height: 24 }} />
     </section>
   )
 }
 
-function AccountScreen({ onSignOut }: { onSignOut: () => void }) {
+// ─── LIBRARY ─────────────────────────────────────────────────────────────────
+
+function LibraryScreen() {
+  const { items, deleteItem } = useCtx()
+  const [tab, setTab] = useState<'NOTE' | 'JOURNAL' | 'QUOTE'>('NOTE')
+  const visible = items.filter(i => i.type === tab)
+
+  const hints: Record<string, string> = {
+    NOTE: 'Say anything — "The sky was unusually clear today" → becomes a note.',
+    JOURNAL: 'Start with "journal:" or "today I…" to capture a journal entry.',
+    QUOTE: 'Say "quote from…" or "he said…" to save a quote.',
+  }
+
   return (
     <section className="stack">
-      <p className="section-label">ACCOUNT DASHBOARD</p>
-      <h1 className="title">Alex Vanderbilt</h1>
-      <section className="card">
-        <h3>Calendar Integration</h3>
-        <p className="muted">Sync your Google Calendar to manage schedules seamlessly within Boop.</p>
-        <button className="btn-primary">SYNC GOOGLE CALENDAR</button>
-      </section>
-      <section className="card">
-        <h3>Alert Preferences</h3>
-        <Preference label="Push Notifications" on />
-        <Preference label="Email Digests" />
-        <Preference label="SMS Reminders" on />
-      </section>
+      <h1 className="title">Library</h1>
+
+      <div className="tab-row">
+        {(['NOTE', 'JOURNAL', 'QUOTE'] as const).map(t => (
+          <button key={t} className={`tab-btn${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+            <span className="material-symbols-outlined" style={{ fontSize: 13, verticalAlign: 'middle', marginRight: 3 }}>{TYPE_ICON[t]}</span>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {visible.length === 0 && (
+        <div className="card" style={{ opacity: 0.7 }}>
+          <p className="muted" style={{ fontSize: 13 }}>{hints[tab]}</p>
+        </div>
+      )}
+
+      {visible.map(item => (
+        <article key={item.id} className="library-item">
+          <div className="row-between">
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: TYPE_COLOR[item.type] }}>
+              {item.type}
+            </span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span className="tiny">{formatDate(item.createdEpochMillis)}</span>
+              <button className="icon-button small" onClick={() => deleteItem(item.id)} aria-label="Delete">
+                <span className="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          </div>
+          <h4 style={{ margin: '8px 0 4px', fontSize: 15 }}>{item.title}</h4>
+          <p className="muted" style={{ fontSize: 13, lineHeight: 1.6, margin: 0 }}>{item.body}</p>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            {item.area && <span className="area-chip">{item.area}</span>}
+            {item.priority && <span className={`priority-chip priority-${item.priority}`}>{item.priority}</span>}
+          </div>
+        </article>
+      ))}
+
+      <div style={{ height: 24 }} />
+    </section>
+  )
+}
+
+// ─── HABITS ──────────────────────────────────────────────────────────────────
+
+function HabitsScreen() {
+  const { routines, addRoutine, toggleRoutine, deleteRoutine } = useCtx()
+  const [showAdd, setShowAdd] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newTime, setNewTime] = useState<TimeOfDay>('morning')
+
+  const done = routines.filter(r => r.completedToday).length
+  const total = routines.length
+  const TOD_ORDER: TimeOfDay[] = ['morning', 'afternoon', 'evening', 'anytime']
+
+  const save = async () => {
+    if (!newName.trim()) return
+    await addRoutine(newName.trim(), newTime)
+    setNewName(''); setShowAdd(false)
+  }
+
+  return (
+    <section className="stack">
+      <div className="row-between">
+        <h1 className="title">Habits</h1>
+        {total > 0 && <span className="tiny muted">{done}/{total} today</span>}
+      </div>
+
+      {total > 0 && (
+        <div className="progress-bar">
+          <div className="progress-fill" style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }} />
+        </div>
+      )}
+
+      {TOD_ORDER.map(tod => {
+        const group = routines.filter(r => r.timeOfDay === tod)
+        if (!group.length) return null
+        return (
+          <div key={tod} className="today-section">
+            <p className="section-label">{tod}</p>
+            {group.map(r => <RoutineRow key={r.id} routine={r} onToggle={toggleRoutine} onDelete={deleteRoutine} />)}
+          </div>
+        )
+      })}
+
+      {total === 0 && !showAdd && (
+        <p className="muted" style={{ fontSize: 13 }}>Track daily habits and build streaks. Add your first one below.</p>
+      )}
+
+      {showAdd ? (
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h4 style={{ margin: 0 }}>New Habit</h4>
+          <input
+            className="field"
+            style={{ borderRadius: 10, fontSize: 14 }}
+            placeholder="e.g. Take vitamins, Read 10 pages, Walk outside"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && save()}
+            autoFocus
+          />
+          <div className="tab-row">
+            {TOD_ORDER.map(t => (
+              <button key={t} className={`tab-btn${newTime === t ? ' active' : ''}`} style={{ fontSize: 10 }} onClick={() => setNewTime(t)}>
+                {t}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-primary" style={{ flex: 1 }} onClick={save}>SAVE</button>
+            <button className="btn-ghost-outline" onClick={() => { setShowAdd(false); setNewName('') }}>CANCEL</button>
+          </div>
+        </div>
+      ) : (
+        <button className="btn-ghost-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowAdd(true)}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
+          ADD HABIT
+        </button>
+      )}
+
+      <div style={{ height: 24 }} />
+    </section>
+  )
+}
+
+// ─── ACCOUNT ─────────────────────────────────────────────────────────────────
+
+function AccountScreen({ onSignOut }: { onSignOut(): void }) {
+  const { items, routines } = useCtx()
+  const taskCount = items.filter(i => i.type === 'TASK').length
+  const noteCount = items.filter(i => i.type === 'NOTE' || i.type === 'JOURNAL' || i.type === 'QUOTE').length
+
+  return (
+    <section className="stack">
+      <h1 className="title">Account</h1>
+      <div className="card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, textAlign: 'center' }}>
+        <div>
+          <p style={{ fontSize: 28, fontWeight: 800, margin: 0 }}>{taskCount}</p>
+          <p className="muted" style={{ fontSize: 11, margin: '4px 0 0' }}>Tasks</p>
+        </div>
+        <div>
+          <p style={{ fontSize: 28, fontWeight: 800, margin: 0 }}>{noteCount}</p>
+          <p className="muted" style={{ fontSize: 11, margin: '4px 0 0' }}>Library items</p>
+        </div>
+        <div>
+          <p style={{ fontSize: 28, fontWeight: 800, margin: 0 }}>{routines.length}</p>
+          <p className="muted" style={{ fontSize: 11, margin: '4px 0 0' }}>Habits</p>
+        </div>
+      </div>
+      <div className="card">
+        <p className="muted" style={{ fontSize: 13, lineHeight: 1.6, margin: 0 }}>
+          Boop uses your own Firebase account for storage. Voice parsing is 100% free — no AI API keys required. Data stays in your Google account.
+        </p>
+      </div>
       <button className="btn-danger" onClick={onSignOut}>SIGN OUT</button>
     </section>
   )
 }
 
-function ProfileScreen() {
+// ─── SHARED COMPONENTS ───────────────────────────────────────────────────────
+
+function TaskRow({ item, onToggle, onPin, onDelete }: {
+  item: Item
+  onToggle(id: string, completed: boolean): void
+  onPin(id: string, pinned: boolean): void
+  onDelete(id: string): void
+}) {
   return (
-    <section className="stack">
-      <p className="section-label">PROFILE</p>
-      <div className="profile-hero">
-        <div className="profile-avatar">
-          <span className="material-symbols-outlined">person</span>
+    <article className={`list-item${item.completed ? ' dimmed' : ''}`}>
+      <button
+        className={`checkbox btn-ghost${item.completed ? ' done' : ''}`}
+        onClick={() => onToggle(item.id, item.completed)}
+        aria-label="Toggle complete"
+      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, textDecoration: item.completed ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {item.title}
+        </p>
+        <div style={{ display: 'flex', gap: 6, marginTop: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+          {item.dueEpochMillis && <span className="tiny">{formatDue(item.dueEpochMillis)}</span>}
+          {item.area && <span className="area-chip">{item.area}</span>}
+          {item.priority && <span className={`priority-chip priority-${item.priority}`}>{item.priority}</span>}
         </div>
-        <h1 className="title">Nandish Jha</h1>
-        <p className="muted">boop.user@example.com</p>
       </div>
-      <section className="card">
-        <h3>Identity</h3>
-        <p className="muted">Monochrome workspace owner and archive operator.</p>
-      </section>
-      <section className="card">
-        <h3>Quick Actions</h3>
-        <button className="btn-primary">EDIT PROFILE</button>
-      </section>
-    </section>
+      <button
+        className={`icon-button small${item.pinned ? ' pinned' : ''}`}
+        onClick={() => onPin(item.id, item.pinned)}
+        aria-label={item.pinned ? 'Unpin' : 'Pin to top 3'}
+        style={{ background: 'none', border: 'none', color: item.pinned ? '#fbbf24' : 'var(--soft)' }}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 20 }}>{item.pinned ? 'star' : 'star_border'}</span>
+      </button>
+      <button
+        className="icon-button small"
+        onClick={() => onDelete(item.id)}
+        aria-label="Delete"
+        style={{ background: 'none', border: 'none', color: 'var(--soft)' }}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete</span>
+      </button>
+    </article>
   )
 }
 
-function Preference({ label, on = false }: { label: string; on?: boolean }) {
+function RoutineRow({ routine, onToggle, onDelete, compact }: {
+  routine: Routine
+  onToggle(r: Routine): void
+  onDelete(id: string): void
+  compact?: boolean
+}) {
   return (
-    <div className="row-between pref">
-      <span>{label}</span>
-      <span className={on ? 'toggle on' : 'toggle'} />
-    </div>
+    <article className={`list-item${routine.completedToday ? ' dimmed' : ''}`}>
+      <button
+        className={`checkbox btn-ghost${routine.completedToday ? ' done' : ''}`}
+        onClick={() => onToggle(routine)}
+        aria-label="Toggle habit"
+      />
+      <p style={{ flex: 1, margin: 0, textDecoration: routine.completedToday ? 'line-through' : 'none' }}>
+        {routine.name}
+      </p>
+      {routine.streak > 0 && <span className="streak-badge">🔥 {routine.streak}</span>}
+      {!compact && (
+        <button
+          className="icon-button small"
+          onClick={() => onDelete(routine.id)}
+          aria-label="Delete habit"
+          style={{ background: 'none', border: 'none', color: 'var(--soft)' }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete</span>
+        </button>
+      )}
+    </article>
   )
 }
 
-function CreateScreen() {
-  return (
-    <section className="stack">
-      <h1 className="title">Create New Item</h1>
-      <p className="muted">Select a format to capture your thoughts and tasks.</p>
-      <NavLink to="/voice-capture" className="card action-card" style={{ textDecoration: 'none' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="material-symbols-outlined">mic</span>
-          <div>
-            <h3>Quick Capture</h3>
-            <p className="muted">Speak or type — auto-organised into a task or note.</p>
-          </div>
-        </div>
-      </NavLink>
-      <NavLink to="/new-note" className="card action-card">
-        <h3>New Note</h3>
-        <p className="muted">Architectural thoughts and long-form archive.</p>
-      </NavLink>
-      <NavLink to="/new-reminder" className="card action-card">
-        <h3>New Reminder</h3>
-        <p className="muted">Set precision alerts and temporal triggers.</p>
-      </NavLink>
-    </section>
-  )
-}
-
-function NewNoteScreen({ onCreate }: { onCreate: (title: string, text: string) => void }) {
-  const navigate = useNavigate()
-  const [title, setTitle] = useState('')
-  const [text, setText] = useState('')
-
-  const save = () => {
-    const safeTitle = title.trim() || 'Untitled note'
-    const safeText = text.trim() || 'No content'
-    onCreate(safeTitle, safeText)
-    navigate('/notes')
-  }
-
-  return (
-    <section className="stack">
-      <div className="row-between">
-        <NavLink to="/notes" className="icon-link" aria-label="Close editor">
-          <span className="material-symbols-outlined">close</span>
-          <span className="tiny">CLOSE</span>
-        </NavLink>
-        <button className="btn-primary small" onClick={save}>DONE</button>
-      </div>
-      <input className="field title-input" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <textarea className="field body-input" placeholder="Start your thought here..." value={text} onChange={(e) => setText(e.target.value)} />
-      <div className="toolbar" role="toolbar" aria-label="Text formatting">
-        <button className="icon-button small" aria-label="Bold"><span className="material-symbols-outlined">format_bold</span></button>
-        <button className="icon-button small" aria-label="Italic"><span className="material-symbols-outlined">format_italic</span></button>
-        <button className="icon-button small" aria-label="Bulleted list"><span className="material-symbols-outlined">format_list_bulleted</span></button>
-        <div className="toolbar-sep" />
-        <button className="icon-button small" aria-label="Add image"><span className="material-symbols-outlined">image</span></button>
-        <button className="icon-button small" aria-label="Add link"><span className="material-symbols-outlined">link</span></button>
-        <button className="icon-button small active" aria-label="Voice note"><span className="material-symbols-outlined">mic</span></button>
-      </div>
-    </section>
-  )
-}
-
-function NewReminderScreen({ onCreate }: { onCreate: (title: string, dueEpochMillis: number, context: string) => void }) {
-  const navigate = useNavigate()
-  const [title, setTitle] = useState('')
-  const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
-  const [context, setContext] = useState('')
-
-  const save = () => {
-    const safeTitle = title.trim() || 'Untitled reminder'
-    const dueEpochMillis = parseDateTime(date, time)
-    onCreate(safeTitle, dueEpochMillis, context)
-    navigate('/reminders')
-  }
-
-  return (
-    <section className="stack">
-      <div className="row-between">
-        <NavLink to="/reminders" className="icon-link" aria-label="Close editor">
-          <span className="material-symbols-outlined">close</span>
-          <span className="tiny">CLOSE</span>
-        </NavLink>
-        <button className="btn-primary small" onClick={save}>SAVE</button>
-      </div>
-      <h1 className="title">New Reminder</h1>
-      <input className="field" placeholder="What needs attention?" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <div className="two">
-        <input className="field" placeholder="mm/dd/yyyy" value={date} onChange={(e) => setDate(e.target.value)} />
-        <input className="field" placeholder="--:--" value={time} onChange={(e) => setTime(e.target.value)} />
-      </div>
-      <textarea className="field body-input small" placeholder="Additional context..." value={context} onChange={(e) => setContext(e.target.value)} />
-      <button className="btn-primary" onClick={save}>CREATE REMINDER</button>
-    </section>
-  )
-}
-
-function BottomNav() {
-  return (
-    <nav className="bottomnav">
-      <NavItem to="/home" label="HOME" icon="home" />
-      <NavItem to="/reminders" label="REMINDERS" icon="notifications" />
-      <NavItem to="/calendar" label="CALENDAR" icon="calendar_today" />
-      <NavItem to="/notes" label="NOTES" icon="description" />
-    </nav>
-  )
-}
-
-function NavItem({ to, label, icon }: { to: string; label: string; icon: string }) {
-  return (
-    <NavLink to={to} className={({ isActive }) => (isActive ? 'navitem active' : 'navitem')}>
-      <span className="material-symbols-outlined" aria-hidden="true">
-        {icon}
-      </span>
-      <span className="sr-only">{label}</span>
-    </NavLink>
-  )
-}
-
-export default App
-
-function formatDue(epochMillis: number) {
-  return new Date(epochMillis).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function formatHour(epochMillis: number) {
-  return new Date(epochMillis).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-function parseDateTime(date: string, time: string) {
-  if (!date) return Date.now() + 3600000
-  const normalizedTime = time && time.length >= 4 ? time : '09:00'
-  const value = new Date(`${date}T${normalizedTime}:00`)
-  return Number.isNaN(value.getTime()) ? Date.now() + 3600000 : value.getTime()
-}
