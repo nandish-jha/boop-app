@@ -1085,11 +1085,6 @@ private fun BoopSpeedDialFab(
             exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.End) {
-                SmallFloatingActionButton(
-                    onClick = { onOpenVoiceCapture(); onExpandedChange(false) },
-                    containerColor = Color(0xFFE8E8EA),
-                    contentColor = Color.Black,
-                ) { Icon(Icons.Outlined.Mic, contentDescription = "Voice capture") }
                 if (selectedTab == 2) {
                     SmallFloatingActionButton(
                         onClick = { onOpenTask(); onExpandedChange(false) },
@@ -1163,30 +1158,43 @@ private fun BoopSpeedDialFab(
                 }
             }
         }
-        FloatingActionButton(
-            onClick = {
-                when (selectedTab) {
-                    0 -> onExpandedChange(!expanded)
-                    1 -> onOpenTask()
-                    2 -> onExpandedChange(!expanded)
-                    3 -> onOpenHabit()
-                    else -> onExpandedChange(!expanded)
-                }
-            },
-            modifier = Modifier.pointerInput(selectedTab) {
-                if (selectedTab != 0) {
-                    detectTapGestures(onLongPress = { onExpandedChange(true) })
-                }
-            },
-            containerColor = Color.White,
-            contentColor = Color.Black,
-            elevation = FloatingActionButtonDefaults.elevation(),
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Bottom,
         ) {
-            Crossfade(targetState = expanded, label = "fab_icon") { showClose ->
-                Icon(
-                    imageVector = if (showClose) Icons.Outlined.Close else Icons.Outlined.Add,
-                    contentDescription = if (showClose) "Close" else "Add",
-                )
+            FloatingActionButton(
+                onClick = onOpenVoiceCapture,
+                containerColor = Color(0xFFE8E8EA),
+                contentColor = Color.Black,
+                elevation = FloatingActionButtonDefaults.elevation(),
+            ) {
+                Icon(Icons.Outlined.Mic, contentDescription = "Voice capture")
+            }
+            FloatingActionButton(
+                onClick = {
+                    when (selectedTab) {
+                        0 -> onExpandedChange(!expanded)
+                        1 -> onOpenTask()
+                        2 -> onExpandedChange(!expanded)
+                        3 -> onOpenHabit()
+                        else -> onExpandedChange(!expanded)
+                    }
+                },
+                modifier = Modifier.pointerInput(selectedTab) {
+                    if (selectedTab != 0) {
+                        detectTapGestures(onLongPress = { onExpandedChange(true) })
+                    }
+                },
+                containerColor = Color.White,
+                contentColor = Color.Black,
+                elevation = FloatingActionButtonDefaults.elevation(),
+            ) {
+                Crossfade(targetState = expanded, label = "fab_icon") { showClose ->
+                    Icon(
+                        imageVector = if (showClose) Icons.Outlined.Close else Icons.Outlined.Add,
+                        contentDescription = if (showClose) "Close" else "Add",
+                    )
+                }
             }
         }
     }
