@@ -235,19 +235,45 @@ object VoiceCaptureParser {
         }
 
         val timeMatch = Regex(
-            """\bat\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b|\b(\d{1,2}):(\d{2})\s*(am|pm)?\b""",
+            """\bat\s*(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\b""" +
+                """|\b(\d{1,2}):(\d{2})\s*(a\.?m\.?|p\.?m\.?)?\b""" +
+                """|\b(\d{1,2})\s*(a\.?m\.?|p\.?m\.?)\b""" +
+                """|\b(\d{1,2})(?::(\d{2}))?\s+(?:in\s+the\s+)?(morning|afternoon|evening)\b""",
             RegexOption.IGNORE_CASE,
         ).find(lower)
 
         if (timeMatch != null) {
-            var hours = (timeMatch.groupValues[1].ifBlank { timeMatch.groupValues[4] }).toIntOrNull() ?: 9
-            val minutes = (timeMatch.groupValues[2].ifBlank { timeMatch.groupValues[5] }).toIntOrNull() ?: 0
-            val meridiem = (timeMatch.groupValues[3].ifBlank { timeMatch.groupValues[6] }).lowercase(Locale.US)
-            if (meridiem == "pm" && hours < 12) hours += 12
-            if (meridiem == "am" && hours == 12) hours = 0
+            val g = timeMatch.groupValues
+            val hours = listOf(1, 4, 7, 9).firstNotNullOfOrNull { g.getOrNull(it)?.toIntOrNull() } ?: 9
+            val minutes = listOf(2, 5, 10).firstNotNullOfOrNull { g.getOrNull(it)?.toIntOrNull() } ?: 0
+            val explicitMeridiem = listOf(3, 6, 8).firstNotNullOfOrNull { g.getOrNull(it)?.takeIf { it.isNotBlank() } }.orEmpty()
+            val contextWord = g.getOrNull(11).orEmpty()
+            val resolvedHours = resolveHourWithMeridiem(
+                hours = hours,
+                explicitMeridiem = explicitMeridiem,
+                contextWord = contextWord,
+                fullText = lower,
+            )
             if (!foundDay) base = Calendar.getInstance()
-            base.set(Calendar.HOUR_OF_DAY, hours)
+            base.set(Calendar.HOUR_OF_DAY, resolvedHours)
             base.set(Calendar.MINUTE, minutes)
+            base.set(Calendar.SECOND, 0)
+            base.set(Calendar.MILLISECOND, 0)
+            return base.timeInMillis
+        }
+
+        if (lower.contains("noon") || lower.contains("midday")) {
+            if (!foundDay) base = Calendar.getInstance()
+            base.set(Calendar.HOUR_OF_DAY, 12)
+            base.set(Calendar.MINUTE, 0)
+            base.set(Calendar.SECOND, 0)
+            base.set(Calendar.MILLISECOND, 0)
+            return base.timeInMillis
+        }
+        if (lower.contains("midnight")) {
+            if (!foundDay) base = Calendar.getInstance()
+            base.set(Calendar.HOUR_OF_DAY, 0)
+            base.set(Calendar.MINUTE, 0)
             base.set(Calendar.SECOND, 0)
             base.set(Calendar.MILLISECOND, 0)
             return base.timeInMillis
@@ -274,6 +300,53 @@ object VoiceCaptureParser {
             return System.currentTimeMillis() + n * ms
         }
         return null
+    }
+
+    private fun normalizeMeridiemToken(raw: String): String? {
+        val token = raw.lowercase(Locale.US).replace(".", "").trim()
+        return when (token) {
+            "am" -> "am"
+            "pm" -> "pm"
+            else -> null
+        }
+    }
+
+    private fun meridiemFromTimeOfDayWord(word: String): String? = when (word.lowercase(Locale.US)) {
+        "morning" -> "am"
+        "afternoon", "evening" -> "pm"
+        else -> null
+    }
+
+    private fun meridiemFromSpeechContext(lower: String): String? = when {
+        lower.contains("midnight") -> "am"
+        lower.contains("noon") || lower.contains("midday") || lower.contains("lunch time") || lower.contains("lunchtime") -> "pm"
+        lower.contains("in the morning") || Regex("""\bmorning\b""").containsMatchIn(lower) -> "am"
+        lower.contains("in the afternoon") || Regex("""\bafternoon\b""").containsMatchIn(lower) -> "pm"
+        lower.contains("in the evening") || lower.contains("tonight") ||
+            Regex("""\bevening\b""").containsMatchIn(lower) || Regex("""\bnight\b""").containsMatchIn(lower) -> "pm"
+        else -> null
+    }
+
+    private fun resolveHourWithMeridiem(
+        hours: Int,
+        explicitMeridiem: String,
+        contextWord: String,
+        fullText: String,
+    ): Int {
+        val meridiem = normalizeMeridiemToken(explicitMeridiem)
+            ?: meridiemFromTimeOfDayWord(contextWord)
+            ?: meridiemFromSpeechContext(fullText)
+
+        var h = hours.coerceIn(0, 23)
+        return when (meridiem) {
+            "am" -> if (h == 12) 0 else h.coerceAtMost(11)
+            "pm" -> when {
+                h == 12 -> 12
+                h < 12 -> h + 12
+                else -> h
+            }
+            else -> h
+        }
     }
 
     private fun extractRepeatDays(lower: String): Int = when {
