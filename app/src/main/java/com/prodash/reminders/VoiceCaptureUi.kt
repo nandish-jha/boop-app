@@ -36,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,6 +52,7 @@ fun VoiceCaptureSheet(
     onListeningChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
+    val colors = MaterialTheme.colorScheme
     var transcript by remember { mutableStateOf("") }
     var partial by remember { mutableStateOf("") }
     var listening by remember { mutableStateOf(false) }
@@ -171,9 +171,25 @@ fun VoiceCaptureSheet(
         if (stopSignal > 0 && listening) stopListening()
     }
 
+    fun releaseRecognizer() {
+        val sr = recognizer ?: return
+        try {
+            sr.stopListening()
+        } catch (_: Throwable) {
+        }
+        try {
+            sr.cancel()
+        } catch (_: Throwable) {
+        }
+        try {
+            sr.destroy()
+        } catch (_: Throwable) {
+        }
+    }
+
     DisposableEffect(recognizer) {
         onDispose {
-            recognizer?.destroy()
+            releaseRecognizer()
             onListeningChanged(false)
         }
     }
@@ -188,18 +204,18 @@ fun VoiceCaptureSheet(
                 "Voice capture",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
+                color = colors.onBackground,
             )
             if (listening) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(22.dp),
-                    color = Color(0xFFFF8A8A),
+                    color = colors.primary,
                     strokeWidth = 2.dp,
                 )
             }
         }
         Spacer(Modifier.height(8.dp))
-        Text(status, color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
+        Text(status, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
 
         val displayText = when {
             partial.isNotBlank() -> partial
@@ -210,12 +226,12 @@ fun VoiceCaptureSheet(
             Spacer(Modifier.height(16.dp))
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF242426),
+                color = colors.surfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
                     displayText,
-                    color = Color.White,
+                    color = colors.onBackground,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(14.dp),
                 )
@@ -229,24 +245,35 @@ fun VoiceCaptureSheet(
             Spacer(Modifier.height(12.dp))
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF1A1A1E),
+                color = colors.secondary,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         "Detected: ${parsed.type.name.lowercase().replaceFirstChar { it.titlecase() }}",
-                        color = Color(0xFF9AE6B4),
+                        color = colors.primary,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    Text(parsed.title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    if (parsed.title.isNotBlank()) {
+                        Text(parsed.title, color = colors.onBackground, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    if (parsed.type == VoiceCaptureType.NOTE && parsed.body.isNotBlank()) {
+                        Text(
+                            parsed.body,
+                            color = if (parsed.title.isBlank()) colors.onBackground else colors.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    } else if (parsed.type != VoiceCaptureType.NOTE && parsed.title.isBlank()) {
+                        Text("—", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    }
                     parsed.amount?.let {
-                        Text("Amount: $${"%.2f".format(it)}", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                        Text("Amount: $${"%.2f".format(it)}", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     }
                     parsed.dueAtMillis?.let {
                         Text(
                             "When: ${java.text.SimpleDateFormat("EEE, MMM d · HH:mm", java.util.Locale.US).format(it)}",
-                            color = Color(0xFFBFBFBF),
+                            color = colors.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -263,10 +290,11 @@ fun VoiceCaptureSheet(
                 },
                 modifier = Modifier.weight(1f),
             ) {
-                Text("Cancel", color = Color(0xFFBFBFBF))
+                Text("Cancel", color = colors.onSurfaceVariant)
             }
             Surface(
                 onClick = {
+                    stopListening()
                     val text = transcript.ifBlank { partial }.trim()
                     if (text.isBlank()) {
                         Toast.makeText(context, "Say something first.", Toast.LENGTH_SHORT).show()
@@ -275,7 +303,7 @@ fun VoiceCaptureSheet(
                     onParsed(VoiceCaptureParser.parse(text, accounts))
                 },
                 shape = RoundedCornerShape(12.dp),
-                color = Color.White,
+                color = colors.primary,
                 modifier = Modifier.weight(1f),
             ) {
                 Row(
@@ -283,8 +311,8 @@ fun VoiceCaptureSheet(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Outlined.Sync, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                    Text("  Use", color = Color.Black, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Outlined.Sync, contentDescription = null, tint = colors.onPrimary, modifier = Modifier.size(18.dp))
+                    Text("  Use", color = colors.onPrimary, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
