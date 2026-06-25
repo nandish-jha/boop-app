@@ -200,7 +200,7 @@ export default function VoiceCaptureScreen({ onSave }: Props) {
           <div className="card" style={{ gap: 12, display: 'flex', flexDirection: 'column' }}>
             <div className="row-between">
               <span className="tiny">DETECTED AS</span>
-              <span className={`vc-badge ${parsed.type === 'TASK' ? 'vc-badge-task' : 'vc-badge-note'}`}>
+              <span className={`vc-badge vc-badge-${parsed.type.toLowerCase()}`}>
                 {parsed.type}
               </span>
             </div>
@@ -315,6 +315,8 @@ export default function VoiceCaptureScreen({ onSave }: Props) {
         }
         .vc-badge-task { background: rgba(99,102,241,0.15); color: #818cf8; }
         .vc-badge-note { background: rgba(34,197,94,0.12); color: #4ade80; }
+        .vc-badge-journal { background: rgba(251,191,36,0.12); color: #fbbf24; }
+        .vc-badge-quote { background: rgba(244,114,182,0.12); color: #f472b6; }
         .vc-chip {
           display: inline-flex; align-items: center; gap: 4px;
           font-size: 12px; padding: 3px 10px; border-radius: 20px;
