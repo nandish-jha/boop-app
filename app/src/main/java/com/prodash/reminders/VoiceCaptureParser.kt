@@ -25,6 +25,11 @@ data class ParsedVoiceCapture(
 )
 
 object VoiceCaptureParser {
+    // Android ICU treats `[:` inside `[...]` as a POSIX class — use alternation instead.
+    private const val COMMA_OR_COLON = """(?:,|:)"""
+    private const val OPTIONAL_COMMA_OR_COLON = """(?:,|:)?"""
+    private const val TITLE_DELIMITER = """(?:-|,|:|\u2013|\u2014)"""
+
     private val taskTriggers = listOf(
         "add task", "create task", "new task", "remind me", "reminder",
         "todo", "to-do", "to do", "buy", "pick up", "call", "email", "send",
@@ -83,14 +88,14 @@ object VoiceCaptureParser {
     )
 
     private val noteCommandPatterns = listOf(
-        Regex("""^take\s+a\s+note\s+(?:of|about|that)?\s*(?:this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
-        Regex("""^take\s+(?:a\s+)?notes?\s*(?:of|about|that)?\s*(?:this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
-        Regex("""^(?:tak(?:e|ing)|mak(?:e|ing)|writ(?:e|ing)|creat(?:e|ing)|add(?:ing)?)\s+(?:a\s+)?notes?\s*(?:of|about|that)?\s*(?:this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
-        Regex("""^(please )?(?:add|create|write|make)\s+(?:a )?(?:new )?notes? (?:about|that|of|to self)? ?(?:this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
-        Regex("""^note (to self )?(that|about|of)? (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
-        Regex("""^jot down (this|that)?[,:]?\s*""", RegexOption.IGNORE_CASE),
-        Regex("""^(please )?remember (that|this)[,:]?\s*""", RegexOption.IGNORE_CASE),
-        Regex("""^voice note[,:]?\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^take\s+a\s+note\s+(?:of|about|that)?\s*(?:this|that)?$OPTIONAL_COMMA_OR_COLON\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^take\s+(?:a\s+)?notes?\s*(?:of|about|that)?\s*(?:this|that)?$OPTIONAL_COMMA_OR_COLON\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^(?:tak(?:e|ing)|mak(?:e|ing)|writ(?:e|ing)|creat(?:e|ing)|add(?:ing)?)\s+(?:a\s+)?notes?\s*(?:of|about|that)?\s*(?:this|that)?$OPTIONAL_COMMA_OR_COLON\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^(please )?(?:add|create|write|make)\s+(?:a )?(?:new )?notes? (?:about|that|of|to self)? ?(?:this|that)?$OPTIONAL_COMMA_OR_COLON\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^note (to self )?(that|about|of)? (this|that)?$OPTIONAL_COMMA_OR_COLON\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^jot down (this|that)?$OPTIONAL_COMMA_OR_COLON\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^(please )?remember (that|this)$OPTIONAL_COMMA_OR_COLON\s*""", RegexOption.IGNORE_CASE),
+        Regex("""^voice note$OPTIONAL_COMMA_OR_COLON\s*""", RegexOption.IGNORE_CASE),
     )
 
     private val fillerPatterns = listOf(
@@ -490,21 +495,26 @@ object VoiceCaptureParser {
         return trimmed.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
     }
 
+    private val noteTitleSplitPatterns = listOf(
+        Regex("""title\s+is\s+(.+?)\s+(?:body|content|description)\s+(?:is\s+)?(.+)""", RegexOption.IGNORE_CASE),
+        Regex("""title\s*:\s*(.+?)\s*$TITLE_DELIMITER\s+(.+)""", RegexOption.IGNORE_CASE),
+        Regex("""titled\s+(.+?)\s+(?:body|content|description)\s+(?:is\s+)?(.+)""", RegexOption.IGNORE_CASE),
+        Regex("""titled\s+(.+?)\s+that\s+(.+)""", RegexOption.IGNORE_CASE),
+        Regex("""titled\s+(.+?)(?:\.|,)\s+(.+)""", RegexOption.IGNORE_CASE),
+        Regex("""^about\s+(.+?)\s+that\s+(.+)""", RegexOption.IGNORE_CASE),
+        Regex("""^about\s+(.+?)$COMMA_OR_COLON\s+(.+)""", RegexOption.IGNORE_CASE),
+        Regex("""call(?:\s+it)?\s+(.+?)$COMMA_OR_COLON\s+(.+)""", RegexOption.IGNORE_CASE),
+        Regex("""named\s+(.+?)$COMMA_OR_COLON\s+(.+)""", RegexOption.IGNORE_CASE),
+        Regex("""subject\s*:\s*(.+?)$COMMA_OR_COLON\s+(.+)""", RegexOption.IGNORE_CASE),
+        Regex("""with (?:the )?title\s+(.+?)\s+and (?:the )?(?:body|content|description)\s+(.+)""", RegexOption.IGNORE_CASE),
+    )
+
+    private val noteTitleDelimiterPattern =
+        Regex("""^(.{2,60}?)$COMMA_OR_COLON\s+(.{2,})$""")
+
     private fun extractExplicitNoteTitle(content: String): Pair<String, String>? {
         val text = content.trim()
-        val twoPartPatterns = listOf(
-            Regex("""title\s+is\s+(.+?)\s+(?:body|content|description)\s+(?:is\s+)?(.+)""", RegexOption.IGNORE_CASE),
-            Regex("""title\s*[:]\s*(.+?)\s*[-–—,:]\s+(.+)""", RegexOption.IGNORE_CASE),
-            Regex("""titled\s+(.+?)\s+(?:body|content|description)\s+(?:is\s+)?(.+)""", RegexOption.IGNORE_CASE),
-            Regex("""titled\s+(.+?)\s+that\s+(.+)""", RegexOption.IGNORE_CASE),
-            Regex("""titled\s+(.+?)[,.]\s+(.+)""", RegexOption.IGNORE_CASE),
-            Regex("""^about\s+(.+?)\s+that\s+(.+)""", RegexOption.IGNORE_CASE),
-            Regex("""^about\s+(.+?)[,:]\s+(.+)""", RegexOption.IGNORE_CASE),
-            Regex("""call(?:\s+it)?\s+(.+?)[,:]\s+(.+)""", RegexOption.IGNORE_CASE),
-            Regex("""named\s+(.+?)[,:]\s+(.+)""", RegexOption.IGNORE_CASE),
-            Regex("""subject\s*[:]\s*(.+?)[,:]\s+(.+)""", RegexOption.IGNORE_CASE),
-            Regex("""with (?:the )?title\s+(.+?)\s+and (?:the )?(?:body|content|description)\s+(.+)""", RegexOption.IGNORE_CASE),
-        )
+        val twoPartPatterns = noteTitleSplitPatterns
         for (pattern in twoPartPatterns) {
             val match = pattern.find(text) ?: continue
             val title = match.groupValues[1].trim()
@@ -512,7 +522,7 @@ object VoiceCaptureParser {
             if (title.isNotBlank() && body.isNotBlank()) return title to body
         }
 
-        val delimiter = Regex("""^(.{2,60}?)[,:]\s+(.{2,})$""").find(text) ?: return null
+        val delimiter = noteTitleDelimiterPattern.find(text) ?: return null
         val title = delimiter.groupValues[1].trim()
         val body = delimiter.groupValues[2].trim()
         val titleWords = title.split(Regex("""\s+""")).filter { it.isNotBlank() }

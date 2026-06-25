@@ -185,6 +185,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -328,6 +329,8 @@ private enum class ThemeMode(val storageKey: String, val label: String) {
 private data class BoopPalette(
     val background: Color,
     val surface: Color,
+    val surfaceVariant: Color,
+    val surfaceElevated: Color,
     val onBackground: Color,
     val muted: Color,
     val accent: Color,
@@ -335,30 +338,44 @@ private data class BoopPalette(
     val navPill: Color,
     val navSelected: Color,
     val navUnselected: Color,
+    val inputField: Color,
+    val danger: Color,
+    val recording: Color,
 )
 
+/** Anthropic Claude-inspired warm parchment + terracotta palette. */
 private fun boopDarkPalette() = BoopPalette(
-    background = Color(0xFF16181E),
-    surface = Color(0xFF21242C),
-    onBackground = Color(0xFFE2E4EA),
-    muted = Color(0xFF9A9EA8),
-    accent = Color(0xFFEBEDF2),
-    accentOn = Color(0xFF16181E),
-    navPill = Color(0xFFEBEDF2),
-    navSelected = Color(0xFF16181E),
-    navUnselected = Color(0xFF757A88),
+    background = Color(0xFF141413),
+    surface = Color(0xFF30302E),
+    surfaceVariant = Color(0xFF252320),
+    surfaceElevated = Color(0xFF3D3D3A),
+    onBackground = Color(0xFFFAF9F5),
+    muted = Color(0xFFB0AEA5),
+    accent = Color(0xFFD97757),
+    accentOn = Color(0xFFFFFFFF),
+    navPill = Color(0xFFFAF9F5),
+    navSelected = Color(0xFF141413),
+    navUnselected = Color(0xFF87867F),
+    inputField = Color(0xFF252320),
+    danger = Color(0xFFE07A6A),
+    recording = Color(0xFFD97757),
 )
 
 private fun boopLightPalette() = BoopPalette(
-    background = Color(0xFFF7F5F2),
-    surface = Color(0xFFFFFCF9),
-    onBackground = Color(0xFF2A2C33),
-    muted = Color(0xFF6E727C),
-    accent = Color(0xFF2A2C33),
-    accentOn = Color(0xFFFFFCF9),
-    navPill = Color(0xFF2A2C33),
-    navSelected = Color(0xFFFFFCF9),
-    navUnselected = Color(0xFFA4A8B0),
+    background = Color(0xFFFAF9F5),
+    surface = Color(0xFFF5F4ED),
+    surfaceVariant = Color(0xFFE8E6DC),
+    surfaceElevated = Color(0xFFEFE9DE),
+    onBackground = Color(0xFF141413),
+    muted = Color(0xFF87867F),
+    accent = Color(0xFFD97757),
+    accentOn = Color(0xFFFFFFFF),
+    navPill = Color(0xFF141413),
+    navSelected = Color(0xFFFAF9F5),
+    navUnselected = Color(0xFF87867F),
+    inputField = Color(0xFFEFE9DE),
+    danger = Color(0xFFC96442),
+    recording = Color(0xFFD97757),
 )
 
 private val LocalBoopPalette = staticCompositionLocalOf { boopDarkPalette() }
@@ -540,9 +557,16 @@ private fun BoopApp() {
         openEventSheet(existing = detail)
     }
 
+    var pendingVoiceCapture by remember { mutableStateOf<ParsedVoiceCapture?>(null) }
+
     fun applyVoiceCapture(parsed: ParsedVoiceCapture) {
-        voiceCaptureOpen = false
+        voiceStopSignal++
         voiceListening = false
+        voiceCaptureOpen = false
+        pendingVoiceCapture = parsed
+    }
+
+    fun openVoiceCaptureResult(parsed: ParsedVoiceCapture) {
         when (parsed.type) {
             VoiceCaptureType.TASK -> {
                 itemSheet = ItemSheet.TaskSheet(
@@ -613,18 +637,58 @@ private fun BoopApp() {
                 prefilledNote = parsed.body,
             )
             VoiceCaptureType.NOTE -> {
-                itemSheet = ItemSheet.NoteSheet(
-                    id = null,
-                    sessionKey = UUID.randomUUID().toString(),
-                    title = parsed.title,
-                    body = parsed.body,
-                    attachmentUri = null,
-                    audioUri = null,
-                    tagsCsv = "",
-                )
+                val trimmedTitle = parsed.title.trim()
+                val trimmedBody = parsed.body.trim()
+                if (trimmedTitle.isNotBlank() || trimmedBody.isNotBlank()) {
+                    val noteId = UUID.randomUUID().toString()
+                    val now = System.currentTimeMillis()
+                    val note = BoopNote(
+                        id = noteId,
+                        title = trimmedTitle,
+                        body = trimmedBody,
+                        attachmentUri = null,
+                        audioUri = null,
+                        tagsCsv = "",
+                        ocrText = "",
+                        linkedTaskId = null,
+                        archived = false,
+                        createdAtMillis = now,
+                        updatedAtMillis = now,
+                    )
+                    repository.saveNote(note)
+                    refresh()
+                    itemSheet = ItemSheet.NoteSheet(
+                        id = noteId,
+                        sessionKey = noteId,
+                        title = trimmedTitle,
+                        body = trimmedBody,
+                        attachmentUri = null,
+                        audioUri = null,
+                        tagsCsv = "",
+                        createdAtMillis = now,
+                        updatedAtMillis = now,
+                    )
+                } else {
+                    itemSheet = ItemSheet.NoteSheet(
+                        id = null,
+                        sessionKey = UUID.randomUUID().toString(),
+                        title = "",
+                        body = "",
+                        attachmentUri = null,
+                        audioUri = null,
+                        tagsCsv = "",
+                    )
+                }
             }
         }
         speedDialExpanded = false
+    }
+
+    LaunchedEffect(pendingVoiceCapture) {
+        val parsed = pendingVoiceCapture ?: return@LaunchedEffect
+        delay(120)
+        openVoiceCaptureResult(parsed)
+        pendingVoiceCapture = null
     }
 
     LaunchedEffect(tasks, pendingOpenTaskId) {
@@ -645,24 +709,28 @@ private fun BoopApp() {
         darkColorScheme(
             background = palette.background,
             surface = palette.surface,
-            surfaceVariant = Color(0xFF2A2E38),
+            surfaceVariant = palette.surfaceVariant,
             onBackground = palette.onBackground,
             onSurface = palette.onBackground,
             onSurfaceVariant = palette.muted,
             primary = palette.accent,
             onPrimary = palette.accentOn,
+            secondary = palette.surfaceElevated,
+            onSecondary = palette.onBackground,
             outline = palette.muted,
         )
     } else {
         lightColorScheme(
             background = palette.background,
             surface = palette.surface,
-            surfaceVariant = Color(0xFFEDEAE6),
+            surfaceVariant = palette.surfaceVariant,
             onBackground = palette.onBackground,
             onSurface = palette.onBackground,
             onSurfaceVariant = palette.muted,
             primary = palette.accent,
             onPrimary = palette.accentOn,
+            secondary = palette.surfaceElevated,
+            onSecondary = palette.onBackground,
             outline = palette.muted,
         )
     }
@@ -672,8 +740,12 @@ private fun BoopApp() {
         colorScheme = colorScheme,
         typography = MaterialTheme.typography.copy(
             titleLarge = MaterialTheme.typography.titleLarge.copy(
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Normal,
+            ),
+            headlineSmall = MaterialTheme.typography.headlineSmall.copy(
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Normal,
             ),
             bodyMedium = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
         ),
@@ -718,6 +790,7 @@ private fun BoopApp() {
             when {
                 settingsOpen -> settingsOpen = false
                 voiceCaptureOpen -> {
+                    voiceStopSignal++
                     voiceListening = false
                     voiceCaptureOpen = false
                 }
@@ -878,8 +951,8 @@ private fun BoopApp() {
                         refreshing = pullRefreshing,
                         state = pullRefreshState,
                         modifier = Modifier.align(Alignment.TopCenter),
-                        contentColor = Color.White,
-                        backgroundColor = Color(0xFF2A2A2C),
+                        contentColor = palette.onBackground,
+                        backgroundColor = palette.surfaceVariant,
                     )
                 }
             }
@@ -890,7 +963,7 @@ private fun BoopApp() {
                     onDismissRequest = { itemSheet = null },
                     sheetState = sheetState,
                     containerColor = darkSurface,
-                    dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
+                    dragHandle = { BottomSheetDefaults.DragHandle(color = palette.muted) },
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                 ) {
                     Column(
@@ -995,7 +1068,7 @@ private fun BoopApp() {
                     onDismissRequest = { habitCheckInOpen = false },
                     sheetState = habitSheetState,
                     containerColor = darkSurface,
-                    dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
+                    dragHandle = { BottomSheetDefaults.DragHandle(color = palette.muted) },
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                 ) {
                     HabitTodayCheckInSheet(
@@ -1016,10 +1089,14 @@ private fun BoopApp() {
             if (voiceCaptureOpen) {
                 val voiceSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
                 ModalBottomSheet(
-                    onDismissRequest = { voiceCaptureOpen = false },
+                    onDismissRequest = {
+                        voiceStopSignal++
+                        voiceListening = false
+                        voiceCaptureOpen = false
+                    },
                     sheetState = voiceSheetState,
                     containerColor = darkSurface,
-                    dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
+                    dragHandle = { BottomSheetDefaults.DragHandle(color = palette.muted) },
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                 ) {
                     Column(
@@ -1035,6 +1112,7 @@ private fun BoopApp() {
                             startSignal = voiceStartSignal,
                             stopSignal = voiceStopSignal,
                             onDismiss = {
+                                voiceStopSignal++
                                 voiceListening = false
                                 voiceCaptureOpen = false
                             },
@@ -1318,6 +1396,7 @@ private fun BoopSpeedDialFab(
     onOpenVoiceCapture: () -> Unit,
     voiceListening: Boolean,
 ) {
+    val palette = LocalBoopPalette.current
     Column(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1332,71 +1411,71 @@ private fun BoopSpeedDialFab(
                 if (selectedTab == 2) {
                     SmallFloatingActionButton(
                         onClick = { onOpenTask(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.Notifications, contentDescription = "Add task") }
                     SmallFloatingActionButton(
                         onClick = { onOpenEvent(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.CalendarMonth, contentDescription = "Add event") }
                     SmallFloatingActionButton(
                         onClick = { onSyncCalendar(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.Sync, contentDescription = "Sync calendar") }
                     SmallFloatingActionButton(
                         onClick = { onOpenExternalCalendar(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.Link, contentDescription = "Add external calendar") }
                 } else if (selectedTab == 4) {
                     SmallFloatingActionButton(
                         onClick = { onOpenAccount(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.Add, contentDescription = "Add account") }
                     SmallFloatingActionButton(
                         onClick = { onOpenIncome(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.AttachMoney, contentDescription = "Add income") }
                     SmallFloatingActionButton(
                         onClick = { onOpenExpense(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.EditNote, contentDescription = "Add expense") }
                     SmallFloatingActionButton(
                         onClick = { onOpenTransfer(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.Sync, contentDescription = "Add transfer") }
                 } else {
                     SmallFloatingActionButton(
                         onClick = { onOpenTask(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.Notifications, contentDescription = "Add task") }
                     SmallFloatingActionButton(
                         onClick = { onOpenEvent(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.CalendarMonth, contentDescription = "Add event") }
                     SmallFloatingActionButton(
                         onClick = { onOpenNote(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.EditNote, contentDescription = "Add note") }
                     SmallFloatingActionButton(
                         onClick = { onOpenHabit(); onExpandedChange(false) },
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
+                        containerColor = palette.surfaceElevated,
+                        contentColor = palette.onBackground,
                     ) { Icon(Icons.Outlined.Flag, contentDescription = "Add habit") }
                     if (selectedTab == 0) {
                         SmallFloatingActionButton(
                             onClick = { onOpenAccount(); onExpandedChange(false) },
-                            containerColor = Color.White,
-                            contentColor = Color.Black,
+                            containerColor = palette.surfaceElevated,
+                            contentColor = palette.onBackground,
                         ) { Icon(Icons.Outlined.Add, contentDescription = "Add account") }
                     }
                 }
@@ -1408,8 +1487,8 @@ private fun BoopSpeedDialFab(
         ) {
             FloatingActionButton(
                 onClick = onOpenVoiceCapture,
-                containerColor = if (voiceListening) Color(0xFF3A1414) else Color(0xFFE8E8EA),
-                contentColor = if (voiceListening) Color(0xFFFF8A8A) else Color.Black,
+                containerColor = if (voiceListening) palette.surfaceVariant else palette.accent,
+                contentColor = if (voiceListening) palette.recording else palette.accentOn,
                 elevation = FloatingActionButtonDefaults.elevation(),
             ) {
                 Icon(
@@ -1432,8 +1511,8 @@ private fun BoopSpeedDialFab(
                         detectTapGestures(onLongPress = { onExpandedChange(true) })
                     }
                 },
-                containerColor = Color.White,
-                contentColor = Color.Black,
+                containerColor = palette.accent,
+                contentColor = palette.accentOn,
                 elevation = FloatingActionButtonDefaults.elevation(),
             ) {
                 Crossfade(targetState = expanded, label = "fab_icon") { showClose ->
@@ -1649,7 +1728,7 @@ private fun DashboardCompactSection(
 ) {
     val interaction = remember(title) { MutableInteractionSource() }
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161619)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -1856,7 +1935,7 @@ private fun DashboardScreen(
                         upcomingTasks.forEach { task ->
                             val taskInteraction = remember(task.id) { MutableInteractionSource() }
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1891,7 +1970,7 @@ private fun DashboardScreen(
                     } else {
                         topAccounts.forEach { account ->
                             val bal = accountBalances[account.id] ?: 0.0
-                            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)), shape = RoundedCornerShape(12.dp)) {
+                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(12.dp)) {
                                 Row(
                                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -2052,7 +2131,7 @@ private fun DashboardHabitCompactCard(
     val doneCount = parseHabitDayKeys(habit.dayKeys).size
     val interaction = remember(habit.id) { MutableInteractionSource() }
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -2098,7 +2177,7 @@ private fun DashboardNoteTile(note: BoopNote, modifier: Modifier = Modifier, onC
     val snippet = remember(note.body) { plainNoteSnippet(note.body, 72) }
     val interaction = remember(note.id) { MutableInteractionSource() }
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(14.dp),
         modifier = modifier
             .heightIn(min = 88.dp, max = 120.dp)
@@ -2150,29 +2229,32 @@ private fun BoopFilledTextField(
     singleLine: Boolean = true,
     minLines: Int = 1,
 ) {
+    val palette = LocalBoopPalette.current
     TextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 3.dp,
+                elevation = 2.dp,
                 shape = RoundedCornerShape(14.dp),
-                ambientColor = Color.Black.copy(alpha = 0.35f),
-                spotColor = Color.Black.copy(alpha = 0.45f),
+                ambientColor = Color.Black.copy(alpha = 0.12f),
+                spotColor = Color.Black.copy(alpha = 0.16f),
             ),
         shape = RoundedCornerShape(14.dp),
         colors = TextFieldDefaults.colors(
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
             disabledIndicatorColor = Color.Transparent,
-            focusedContainerColor = Color(0xFF262628),
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            cursorColor = Color.White,
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            focusedLabelColor = Color(0xFFBFBFBF),
-            unfocusedLabelColor = Color(0xFF9A9A9A),
+            focusedContainerColor = palette.inputField,
+            unfocusedContainerColor = palette.surfaceVariant,
+            cursorColor = palette.accent,
+            focusedTextColor = palette.onBackground,
+            unfocusedTextColor = palette.onBackground,
+            focusedLabelColor = palette.muted,
+            unfocusedLabelColor = palette.muted,
+            focusedPlaceholderColor = palette.muted,
+            unfocusedPlaceholderColor = palette.muted,
         ),
         label = label,
         placeholder = placeholder,
@@ -2452,6 +2534,46 @@ private fun extractTextFromAttachment(context: Context, stored: String?): String
 private fun createNoteAudioFile(context: Context, baseName: String): File {
     val dir = File(context.filesDir, "note_audio").apply { mkdirs() }
     return File(dir, "$baseName.m4a")
+}
+
+private fun startNoteAudioRecording(
+    context: Context,
+    onStarted: (MediaRecorder, String, Long) -> Unit,
+    onFailed: (String) -> Unit,
+) {
+    val out = createNoteAudioFile(context, UUID.randomUUID().toString())
+    var recorder: MediaRecorder? = null
+    try {
+        val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            MediaRecorder(context)
+        } else {
+            @Suppress("DEPRECATION")
+            MediaRecorder()
+        }
+        recorder = r
+        r.setAudioSource(MediaRecorder.AudioSource.MIC)
+        r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+        r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+        r.setAudioSamplingRate(44_100)
+        r.setAudioEncodingBitRate(128_000)
+        r.setOutputFile(out.absolutePath)
+        r.prepare()
+        r.start()
+        onStarted(r, out.absolutePath, System.currentTimeMillis())
+    } catch (t: Throwable) {
+        try {
+            recorder?.reset()
+        } catch (_: Throwable) {
+        }
+        try {
+            recorder?.release()
+        } catch (_: Throwable) {
+        }
+        if (out.exists() && out.length() == 0L) {
+            out.delete()
+        }
+        onFailed(t.message ?: "recording unavailable")
+    }
 }
 
 data class CalendarEventUi(
@@ -2890,7 +3012,7 @@ private fun TaskListScreen(
                                 label = "task_unarchive_alpha",
                             )
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -2977,7 +3099,7 @@ private fun TaskListScreen(
                                 label = "task_restore_alpha",
                             )
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -3745,7 +3867,7 @@ private fun NotesListScreen(
                     ) {
                         items(archivedNotes, key = { it.id }) { note ->
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -4459,7 +4581,7 @@ private fun HabitWeekStripCard(
     val dayValues = parseHabitDayValues(habit.quantityDayValues)
     val todayAmount = dayValues[todayKey] ?: 0
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1D)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -5346,6 +5468,7 @@ private fun NoteEditorSheet(
     onSave: (BoopNote) -> Unit,
 ) {
     val context = LocalContext.current
+    val palette = LocalBoopPalette.current
     val session = initial.sessionKey
     var title by rememberSaveable(session) { mutableStateOf(initial.title) }
     var tagsCsv by rememberSaveable(session) { mutableStateOf(initial.tagsCsv) }
@@ -5392,28 +5515,39 @@ private fun NoteEditorSheet(
         }
         attachmentStored = existing.distinct().take(25)
     }
+    var micGranted by remember(session) {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO,
+            ) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    fun beginAudioRecording() {
+        if (recording) return
+        startNoteAudioRecording(
+            context = context,
+            onStarted = { r, path, startedAt ->
+                recorder = r
+                recording = true
+                recordingStartedAt = startedAt
+                audioStored = path
+                Toast.makeText(context, "Recording… tap stop when done", Toast.LENGTH_SHORT).show()
+            },
+            onFailed = { reason ->
+                recorder = null
+                recording = false
+                recordingStartedAt = 0L
+                Toast.makeText(context, "Could not start recording: $reason", Toast.LENGTH_LONG).show()
+            },
+        )
+    }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) return@rememberLauncherForActivityResult
-        val out = createNoteAudioFile(context, UUID.randomUUID().toString())
-        try {
-            val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
-            r.setAudioSource(MediaRecorder.AudioSource.MIC)
-            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            r.setOutputFile(out.absolutePath)
-            r.prepare()
-            r.start()
-            recorder = r
-            recording = true
-            recordingStartedAt = System.currentTimeMillis()
-            audioStored = out.absolutePath
-            Toast.makeText(context, "Recording started", Toast.LENGTH_SHORT).show()
-        } catch (_: Throwable) {
-            recorder?.release()
-            recorder = null
-            recording = false
-            recordingStartedAt = 0L
-            Toast.makeText(context, "Audio recording failed to start", Toast.LENGTH_SHORT).show()
+        micGranted = granted
+        if (granted) {
+            beginAudioRecording()
+        } else {
+            Toast.makeText(context, "Microphone permission is required to record audio.", Toast.LENGTH_LONG).show()
         }
     }
     DisposableEffect(session) {
@@ -5538,10 +5672,13 @@ private fun NoteEditorSheet(
             )
             .clip(RoundedCornerShape(14.dp)),
         factory = { ctx ->
+            val fieldBg = palette.inputField
+            val fieldFg = palette.onBackground
+            val fieldHint = palette.muted
             EditText(ctx).apply {
-                setBackgroundColor(android.graphics.Color.parseColor("#1F1F22"))
-                setTextColor(android.graphics.Color.WHITE)
-                setHintTextColor(android.graphics.Color.parseColor("#8A8A8A"))
+                setBackgroundColor(fieldBg.toArgb())
+                setTextColor(fieldFg.toArgb())
+                setHintTextColor(fieldHint.toArgb())
                 hint = "Write your note…"
                 minLines = 4
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
@@ -5625,7 +5762,15 @@ private fun NoteEditorSheet(
                     recording = false
                     val secs = ((System.currentTimeMillis() - recordingStartedAt) / 1000L).coerceAtLeast(1L)
                     recordingStartedAt = 0L
-                    Toast.makeText(context, "Recording saved (${secs}s)", Toast.LENGTH_SHORT).show()
+                    val fileOk = !audioStored.isNullOrBlank() && File(audioStored!!).let { it.exists() && it.length() > 0L }
+                    if (fileOk) {
+                        Toast.makeText(context, "Recording saved (${secs}s)", Toast.LENGTH_SHORT).show()
+                    } else {
+                        audioStored = null
+                        Toast.makeText(context, "Recording failed — try again", Toast.LENGTH_SHORT).show()
+                    }
+                } else if (micGranted) {
+                    beginAudioRecording()
                 } else {
                     micPermission.launch(Manifest.permission.RECORD_AUDIO)
                 }
@@ -5634,32 +5779,46 @@ private fun NoteEditorSheet(
             Icon(
                 if (recording) Icons.Outlined.Stop else Icons.Outlined.Mic,
                 contentDescription = if (recording) "Stop recording" else "Record audio",
-                tint = if (recording) Color(0xFFFF8A8A) else Color.White,
+                tint = if (recording) palette.recording else MaterialTheme.colorScheme.onBackground,
             )
         }
         if (!audioStored.isNullOrBlank()) {
             IconButton(
                 onClick = {
+                    val path = audioStored ?: return@IconButton
                     try {
-                        val player = MediaPlayer().apply {
-                            setDataSource(audioStored)
+                        MediaPlayer().apply {
+                            setDataSource(path)
                             prepare()
                             start()
                             setOnCompletionListener { mp -> mp.release() }
                         }
                     } catch (_: Throwable) {
+                        Toast.makeText(context, "Could not play recording", Toast.LENGTH_SHORT).show()
                     }
                 },
             ) {
-                Icon(Icons.Outlined.PlayArrow, contentDescription = "Play audio", tint = MaterialTheme.colorScheme.onBackground)
+                Icon(Icons.Outlined.PlayArrow, contentDescription = "Play audio", tint = palette.accent)
             }
         }
     }
     if (recording) {
         Spacer(Modifier.height(6.dp))
-        Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFF3A1414)) {
-            Text("Recording... tap stop to save", color = Color(0xFFFFB4B4), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+        Surface(shape = RoundedCornerShape(10.dp), color = palette.surfaceVariant) {
+            Text(
+                "Recording… tap stop when done",
+                color = palette.recording,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            )
         }
+    } else if (!audioStored.isNullOrBlank()) {
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Audio attached — tap play to listen",
+            color = palette.muted,
+            style = MaterialTheme.typography.labelSmall,
+        )
     }
     if (previewLinks.isNotEmpty()) {
         Spacer(Modifier.height(8.dp))
@@ -5834,14 +5993,16 @@ private fun HabitEditorSheet(
 
 @Composable
 private fun BoopWhiteButton(label: String, onClick: () -> Unit) {
+    val palette = LocalBoopPalette.current
     Button(
         onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color.White,
-            contentColor = Color.Black,
+            containerColor = palette.accent,
+            contentColor = palette.accentOn,
         ),
     ) {
-        Text(label)
+        Text(label, fontWeight = FontWeight.SemiBold)
     }
 }
 
