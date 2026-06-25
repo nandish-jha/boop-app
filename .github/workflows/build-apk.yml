@@ -2,7 +2,8 @@ name: Build & Release APK
 
 on:
   push:
-    branches: [main]
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -36,9 +37,9 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Copy web assets into Android project
+      - name: Sync web assets into Android project
         working-directory: pwa-prototype
-        run: npx cap copy android
+        run: npx cap sync android
 
       - name: Make Gradle executable
         working-directory: pwa-prototype/android
@@ -50,20 +51,26 @@ jobs:
           ANDROID_HOME: /usr/local/lib/android/sdk
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Get short SHA
-        id: sha
-        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      - name: Rename APK
+        run: |
+          mkdir -p artifacts
+          cp pwa-prototype/android/app/build/outputs/apk/debug/app-debug.apk \
+             artifacts/boop-${{ github.ref_name }}.apk
 
       - name: Upload APK to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ steps.sha.outputs.short }}
-          name: "Boop ${{ steps.sha.outputs.short }}"
+          tag_name: ${{ github.ref_name }}
+          name: "Boop ${{ github.ref_name }}"
           body: |
-            Debug APK — built from `${{ github.sha }}`
+            ## Boop ${{ github.ref_name }}
+
+            Today screen · Tasks · Library (Notes / Journal / Quotes) · Habits with streaks
+
+            Voice or text → free rule-based NLP → TASK / NOTE / JOURNAL / QUOTE — no AI API key needed.
 
             **Install on Android:**
-            1. Download `boop-debug.apk` below
-            2. Settings → Security → enable "Install unknown apps"
+            1. Download `boop-${{ github.ref_name }}.apk` below
+            2. Settings → Apps → Special app access → Install unknown apps → allow your browser/files app
             3. Open the file and tap Install
-          files: pwa-prototype/android/app/build/outputs/apk/debug/app-debug.apk
+          files: artifacts/boop-${{ github.ref_name }}.apk
