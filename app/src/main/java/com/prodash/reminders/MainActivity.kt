@@ -337,27 +337,27 @@ private data class BoopPalette(
 )
 
 private fun boopDarkPalette() = BoopPalette(
-    background = Color(0xFF0C0C0D),
-    surface = Color(0xFF151517),
-    onBackground = Color(0xFFF3F3F3),
-    muted = Color(0xFF9A9A9A),
-    accent = Color(0xFFFFFFFF),
-    accentOn = Color(0xFF000000),
-    navPill = Color(0xFFFFFFFF),
-    navSelected = Color(0xFF000000),
-    navUnselected = Color(0xFF7E7E82),
+    background = Color(0xFF12141A),
+    surface = Color(0xFF1C1F28),
+    onBackground = Color(0xFFE8E9EE),
+    muted = Color(0xFF9498A3),
+    accent = Color(0xFFF0F1F5),
+    accentOn = Color(0xFF12141A),
+    navPill = Color(0xFFE8E9EE),
+    navSelected = Color(0xFF12141A),
+    navUnselected = Color(0xFF6E7380),
 )
 
 private fun boopLightPalette() = BoopPalette(
-    background = Color(0xFFF2F2F7),
-    surface = Color(0xFFFFFFFF),
-    onBackground = Color(0xFF1C1C1E),
-    muted = Color(0xFF6E6E73),
-    accent = Color(0xFF1C1C1E),
-    accentOn = Color(0xFFFFFFFF),
-    navPill = Color(0xFF1C1C1E),
-    navSelected = Color(0xFFFFFFFF),
-    navUnselected = Color(0xFFAEAEB2),
+    background = Color(0xFFF4F3F0),
+    surface = Color(0xFFFFFCF8),
+    onBackground = Color(0xFF23252C),
+    muted = Color(0xFF727682),
+    accent = Color(0xFF23252C),
+    accentOn = Color(0xFFFFFCF8),
+    navPill = Color(0xFF23252C),
+    navSelected = Color(0xFFFFFCF8),
+    navUnselected = Color(0xFFA8ABB4),
 )
 
 private val LocalBoopPalette = staticCompositionLocalOf { boopDarkPalette() }
@@ -642,21 +642,25 @@ private fun BoopApp() {
         darkColorScheme(
             background = palette.background,
             surface = palette.surface,
+            surfaceVariant = Color(0xFF242833),
             onBackground = palette.onBackground,
             onSurface = palette.onBackground,
             onSurfaceVariant = palette.muted,
             primary = palette.accent,
             onPrimary = palette.accentOn,
+            outline = palette.muted,
         )
     } else {
         lightColorScheme(
             background = palette.background,
             surface = palette.surface,
+            surfaceVariant = Color(0xFFECEAE6),
             onBackground = palette.onBackground,
             onSurface = palette.onBackground,
             onSurfaceVariant = palette.muted,
             primary = palette.accent,
             onPrimary = palette.accentOn,
+            outline = palette.muted,
         )
     }
 
@@ -711,41 +715,43 @@ private fun BoopApp() {
             Scaffold(
                 containerColor = darkBg,
                 floatingActionButton = {
-                    BoopSpeedDialFab(
-                        selectedTab = selectedTab,
-                        expanded = speedDialExpanded,
-                        onExpandedChange = { speedDialExpanded = it },
-                        onSyncCalendar = {
-                            selectedTab = 2
-                            calendarSyncRequest++
-                            speedDialExpanded = false
-                        },
-                        onOpenTask = { openTaskSheet(null) },
+                    if (!settingsOpen) {
+                        BoopSpeedDialFab(
+                            selectedTab = selectedTab,
+                            expanded = speedDialExpanded,
+                            onExpandedChange = { speedDialExpanded = it },
+                            onSyncCalendar = {
+                                selectedTab = 2
+                                calendarSyncRequest++
+                                speedDialExpanded = false
+                            },
+                            onOpenTask = { openTaskSheet(null) },
                             onOpenEvent = { openEventSheet(startAt = calendarCreateAtMillis) },
-                        onOpenExternalCalendar = {
-                            try {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://calendar.formula1.com/")))
-                            } catch (_: Throwable) {
-                            }
-                            speedDialExpanded = false
-                        },
-                        onOpenNote = { openNoteSheet(null) },
-                        onOpenHabit = { openHabitSheet(null) },
-                        onOpenIncome = { openFinanceEntrySheet("income") },
-                        onOpenExpense = { openFinanceEntrySheet("expense") },
-                        onOpenTransfer = { openFinanceEntrySheet("transfer") },
-                        onOpenAccount = { openAccountSheet(null) },
-                        onOpenVoiceCapture = {
-                            speedDialExpanded = false
-                            if (voiceListening) {
-                                voiceStopSignal++
-                            } else {
-                                voiceCaptureOpen = true
-                                voiceStartSignal++
-                            }
-                        },
-                        voiceListening = voiceListening,
-                    )
+                            onOpenExternalCalendar = {
+                                try {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://calendar.formula1.com/")))
+                                } catch (_: Throwable) {
+                                }
+                                speedDialExpanded = false
+                            },
+                            onOpenNote = { openNoteSheet(null) },
+                            onOpenHabit = { openHabitSheet(null) },
+                            onOpenIncome = { openFinanceEntrySheet("income") },
+                            onOpenExpense = { openFinanceEntrySheet("expense") },
+                            onOpenTransfer = { openFinanceEntrySheet("transfer") },
+                            onOpenAccount = { openAccountSheet(null) },
+                            onOpenVoiceCapture = {
+                                speedDialExpanded = false
+                                if (voiceListening) {
+                                    voiceStopSignal++
+                                } else {
+                                    voiceCaptureOpen = true
+                                    voiceStartSignal++
+                                }
+                            },
+                            voiceListening = voiceListening,
+                        )
+                    }
                 },
                 floatingActionButtonPosition = androidx.compose.material3.FabPosition.End,
                 bottomBar = {
@@ -826,7 +832,10 @@ private fun BoopApp() {
                                 repository.saveLedgerEntry(entry)
                                 refresh()
                             },
-                            onOpenSettings = { settingsOpen = true },
+                            onOpenSettings = {
+                                speedDialExpanded = false
+                                settingsOpen = true
+                            },
                         )
                     }
                     if (settingsOpen) {
@@ -1897,7 +1906,7 @@ private fun DashboardScreen(
                 val quoteOfLaunch = remember { quotes.random() }
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color(0xFF151517),
+                    color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
@@ -2126,7 +2135,7 @@ private fun BoopFilledTextField(
             unfocusedIndicatorColor = Color.Transparent,
             disabledIndicatorColor = Color.Transparent,
             focusedContainerColor = Color(0xFF262628),
-            unfocusedContainerColor = Color(0xFF1F1F22),
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
             cursorColor = Color.White,
             focusedTextColor = Color.White,
             unfocusedTextColor = Color.White,
@@ -2739,7 +2748,7 @@ private fun TaskListScreen(
                     label = "task_archive_alpha",
                 )
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3329,7 +3338,7 @@ private fun CalendarScreen(
                             Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFF151517))
+                                .background(MaterialTheme.colorScheme.surface)
                                 .padding(8.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
@@ -3386,7 +3395,7 @@ private fun CalendarScreen(
                         Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF151517))
+                            .background(MaterialTheme.colorScheme.surface)
                             .padding(6.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
@@ -3469,7 +3478,7 @@ private fun CalendarScreen(
                     val item = render.item
                     val isTask = item.isTask
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -3583,7 +3592,7 @@ private fun NotesListScreen(
                     val interaction = remember(tag) { MutableInteractionSource() }
                     Surface(
                         shape = RoundedCornerShape(999.dp),
-                        color = if (active) Color.White else Color(0xFF1F1F22),
+                        color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.clickable(interactionSource = interaction, indication = null) { selectedTag = tag },
                     ) {
                         Text(
@@ -3605,7 +3614,7 @@ private fun NotesListScreen(
         ) {
             items(visibleNotes, key = { it.id }) { note ->
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3850,7 +3859,7 @@ private fun FinanceScreen(
                     ) {
                         items(accounts, key = { it.id }) { account ->
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.clickable {
                                     reconcileAccountId = account.id
@@ -3887,7 +3896,7 @@ private fun FinanceScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(entries, key = { it.id }) { entry ->
-                            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)), shape = RoundedCornerShape(14.dp)) {
+                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(14.dp)) {
                                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text(entry.title.ifBlank { entry.type.replaceFirstChar { it.uppercase() } }, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge)
                                     when (entry.type) {
@@ -3928,7 +3937,7 @@ private fun FinanceScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     item {
-                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)), shape = RoundedCornerShape(14.dp)) {
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(14.dp)) {
                             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Money flow", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleMedium)
                                 val maxFlow = maxOf(totalIncome, totalExpense, 1.0)
@@ -3955,7 +3964,7 @@ private fun FinanceScreen(
                     }
                     item {
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth().clickable { viewMode = "accounts" },
                         ) {
@@ -3970,7 +3979,7 @@ private fun FinanceScreen(
                     }
                     item {
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth().clickable { viewMode = "transactions" },
                         ) {
@@ -4028,7 +4037,7 @@ private fun FinanceScreen(
                     },
                 ) { Text("Apply", color = MaterialTheme.colorScheme.onBackground) }
             },
-            containerColor = Color(0xFF151517),
+            containerColor = MaterialTheme.colorScheme.surface,
         )
     }
     val pendingDeleteAccount = accounts.firstOrNull { it.id == pendingDeleteAccountId }
@@ -4046,7 +4055,7 @@ private fun FinanceScreen(
                     pendingDeleteAccountId = ""
                 }) { Text("Delete", color = Color(0xFFEF9A9A)) }
             },
-            containerColor = Color(0xFF151517),
+            containerColor = MaterialTheme.colorScheme.surface,
         )
     }
 }
@@ -4132,7 +4141,7 @@ private fun FinanceEntrySheet(
             val active = fromAccountId == account.id
             Surface(
                 shape = RoundedCornerShape(999.dp),
-                color = if (active) Color.White else Color(0xFF242426),
+                color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.clickable { fromAccountId = account.id },
             ) {
                 Text(
@@ -4158,7 +4167,7 @@ private fun FinanceEntrySheet(
                 val active = toAccountId == account.id
                 Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = if (active) Color.White else Color(0xFF242426),
+                    color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier.clickable { toAccountId = account.id },
                 ) {
                     Text(
@@ -4347,7 +4356,7 @@ private fun GlobalSearchResultsInline(
                     Text("Tasks", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
                     matchTasks.take(12).forEach { task ->
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -4364,7 +4373,7 @@ private fun GlobalSearchResultsInline(
                     Text("Notes", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
                     matchNotes.take(12).forEach { note ->
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -4384,7 +4393,7 @@ private fun GlobalSearchResultsInline(
                     Text("Habits", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
                     matchHabits.take(12).forEach { habit ->
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF151517)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -4521,7 +4530,7 @@ private fun HabitWeekStripCard(
                     quickAdd.forEach { delta ->
                         Surface(
                             shape = RoundedCornerShape(999.dp),
-                            color = Color(0xFF242426),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.clickable {
                                 val map = dayValues.toMutableMap()
                                 map[todayKey] = todayAmount + delta
@@ -4773,7 +4782,7 @@ private fun EventEditorSheet(
     Surface(
         onClick = { pickStart = true },
         shape = RoundedCornerShape(12.dp),
-        color = Color(0xFF242426),
+        color = MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(12.dp)) {
@@ -4794,7 +4803,7 @@ private fun EventEditorSheet(
     val todayDateLabel = remember { SimpleDateFormat("EEE, MMM dd", Locale.US).format(todayRef) }
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = Color(0xFF151517),
+        color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFBFBF)),
         modifier = Modifier.clickable {
             val current = Calendar.getInstance().apply { timeInMillis = startAt }
@@ -4817,7 +4826,7 @@ private fun EventEditorSheet(
     Surface(
         onClick = { pickEnd = true },
         shape = RoundedCornerShape(12.dp),
-        color = Color(0xFF242426),
+        color = MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(12.dp)) {
@@ -4857,7 +4866,7 @@ private fun EventEditorSheet(
                 val active = cal.id == selectedCalId
                 Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = if (active) Color.White else Color(0xFF242426),
+                    color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier.clickable { selectedCalId = cal.id },
                 ) {
                     Text(
@@ -4922,7 +4931,7 @@ private fun EventEditorSheet(
             val active = repeatEveryDays == days
             Surface(
                 shape = RoundedCornerShape(999.dp),
-                color = if (active) Color.White else Color(0xFF242426),
+                color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.clickable {
                     repeatEveryDays = days
                     if (days in setOf(0, 1, 7, 30, 365)) customRepeatDays = ""
@@ -4939,7 +4948,7 @@ private fun EventEditorSheet(
         val customActive = repeatEveryDays !in setOf(0, 1, 7, 30, 365)
         Surface(
             shape = RoundedCornerShape(999.dp),
-            color = if (customActive) Color.White else Color(0xFF242426),
+            color = if (customActive) Color.White else MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.clickable { if (repeatEveryDays in setOf(0, 1, 7, 30, 365)) repeatEveryDays = 2 },
         ) {
             Text(
@@ -5137,7 +5146,7 @@ private fun TaskEditorSheet(
             val active = repeatEveryDays == days
             Surface(
                 shape = RoundedCornerShape(999.dp),
-                color = if (active) Color.White else Color(0xFF242426),
+                color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.clickable {
                     repeatEveryDays = days
                     if (days in setOf(0, 1, 7, 30, 365)) customRepeatDays = ""
@@ -5154,7 +5163,7 @@ private fun TaskEditorSheet(
         val customActive = repeatEveryDays !in setOf(0, 1, 7, 30, 365)
         Surface(
             shape = RoundedCornerShape(999.dp),
-            color = if (customActive) Color.White else Color(0xFF242426),
+            color = if (customActive) Color.White else MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.clickable { if (repeatEveryDays in setOf(0, 1, 7, 30, 365)) repeatEveryDays = 2 },
         ) {
             Text(
@@ -5192,7 +5201,7 @@ private fun TaskEditorSheet(
         val noneActive = linkedNoteId == null
         Surface(
             shape = RoundedCornerShape(999.dp),
-            color = if (noneActive) Color.White else Color(0xFF242426),
+            color = if (noneActive) Color.White else MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.clickable { linkedNoteId = null },
         ) {
             Text(
@@ -5206,7 +5215,7 @@ private fun TaskEditorSheet(
             val active = linkedNoteId == note.id
             Surface(
                 shape = RoundedCornerShape(999.dp),
-                color = if (active) Color.White else Color(0xFF242426),
+                color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.clickable { linkedNoteId = note.id },
             ) {
                 Text(
@@ -5239,7 +5248,7 @@ private fun TaskEditorSheet(
     Surface(
         onClick = { showReminderPicker = true },
         shape = RoundedCornerShape(14.dp),
-        color = Color(0xFF242426),
+        color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 2.dp,
         shadowElevation = 2.dp,
         modifier = Modifier.fillMaxWidth(),
@@ -5714,7 +5723,7 @@ private fun HabitEditorSheet(
             val active = dayPeriodCategory == cat
             Surface(
                 shape = RoundedCornerShape(999.dp),
-                color = if (active) Color.White else Color(0xFF242426),
+                color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.clickable { dayPeriodCategory = cat },
             ) {
                 Text(
