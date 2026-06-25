@@ -1,0 +1,355 @@
+package com.prodash.reminders
+
+import java.util.Calendar
+import java.util.Locale
+import java.util.regex.Pattern
+
+enum class VoiceCaptureType {
+    TASK, EVENT, HABIT, EXPENSE, INCOME, TRANSFER, NOTE,
+}
+
+data class ParsedVoiceCapture(
+    val type: VoiceCaptureType,
+    val title: String,
+    val body: String,
+    val dueAtMillis: Long? = null,
+    val endAtMillis: Long? = null,
+    val allDay: Boolean = false,
+    val repeatEveryDays: Int = 0,
+    val habitDayPeriod: String = "day",
+    val amount: Double? = null,
+    val accountId: String? = null,
+    val toAccountId: String? = null,
+    val category: String = "",
+    val location: String = "",
+)
+
+object VoiceCaptureParser {
+    private val taskTriggers = listOf(
+        "add task", "create task", "new task", "remind me", "reminder",
+        "todo", "to-do", "to do", "buy", "pick up", "call", "email", "send",
+        "fix", "check", "review", "submit", "book", "reserve", "order",
+        "clean", "wash", "cook", "prepare", "finish", "complete", "update",
+        "cancel", "change", "replace", "install", "set up", "sign up", "register",
+        "apply", "follow up", "contact", "meet", "attend", "go to",
+        "make sure", "don't forget", "need to", "have to", "must",
+    )
+
+    private val eventTriggers = listOf(
+        "add event", "new event", "calendar event", "appointment", "meeting",
+        "schedule", "block off", "dentist", "doctor visit",
+    )
+
+    private val habitTriggers = listOf(
+        "add habit", "new habit", "track habit", "habit to", "start habit",
+        "every day", "every morning", "every night",
+    )
+
+    private val expenseTriggers = listOf(
+        "spent", "expense", "paid for", "bought", "purchase", "cost me",
+        "charge", "debit", "pay for",
+    )
+
+    private val incomeTriggers = listOf(
+        "income", "earned", "got paid", "received", "deposit", "paycheck", "salary",
+    )
+
+    private val transferTriggers = listOf(
+        "transfer", "move money", "send money", "move from", "transfer from",
+    )
+
+    private val fillerPatterns = listOf(
+        Regex("""\bum+\b""", RegexOption.IGNORE_CASE),
+        Regex("""\buh+\b""", RegexOption.IGNORE_CASE),
+        Regex("""\badd (a |an )?(task|reminder|note|event|habit|expense|income) (for |to )?(me )?""", RegexOption.IGNORE_CASE),
+        Regex("""\bremind me to\b""", RegexOption.IGNORE_CASE),
+        Regex("""\bcreate (a |an )?(new )?(task|reminder|note|event|habit)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\bschedule (a |an )?""", RegexOption.IGNORE_CASE),
+        Regex("""\bplease\b""", RegexOption.IGNORE_CASE),
+        Regex("""\bcan you\b""", RegexOption.IGNORE_CASE),
+    )
+
+    fun parse(raw: String, accounts: List<BoopAccount>): ParsedVoiceCapture {
+        val text = raw.trim()
+        val lower = text.lowercase(Locale.US)
+        if (text.isBlank()) {
+            return ParsedVoiceCapture(VoiceCaptureType.NOTE, "New note", "")
+        }
+
+        val amount = extractAmount(lower)
+        val dueAt = extractDueDate(lower)
+        val (fromAccount, toAccount) = matchAccounts(lower, accounts)
+        val type = detectType(lower, amount, fromAccount, toAccount)
+        val cleaned = cleanText(text)
+        val title = extractTitle(cleaned, type)
+        val category = extractCategory(lower, type)
+        val location = extractLocation(lower)
+        val repeatDays = extractRepeatDays(lower)
+        val habitPeriod = extractHabitDayPeriod(lower)
+        val allDay = lower.contains("all day") || lower.contains("all-day")
+
+        val start = dueAt ?: defaultDueMillis(type)
+        val end = when {
+            start == null -> null
+            allDay -> start + 24 * 60 * 60_000L
+            type == VoiceCaptureType.EVENT -> start + 60 * 60_000L
+            else -> null
+        }
+
+        return ParsedVoiceCapture(
+            type = type,
+            title = title,
+            body = cleaned,
+            dueAtMillis = start,
+            endAtMillis = end,
+            allDay = allDay,
+            repeatEveryDays = repeatDays,
+            habitDayPeriod = habitPeriod,
+            amount = amount,
+            accountId = fromAccount?.id,
+            toAccountId = toAccount?.id,
+            category = category,
+            location = location,
+        )
+    }
+
+    private fun detectType(
+        lower: String,
+        amount: Double?,
+        fromAccount: BoopAccount?,
+        toAccount: BoopAccount?,
+    ): VoiceCaptureType {
+        if (transferTriggers.any { lower.contains(it) } || (fromAccount != null && toAccount != null)) {
+            return VoiceCaptureType.TRANSFER
+        }
+        if (incomeTriggers.any { lower.contains(it) }) return VoiceCaptureType.INCOME
+        if (expenseTriggers.any { lower.contains(it) } || (amount != null && lower.contains("dollar"))) {
+            return VoiceCaptureType.EXPENSE
+        }
+        if (habitTriggers.any { lower.contains(it) } || lower.contains("habit")) {
+            return VoiceCaptureType.HABIT
+        }
+        if (eventTriggers.any { lower.contains(it) }) return VoiceCaptureType.EVENT
+        if (taskTriggers.any { lower.contains(it) }) return VoiceCaptureType.TASK
+        if (extractDueDate(lower) != null && Regex("""\b(do|get|bring|take|drop|run|go)\b""").containsMatchIn(lower)) {
+            return VoiceCaptureType.TASK
+        }
+        return VoiceCaptureType.NOTE
+    }
+
+    private fun extractAmount(lower: String): Double? {
+        val patterns = listOf(
+            Regex("""\$\s*(\d+(?:\.\d{1,2})?)"""),
+            Regex("""(\d+(?:\.\d{1,2})?)\s*dollars?"""),
+            Regex("""(\d+(?:\.\d{1,2})?)\s*bucks?"""),
+            Regex("""(?:for|of)\s+(\d+(?:\.\d{1,2})?)"""),
+        )
+        for (pattern in patterns) {
+            val match = pattern.find(lower) ?: continue
+            return match.groupValues[1].toDoubleOrNull()
+        }
+        return null
+    }
+
+    private fun matchAccounts(
+        lower: String,
+        accounts: List<BoopAccount>,
+    ): Pair<BoopAccount?, BoopAccount?> {
+        if (accounts.isEmpty()) return null to null
+        val sorted = accounts.sortedByDescending { it.name.length }
+        var from: BoopAccount? = null
+        var to: BoopAccount? = null
+
+        val fromTo = Regex("""from\s+(.+?)\s+to\s+(.+)""", RegexOption.IGNORE_CASE).find(lower)
+        if (fromTo != null) {
+            val fromText = fromTo.groupValues[1]
+            val toText = fromTo.groupValues[2]
+            from = sorted.firstOrNull { fromText.contains(it.name.lowercase(Locale.US)) }
+            to = sorted.firstOrNull { toText.contains(it.name.lowercase(Locale.US)) }
+            return from to to
+        }
+
+        for (account in sorted) {
+            val name = account.name.lowercase(Locale.US)
+            if (name.length < 3) continue
+            if (lower.contains(name)) {
+                if (from == null) from = account else if (to == null && account.id != from.id) to = account
+            }
+        }
+        return from to to
+    }
+
+    fun extractDueDate(lower: String): Long? {
+        val now = Calendar.getInstance()
+        val todayMidnight = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        var base = Calendar.getInstance()
+
+        val dayNames = listOf("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
+        var foundDay = false
+
+        when {
+            lower.contains("next week") -> {
+                base = todayMidnight.clone() as Calendar
+                base.add(Calendar.DAY_OF_MONTH, 7)
+                foundDay = true
+            }
+            lower.contains("next month") -> {
+                base = todayMidnight.clone() as Calendar
+                base.add(Calendar.DAY_OF_MONTH, 30)
+                foundDay = true
+            }
+            lower.contains("day after tomorrow") -> {
+                base = todayMidnight.clone() as Calendar
+                base.add(Calendar.DAY_OF_MONTH, 2)
+                foundDay = true
+            }
+            lower.contains("tomorrow") -> {
+                base = todayMidnight.clone() as Calendar
+                base.add(Calendar.DAY_OF_MONTH, 1)
+                foundDay = true
+            }
+            lower.contains("today") || lower.contains("tonight") -> {
+                base = todayMidnight.clone() as Calendar
+                foundDay = true
+            }
+            else -> {
+                for (day in dayNames) {
+                    val next = "next $day"
+                    if (lower.contains(next) || lower.contains(day)) {
+                        val target = dayNames.indexOf(day)
+                        val current = now.get(Calendar.DAY_OF_WEEK) - 1
+                        var diff = target - current
+                        if (lower.contains(next) || diff <= 0) diff += 7
+                        base = todayMidnight.clone() as Calendar
+                        base.add(Calendar.DAY_OF_MONTH, diff)
+                        foundDay = true
+                        break
+                    }
+                }
+            }
+        }
+
+        val timeMatch = Regex(
+            """\bat\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b|\b(\d{1,2}):(\d{2})\s*(am|pm)?\b""",
+            RegexOption.IGNORE_CASE,
+        ).find(lower)
+
+        if (timeMatch != null) {
+            var hours = (timeMatch.groupValues[1].ifBlank { timeMatch.groupValues[4] }).toIntOrNull() ?: 9
+            val minutes = (timeMatch.groupValues[2].ifBlank { timeMatch.groupValues[5] }).toIntOrNull() ?: 0
+            val meridiem = (timeMatch.groupValues[3].ifBlank { timeMatch.groupValues[6] }).lowercase(Locale.US)
+            if (meridiem == "pm" && hours < 12) hours += 12
+            if (meridiem == "am" && hours == 12) hours = 0
+            if (!foundDay) base = Calendar.getInstance()
+            base.set(Calendar.HOUR_OF_DAY, hours)
+            base.set(Calendar.MINUTE, minutes)
+            base.set(Calendar.SECOND, 0)
+            base.set(Calendar.MILLISECOND, 0)
+            return base.timeInMillis
+        }
+
+        if (foundDay) {
+            base.set(Calendar.HOUR_OF_DAY, 9)
+            base.set(Calendar.MINUTE, 0)
+            base.set(Calendar.SECOND, 0)
+            base.set(Calendar.MILLISECOND, 0)
+            return base.timeInMillis
+        }
+
+        val inMatch = Regex("""\bin\s+(\d+)\s+(minute|hour|day|week)s?\b""").find(lower)
+        if (inMatch != null) {
+            val n = inMatch.groupValues[1].toLongOrNull() ?: return null
+            val unit = inMatch.groupValues[2]
+            val ms = when (unit) {
+                "minute" -> 60_000L
+                "hour" -> 3_600_000L
+                "day" -> 86_400_000L
+                else -> 604_800_000L
+            }
+            return System.currentTimeMillis() + n * ms
+        }
+        return null
+    }
+
+    private fun extractRepeatDays(lower: String): Int = when {
+        lower.contains("every year") || lower.contains("yearly") -> 365
+        lower.contains("every month") || lower.contains("monthly") -> 30
+        lower.contains("every week") || lower.contains("weekly") -> 7
+        lower.contains("every day") || lower.contains("daily") -> 1
+        else -> 0
+    }
+
+    private fun extractHabitDayPeriod(lower: String): String = when {
+        lower.contains("night") || lower.contains("evening") -> "night"
+        lower.contains("afternoon") || lower.contains("midday") || lower.contains("lunch") -> "mid"
+        else -> "day"
+    }
+
+    private fun extractCategory(lower: String, type: VoiceCaptureType): String {
+        if (type !in setOf(VoiceCaptureType.EXPENSE, VoiceCaptureType.INCOME)) return ""
+        val onMatch = Regex("""(?:on|for)\s+([a-z][a-z\s]{2,30})""", RegexOption.IGNORE_CASE).find(lower)
+        val phrase = onMatch?.groupValues?.getOrNull(1)?.trim().orEmpty()
+        if (phrase.isBlank()) return ""
+        val stopWords = listOf("from", "to", "my", "the", "account", "tomorrow", "today")
+        val words = phrase.split(" ").filter { it.isNotBlank() && it !in stopWords }
+        return words.take(3).joinToString(" ").replaceFirstChar { it.uppercase() }
+    }
+
+    private fun extractLocation(lower: String): String {
+        val atMatch = Regex("""\bat\s+([a-z0-9][a-z0-9\s'.-]{2,40})""", RegexOption.IGNORE_CASE).find(lower)
+            ?: return ""
+        val phrase = atMatch.groupValues[1].trim()
+        if (phrase.matches(Regex("""\d{1,2}(:\d{2})?\s*(am|pm)?""", RegexOption.IGNORE_CASE))) return ""
+        return phrase.split(" ").take(5).joinToString(" ").replaceFirstChar { it.uppercase() }
+    }
+
+    private fun cleanText(text: String): String {
+        var cleaned = text
+        for (pattern in fillerPatterns) {
+            cleaned = cleaned.replace(pattern, " ")
+        }
+        cleaned = cleaned.replace(Regex("""\s{2,}"""), " ").trim()
+        if (cleaned.isNotEmpty()) {
+            cleaned = cleaned.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+        }
+        return cleaned
+    }
+
+    private fun extractTitle(cleaned: String, type: VoiceCaptureType): String {
+        var title = cleaned
+            .replace(Regex("""\bat\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\b(tomorrow|today|tonight|next\s+\w+)\b""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\$\s*\d+(?:\.\d{1,2})?"""), "")
+            .replace(Regex("""\d+(?:\.\d{1,2})?\s*dollars?""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\s{2,}"""), " ")
+            .trim()
+
+        val dot = title.indexOfFirst { it == '.' || it == '!' || it == '?' }
+        if (dot in 11..79) title = title.substring(0, dot)
+
+        if (title.length > 70) title = title.take(67) + "…"
+
+        if (title.isBlank()) {
+            title = when (type) {
+                VoiceCaptureType.EVENT -> "New event"
+                VoiceCaptureType.HABIT -> "New habit"
+                VoiceCaptureType.EXPENSE -> "Expense"
+                VoiceCaptureType.INCOME -> "Income"
+                VoiceCaptureType.TRANSFER -> "Transfer"
+                VoiceCaptureType.TASK -> "New task"
+                VoiceCaptureType.NOTE -> "New note"
+            }
+        }
+        return title
+    }
+
+    private fun defaultDueMillis(type: VoiceCaptureType): Long? = when (type) {
+        VoiceCaptureType.TASK, VoiceCaptureType.EVENT -> System.currentTimeMillis() + 30 * 60_000L
+        else -> null
+    }
+}

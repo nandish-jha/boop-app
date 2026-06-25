@@ -295,6 +295,12 @@ private sealed class ItemSheet {
     data class FinanceEntrySheet(
         val sessionKey: String,
         val type: String, // income | expense | transfer
+        val prefilledTitle: String = "",
+        val prefilledAmount: String = "",
+        val prefilledAccountId: String = "",
+        val prefilledToAccountId: String = "",
+        val prefilledCategory: String = "",
+        val prefilledNote: String = "",
     ) : ItemSheet()
 }
 
@@ -312,6 +318,7 @@ private fun BoopApp() {
     var itemSheet by remember { mutableStateOf<ItemSheet?>(null) }
     var habitCheckInOpen by remember { mutableStateOf(false) }
     var speedDialExpanded by remember { mutableStateOf(false) }
+    var voiceCaptureOpen by remember { mutableStateOf(false) }
     var calendarSyncRequest by rememberSaveable { mutableIntStateOf(0) }
 
     fun refresh() {
@@ -397,10 +404,24 @@ private fun BoopApp() {
         )
         speedDialExpanded = false
     }
-    fun openFinanceEntrySheet(type: String) {
+    fun openFinanceEntrySheet(
+        type: String,
+        prefilledTitle: String = "",
+        prefilledAmount: String = "",
+        prefilledAccountId: String = "",
+        prefilledToAccountId: String = "",
+        prefilledCategory: String = "",
+        prefilledNote: String = "",
+    ) {
         itemSheet = ItemSheet.FinanceEntrySheet(
             sessionKey = UUID.randomUUID().toString(),
             type = type,
+            prefilledTitle = prefilledTitle,
+            prefilledAmount = prefilledAmount,
+            prefilledAccountId = prefilledAccountId,
+            prefilledToAccountId = prefilledToAccountId,
+            prefilledCategory = prefilledCategory,
+            prefilledNote = prefilledNote,
         )
         speedDialExpanded = false
     }
@@ -443,6 +464,92 @@ private fun BoopApp() {
     fun openEventSheetById(eventId: Long) {
         val detail = readCalendarEventDetail(context, eventId)
         openEventSheet(existing = detail)
+    }
+
+    fun applyVoiceCapture(parsed: ParsedVoiceCapture) {
+        voiceCaptureOpen = false
+        when (parsed.type) {
+            VoiceCaptureType.TASK -> {
+                itemSheet = ItemSheet.TaskSheet(
+                    id = null,
+                    sessionKey = UUID.randomUUID().toString(),
+                    title = parsed.title,
+                    reminderAt = parsed.dueAtMillis ?: (System.currentTimeMillis() + 30 * 60_000),
+                    done = false,
+                    repeatEveryDays = parsed.repeatEveryDays,
+                )
+            }
+            VoiceCaptureType.EVENT -> {
+                val start = parsed.dueAtMillis ?: (startOfDayMillis(System.currentTimeMillis()) + 9 * 60 * 60_000L)
+                val end = parsed.endAtMillis ?: (start + 60 * 60_000L)
+                itemSheet = ItemSheet.EventSheet(
+                    eventId = null,
+                    calendarId = null,
+                    sessionKey = UUID.randomUUID().toString(),
+                    title = parsed.title,
+                    description = parsed.body,
+                    location = parsed.location,
+                    allDay = parsed.allDay,
+                    startAt = start,
+                    endAt = end,
+                    notifyWeeksBefore = 0,
+                    notifyDaysBefore = 0,
+                    notifyHoursBefore = 0,
+                    repeatEveryDays = parsed.repeatEveryDays,
+                )
+            }
+            VoiceCaptureType.HABIT -> {
+                itemSheet = ItemSheet.HabitSheet(
+                    id = null,
+                    sessionKey = UUID.randomUUID().toString(),
+                    title = parsed.title,
+                    dayPeriodCategory = parsed.habitDayPeriod,
+                    goal = 30,
+                    progress = 0,
+                    dayKeys = "",
+                    quantityMode = false,
+                    quantityUnit = "",
+                    quantityDailyTarget = 30,
+                    quantityDayValues = "",
+                )
+            }
+            VoiceCaptureType.EXPENSE -> openFinanceEntrySheet(
+                type = "expense",
+                prefilledTitle = parsed.title,
+                prefilledAmount = parsed.amount?.let { "%.2f".format(it) }.orEmpty(),
+                prefilledAccountId = parsed.accountId.orEmpty(),
+                prefilledCategory = parsed.category,
+                prefilledNote = parsed.body,
+            )
+            VoiceCaptureType.INCOME -> openFinanceEntrySheet(
+                type = "income",
+                prefilledTitle = parsed.title,
+                prefilledAmount = parsed.amount?.let { "%.2f".format(it) }.orEmpty(),
+                prefilledAccountId = parsed.accountId.orEmpty(),
+                prefilledCategory = parsed.category,
+                prefilledNote = parsed.body,
+            )
+            VoiceCaptureType.TRANSFER -> openFinanceEntrySheet(
+                type = "transfer",
+                prefilledTitle = parsed.title,
+                prefilledAmount = parsed.amount?.let { "%.2f".format(it) }.orEmpty(),
+                prefilledAccountId = parsed.accountId.orEmpty(),
+                prefilledToAccountId = parsed.toAccountId.orEmpty(),
+                prefilledNote = parsed.body,
+            )
+            VoiceCaptureType.NOTE -> {
+                itemSheet = ItemSheet.NoteSheet(
+                    id = null,
+                    sessionKey = UUID.randomUUID().toString(),
+                    title = parsed.title,
+                    body = parsed.body,
+                    attachmentUri = null,
+                    audioUri = null,
+                    tagsCsv = "",
+                )
+            }
+        }
+        speedDialExpanded = false
     }
 
     LaunchedEffect(tasks, pendingOpenTaskId) {
@@ -540,6 +647,10 @@ private fun BoopApp() {
                         onOpenExpense = { openFinanceEntrySheet("expense") },
                         onOpenTransfer = { openFinanceEntrySheet("transfer") },
                         onOpenAccount = { openAccountSheet(null) },
+                        onOpenVoiceCapture = {
+                            voiceCaptureOpen = true
+                            speedDialExpanded = false
+                        },
                     )
                 },
                 floatingActionButtonPosition = androidx.compose.material3.FabPosition.End,
@@ -759,6 +870,31 @@ private fun BoopApp() {
                     )
                 }
             }
+
+            if (voiceCaptureOpen) {
+                val voiceSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                ModalBottomSheet(
+                    onDismissRequest = { voiceCaptureOpen = false },
+                    sheetState = voiceSheetState,
+                    containerColor = darkSurface,
+                    dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF8E8E90)) },
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                            .padding(bottom = 28.dp)
+                            .imePadding(),
+                    ) {
+                        VoiceCaptureSheet(
+                            accounts = accounts,
+                            onDismiss = { voiceCaptureOpen = false },
+                            onParsed = { applyVoiceCapture(it) },
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -936,6 +1072,7 @@ private fun BoopSpeedDialFab(
     onOpenExpense: () -> Unit,
     onOpenTransfer: () -> Unit,
     onOpenAccount: () -> Unit,
+    onOpenVoiceCapture: () -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.End,
@@ -948,6 +1085,11 @@ private fun BoopSpeedDialFab(
             exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.End) {
+                SmallFloatingActionButton(
+                    onClick = { onOpenVoiceCapture(); onExpandedChange(false) },
+                    containerColor = Color(0xFFE8E8EA),
+                    contentColor = Color.Black,
+                ) { Icon(Icons.Outlined.Mic, contentDescription = "Voice capture") }
                 if (selectedTab == 2) {
                     SmallFloatingActionButton(
                         onClick = { onOpenTask(); onExpandedChange(false) },
@@ -3720,15 +3862,23 @@ private fun FinanceEntrySheet(
     onDismiss: () -> Unit,
     onSave: (BoopLedgerEntry) -> Unit,
 ) {
-    var title by rememberSaveable(initial.sessionKey) { mutableStateOf("") }
-    var amountText by rememberSaveable(initial.sessionKey) { mutableStateOf("") }
-    var category by rememberSaveable(initial.sessionKey) { mutableStateOf("") }
+    var title by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.prefilledTitle) }
+    var amountText by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.prefilledAmount) }
+    var category by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.prefilledCategory) }
     var subcategory by rememberSaveable(initial.sessionKey) { mutableStateOf("") }
-    var note by rememberSaveable(initial.sessionKey) { mutableStateOf("") }
+    var note by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.prefilledNote) }
     var dueAt by rememberSaveable(initial.sessionKey) { mutableLongStateOf(0L) }
     var showDuePicker by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
-    var fromAccountId by rememberSaveable(initial.sessionKey) { mutableStateOf(accounts.firstOrNull()?.id.orEmpty()) }
-    var toAccountId by rememberSaveable(initial.sessionKey) { mutableStateOf(accounts.drop(1).firstOrNull()?.id.orEmpty()) }
+    var fromAccountId by rememberSaveable(initial.sessionKey) {
+        mutableStateOf(initial.prefilledAccountId.ifBlank { accounts.firstOrNull()?.id.orEmpty() })
+    }
+    var toAccountId by rememberSaveable(initial.sessionKey) {
+        mutableStateOf(
+            initial.prefilledToAccountId.ifBlank {
+                accounts.drop(1).firstOrNull()?.id.orEmpty()
+            },
+        )
+    }
 
     if (accounts.isEmpty()) {
         Text("Add an account first from the + menu.", color = Color(0xFFBFBFBF))
