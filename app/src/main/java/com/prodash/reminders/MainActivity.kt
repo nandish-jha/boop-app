@@ -749,14 +749,16 @@ private fun BoopApp() {
                 },
                 floatingActionButtonPosition = androidx.compose.material3.FabPosition.End,
                 bottomBar = {
-                    BoopBottomNavBar(
-                        palette = palette,
-                        pagerScrollPosition = pagerScrollPosition,
-                        onSelectTab = {
-                            selectedTab = it
-                            speedDialExpanded = false
-                        },
-                    )
+                    if (!settingsOpen) {
+                        BoopBottomNavBar(
+                            palette = palette,
+                            pagerScrollPosition = pagerScrollPosition,
+                            onSelectTab = {
+                                selectedTab = it
+                                speedDialExpanded = false
+                            },
+                        )
+                    }
                 },
             ) { padding ->
                 Box(

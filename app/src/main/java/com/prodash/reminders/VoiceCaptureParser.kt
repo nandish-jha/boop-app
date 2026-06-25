@@ -445,31 +445,51 @@ object VoiceCaptureParser {
         return result.replace(Regex("""\s{2,}"""), " ").trim()
     }
 
-    private fun extractNoteTitleAndBody(raw: String): Pair<String, String> {
-        var content = stripNoteCommandPhrases(raw)
-        if (content.isNotEmpty()) {
-            content = content.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
-        }
-        if (content.isBlank()) return "New note" to ""
+    private fun formatNoteField(text: String): String {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return ""
+        return trimmed.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+    }
 
-        val sentenceBreak = content.indexOfFirst { it == '.' || it == '!' || it == '?' }
-        val title = when {
-            sentenceBreak in 8..70 -> content.substring(0, sentenceBreak + 1).trim()
-            content.length > 52 -> {
-                val chunk = content.take(49)
-                val lastSpace = chunk.lastIndexOf(' ')
-                if (lastSpace > 12) chunk.substring(0, lastSpace).trim() + "…" else chunk.trim() + "…"
-            }
-            else -> {
-                val words = content.split(Regex("""\s+""")).filter { it.isNotBlank() }
-                when {
-                    words.size > 5 -> words.take(4).joinToString(" ")
-                    words.size > 3 -> words.take(3).joinToString(" ")
-                    else -> content
-                }
-            }
+    private fun extractExplicitNoteTitle(content: String): Pair<String, String>? {
+        val text = content.trim()
+        val twoPartPatterns = listOf(
+            Regex("""title\s+is\s+(.+?)\s+(?:body|content|description)\s+(?:is\s+)?(.+)""", RegexOption.IGNORE_CASE),
+            Regex("""title\s*[:]\s*(.+?)\s*[-–—,:]\s+(.+)""", RegexOption.IGNORE_CASE),
+            Regex("""titled\s+(.+?)\s+(?:body|content|description)\s+(?:is\s+)?(.+)""", RegexOption.IGNORE_CASE),
+            Regex("""titled\s+(.+?)\s+that\s+(.+)""", RegexOption.IGNORE_CASE),
+            Regex("""titled\s+(.+?)[,.]\s+(.+)""", RegexOption.IGNORE_CASE),
+            Regex("""^about\s+(.+?)\s+that\s+(.+)""", RegexOption.IGNORE_CASE),
+            Regex("""^about\s+(.+?)[,:]\s+(.+)""", RegexOption.IGNORE_CASE),
+            Regex("""call(?:\s+it)?\s+(.+?)[,:]\s+(.+)""", RegexOption.IGNORE_CASE),
+            Regex("""named\s+(.+?)[,:]\s+(.+)""", RegexOption.IGNORE_CASE),
+            Regex("""subject\s*[:]\s*(.+?)[,:]\s+(.+)""", RegexOption.IGNORE_CASE),
+            Regex("""with (?:the )?title\s+(.+?)\s+and (?:the )?(?:body|content|description)\s+(.+)""", RegexOption.IGNORE_CASE),
+        )
+        for (pattern in twoPartPatterns) {
+            val match = pattern.find(text) ?: continue
+            val title = match.groupValues[1].trim()
+            val body = match.groupValues[2].trim()
+            if (title.isNotBlank() && body.isNotBlank()) return title to body
         }
-        return title.ifBlank { "New note" } to content
+
+        val delimiter = Regex("""^(.{2,60}?)[,:]\s+(.{2,})$""").find(text) ?: return null
+        val title = delimiter.groupValues[1].trim()
+        val body = delimiter.groupValues[2].trim()
+        val titleWords = title.split(Regex("""\s+""")).filter { it.isNotBlank() }
+        if (titleWords.size in 1..8 && body.isNotBlank()) return title to body
+        return null
+    }
+
+    private fun extractNoteTitleAndBody(raw: String): Pair<String, String> {
+        val content = stripNoteCommandPhrases(raw)
+        if (content.isBlank()) return "" to ""
+
+        extractExplicitNoteTitle(content)?.let { (title, body) ->
+            return formatNoteField(title) to formatNoteField(body)
+        }
+
+        return "" to formatNoteField(content)
     }
 
     private fun extractTitle(cleaned: String, type: VoiceCaptureType): String {
