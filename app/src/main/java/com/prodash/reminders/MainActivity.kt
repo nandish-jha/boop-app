@@ -200,6 +200,7 @@ import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import android.widget.TextView
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.text.HtmlCompat
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
@@ -738,17 +739,7 @@ private fun BoopApp() {
     CompositionLocalProvider(LocalBoopPalette provides palette) {
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = MaterialTheme.typography.copy(
-            titleLarge = MaterialTheme.typography.titleLarge.copy(
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Normal,
-            ),
-            headlineSmall = MaterialTheme.typography.headlineSmall.copy(
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Normal,
-            ),
-            bodyMedium = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
-        ),
+        typography = boopTypography(),
     ) {
         val scope = rememberCoroutineScope()
         var pullRefreshing by remember { mutableStateOf(false) }
@@ -1250,7 +1241,6 @@ private fun SettingsScreen(
             Text(
                 "Settings",
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
                 color = palette.onBackground,
             )
         }
@@ -1865,8 +1855,8 @@ private fun DashboardScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Good", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
-                        Text(greetingSecond, fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
+                        BoopPageTitle("Good")
+                        BoopPageTitle(greetingSecond)
                     }
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         FloatingActionButton(
@@ -2850,12 +2840,8 @@ private fun TaskListScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
-            Text(
+            BoopPageTitle(
                 title,
-                fontSize = 58.sp,
-                lineHeight = 60.sp,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.onBackground,
                 modifier = if (onHeaderTap != null) Modifier.clickable { onHeaderTap() } else Modifier,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -3427,12 +3413,8 @@ private fun CalendarScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
-            Text(
+            BoopPageTitle(
                 headerLabel,
-                fontSize = 58.sp,
-                lineHeight = 60.sp,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.clickable {
                     selectedMillis = todayNoon
                     scope.launch { monthPager.animateScrollToPage(basePage) }
@@ -3718,12 +3700,8 @@ private fun NotesListScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
-            Text(
+            BoopPageTitle(
                 title,
-                fontSize = 58.sp,
-                lineHeight = 60.sp,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.onBackground,
                 modifier = if (onHeaderTap != null) Modifier.clickable { onHeaderTap() } else Modifier,
             )
             FloatingActionButton(
@@ -3906,7 +3884,7 @@ private fun HabitsListScreen(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Habits", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
+        BoopPageTitle("Habits")
         Column(
             Modifier
                 .weight(1f)
@@ -3981,7 +3959,7 @@ private fun FinanceScreen(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Accounts", fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
+        BoopPageTitle("Accounts")
         if (viewMode != "overview") {
             val backInteraction = remember { MutableInteractionSource() }
             Surface(
@@ -4752,19 +4730,6 @@ private fun HabitTodayCheckInSheet(
             }
         }
     }
-}
-
-@Composable
-private fun BoopSheetHeaderTitle(text: String) {
-    Text(
-        text,
-        fontSize = 42.sp,
-        lineHeight = 44.sp,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onBackground,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-    )
 }
 
 private fun insertDeviceCalendarEvent(
@@ -5676,6 +5641,7 @@ private fun NoteEditorSheet(
             val fieldFg = palette.onBackground
             val fieldHint = palette.muted
             EditText(ctx).apply {
+                ResourcesCompat.getFont(ctx, R.font.inter_regular)?.let { setTypeface(it) }
                 setBackgroundColor(fieldBg.toArgb())
                 setTextColor(fieldFg.toArgb())
                 setHintTextColor(fieldHint.toArgb())
