@@ -10,7 +10,6 @@ import android.speech.SpeechRecognizer
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,11 +20,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -33,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,14 +45,18 @@ import androidx.core.content.ContextCompat
 @Composable
 fun VoiceCaptureSheet(
     accounts: List<BoopAccount>,
+    autoStart: Boolean,
+    startSignal: Int,
+    stopSignal: Int,
     onDismiss: () -> Unit,
     onParsed: (ParsedVoiceCapture) -> Unit,
+    onListeningChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     var transcript by remember { mutableStateOf("") }
     var partial by remember { mutableStateOf("") }
     var listening by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("Tap the mic and speak.") }
+    var status by remember { mutableStateOf("Listening…") }
     var micGranted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -68,17 +69,13 @@ fun VoiceCaptureSheet(
         if (speechAvailable) SpeechRecognizer.createSpeechRecognizer(context) else null
     }
 
-    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        micGranted = granted
-        if (!granted) status = "Microphone permission denied."
+    fun setListening(active: Boolean) {
+        listening = active
+        onListeningChanged(active)
     }
 
     fun startListening() {
         val sr = recognizer
-        if (!micGranted) {
-            micLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            return
-        }
         if (sr == null) {
             status = "Speech recognition is not available on this device."
             return
@@ -89,8 +86,9 @@ fun VoiceCaptureSheet(
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
-        listening = true
+        setListening(true)
         partial = ""
+        transcript = ""
         status = "Listening…"
         sr.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {}
@@ -98,20 +96,20 @@ fun VoiceCaptureSheet(
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() {
-                listening = false
+                setListening(false)
                 status = "Processing…"
             }
             override fun onError(error: Int) {
-                listening = false
+                setListening(false)
                 status = when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH -> "Didn't catch that — try again."
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected — try again."
+                    SpeechRecognizer.ERROR_NO_MATCH -> "Didn't catch that — tap the mic to try again."
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected — tap the mic to try again."
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission required."
-                    else -> "Voice error ($error). Try again or type below."
+                    else -> "Voice error ($error). Tap the mic to try again."
                 }
             }
             override fun onResults(results: Bundle?) {
-                listening = false
+                setListening(false)
                 val text = results
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull()
@@ -121,7 +119,7 @@ fun VoiceCaptureSheet(
                     partial = ""
                     status = "Got it — tap Use to open the editor."
                 } else {
-                    status = "No speech heard — try again."
+                    status = "No speech heard — tap the mic to try again."
                 }
             }
             override fun onPartialResults(partialResults: Bundle?) {
@@ -136,45 +134,72 @@ fun VoiceCaptureSheet(
     }
 
     fun stopListening() {
-        listening = false
+        setListening(false)
         recognizer?.stopListening()
-        status = "Stopped."
+        if (transcript.isBlank() && partial.isBlank()) {
+            status = "Stopped."
+        }
+    }
+
+    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        micGranted = granted
+        if (granted) {
+            startListening()
+        } else {
+            status = "Microphone permission denied."
+            onListeningChanged(false)
+        }
+    }
+
+    fun requestAndStart() {
+        if (!micGranted) {
+            micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        startListening()
+    }
+
+    LaunchedEffect(autoStart) {
+        if (autoStart) requestAndStart()
+    }
+
+    LaunchedEffect(startSignal) {
+        if (startSignal > 0) requestAndStart()
+    }
+
+    LaunchedEffect(stopSignal) {
+        if (stopSignal > 0 && listening) stopListening()
     }
 
     DisposableEffect(recognizer) {
         onDispose {
             recognizer?.destroy()
+            onListeningChanged(false)
         }
     }
 
     Column(Modifier.fillMaxWidth()) {
-        Text(
-            "Voice capture",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(status, color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
-        Spacer(Modifier.height(16.dp))
-
         Row(
             Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FloatingActionButton(
-                onClick = { if (listening) stopListening() else startListening() },
-                containerColor = Color.White,
-                contentColor = Color.Black,
-            ) {
-                if (listening) {
-                    Icon(Icons.Outlined.Stop, contentDescription = "Stop")
-                } else {
-                    Icon(Icons.Outlined.Mic, contentDescription = "Start listening")
-                }
+            Text(
+                "Voice capture",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+            )
+            if (listening) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    color = Color(0xFFFF8A8A),
+                    strokeWidth = 2.dp,
+                )
             }
         }
+        Spacer(Modifier.height(8.dp))
+        Text(status, color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodySmall)
 
         val displayText = when {
             partial.isNotBlank() -> partial
@@ -231,7 +256,13 @@ fun VoiceCaptureSheet(
 
         Spacer(Modifier.height(20.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+            TextButton(
+                onClick = {
+                    stopListening()
+                    onDismiss()
+                },
+                modifier = Modifier.weight(1f),
+            ) {
                 Text("Cancel", color = Color(0xFFBFBFBF))
             }
             Surface(
