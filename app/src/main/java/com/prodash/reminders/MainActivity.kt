@@ -137,6 +137,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -959,7 +960,7 @@ private fun BoopSpeedDialFab(
                         contentColor = Color.Black,
                     ) { Icon(Icons.Outlined.CalendarMonth, contentDescription = "Add event") }
                     SmallFloatingActionButton(
-                        onClick = { onSyncCalendar() },
+                        onClick = { onSyncCalendar(); onExpandedChange(false) },
                         containerColor = Color.White,
                         contentColor = Color.Black,
                     ) { Icon(Icons.Outlined.Sync, contentDescription = "Sync calendar") }
@@ -2109,7 +2110,7 @@ private fun readGoogleCalendarIds(context: Context): Set<Long> {
             }
         }
     }
-    return fallbackVisibleIds
+    return if (googleIds.isNotEmpty()) googleIds else fallbackVisibleIds
 }
 
 private fun readVisibleCalendars(context: Context): List<DeviceCalendarChoice> {
@@ -2183,6 +2184,9 @@ private fun readGoogleCalendarEventsInRange(
     startMillis: Long,
     endMillis: Long,
 ): List<CalendarEventUi> {
+    val calendarIds = readGoogleCalendarIds(context)
+    if (calendarIds.isEmpty()) return emptyList()
+
     val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
         .appendPath(startMillis.toString())
         .appendPath((endMillis - 1L).toString())
@@ -2192,18 +2196,17 @@ private fun readGoogleCalendarEventsInRange(
         CalendarContract.Instances.TITLE,
         CalendarContract.Instances.BEGIN,
         CalendarContract.Instances.END,
-        CalendarContract.Events.RRULE,
         CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
         CalendarContract.Instances.CALENDAR_ID,
         CalendarContract.Instances.ALL_DAY,
     )
+    val selection = "${CalendarContract.Instances.CALENDAR_ID} IN (${calendarIds.joinToString(",")})"
     val out = mutableListOf<CalendarEventUi>()
-    context.contentResolver.query(uri, projection, null, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
+    context.contentResolver.query(uri, projection, selection, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
         val idIx = c.getColumnIndex(CalendarContract.Instances.EVENT_ID)
         val titleIx = c.getColumnIndex(CalendarContract.Instances.TITLE)
         val beginIx = c.getColumnIndex(CalendarContract.Instances.BEGIN)
         val endIx = c.getColumnIndex(CalendarContract.Instances.END)
-        val rruleIx = c.getColumnIndex(CalendarContract.Events.RRULE)
         val calIx = c.getColumnIndex(CalendarContract.Instances.CALENDAR_DISPLAY_NAME)
         val allDayIx = c.getColumnIndex(CalendarContract.Instances.ALL_DAY)
         while (c.moveToNext()) {
@@ -2235,7 +2238,7 @@ private fun readGoogleCalendarEventsInRange(
                     endMillis = normalized.second,
                     calendarDisplayName = if (calIx >= 0) c.getString(calIx).orEmpty() else "",
                     allDay = isAllDay,
-                    repeatEveryDays = parseRepeatDaysFromRRule(if (rruleIx >= 0) c.getString(rruleIx).orEmpty() else ""),
+                    repeatEveryDays = 0,
                 ),
             )
         }
@@ -2250,7 +2253,7 @@ private fun readGoogleCalendarEventsInRange(
         CalendarContract.Events.CALENDAR_ID,
         CalendarContract.Events.ALL_DAY,
     )
-    val eventSel = "(${CalendarContract.Events.DTSTART} < ?) AND (${CalendarContract.Events.DTEND} > ?)"
+    val eventSel = "(${CalendarContract.Events.DTSTART} < ?) AND (${CalendarContract.Events.DTEND} > ?) AND (${CalendarContract.Events.CALENDAR_ID} IN (${calendarIds.joinToString(",")}))"
     val eventArgs = arrayOf(endMillis.toString(), startMillis.toString())
     context.contentResolver.query(
         CalendarContract.Events.CONTENT_URI,
@@ -2696,6 +2699,7 @@ private fun CalendarScreen(
     }
     var lastSyncStatus by rememberSaveable { mutableStateOf("Tap sync to load Google events into Calendar.") }
     var googleEventsCache by remember { mutableStateOf(emptyList<CalendarEventUi>()) }
+    var isSyncing by remember { mutableStateOf(false) }
     var calendarGranted by remember {
         mutableStateOf(
             androidx.core.content.ContextCompat.checkSelfPermission(
@@ -2704,27 +2708,79 @@ private fun CalendarScreen(
             ) == PackageManager.PERMISSION_GRANTED,
         )
     }
+    fun refreshCalendarPermission() {
+        calendarGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_CALENDAR,
+        ) == PackageManager.PERMISSION_GRANTED
+    }
     val refreshGoogleEvents: suspend (Boolean) -> Int = { updateStatus ->
-        val events = withContext(Dispatchers.IO) {
-            readGoogleCalendarEventsInRange(context, syncRangeStart, syncRangeEnd)
+        if (!calendarGranted) {
+            0
+        } else {
+            isSyncing = true
+            try {
+                val events = withContext(Dispatchers.IO) {
+                    readGoogleCalendarEventsInRange(context, syncRangeStart, syncRangeEnd)
+                }
+                googleEventsCache = events
+                EventReminderScheduler.scheduleFromVisibleEvents(context, events)
+                if (updateStatus) {
+                    lastSyncStatus = if (events.isEmpty()) {
+                        "No Google Calendar events found in this range."
+                    } else {
+                        "Google Calendar synced: ${events.size} events loaded."
+                    }
+                }
+                events.size
+            } catch (t: Throwable) {
+                if (updateStatus) {
+                    lastSyncStatus = "Calendar sync failed: ${t.message ?: "unknown error"}"
+                }
+                0
+            } finally {
+                isSyncing = false
+            }
         }
-        googleEventsCache = events
-        EventReminderScheduler.scheduleFromVisibleEvents(context, events)
-        if (updateStatus) {
-            lastSyncStatus = "Google Calendar synced: ${events.size} events loaded."
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val wasGranted = calendarGranted
+                refreshCalendarPermission()
+                if (!wasGranted && calendarGranted) {
+                    scope.launch { refreshGoogleEvents(true) }
+                }
+            }
         }
-        events.size
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val calendarPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         calendarGranted = granted
         if (granted) {
             scope.launch {
-                lastSyncStatus = "Syncing Google Calendar..."
                 val loaded = refreshGoogleEvents(true)
                 Toast.makeText(context, "Google Calendar synced: $loaded events", Toast.LENGTH_SHORT).show()
             }
         } else {
             lastSyncStatus = "Calendar permission denied. Sync cannot run."
+        }
+    }
+    val triggerCalendarSync: () -> Unit = {
+        lastSyncStatus = "Syncing Google Calendar..."
+        if (!calendarGranted) {
+            calendarPermLauncher.launch(Manifest.permission.READ_CALENDAR)
+        } else {
+            scope.launch {
+                val loaded = refreshGoogleEvents(true)
+                Toast.makeText(
+                    context,
+                    if (loaded > 0) "Google Calendar synced: $loaded events" else "No calendar events found",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
         }
     }
     LaunchedEffect(calendarGranted) {
@@ -2746,14 +2802,9 @@ private fun CalendarScreen(
             }
         }
     }
-    LaunchedEffect(syncRequest, calendarGranted) {
+    LaunchedEffect(syncRequest) {
         if (syncRequest <= 0) return@LaunchedEffect
-        if (!calendarGranted) {
-            calendarPermLauncher.launch(Manifest.permission.READ_CALENDAR)
-        } else {
-            lastSyncStatus = "Syncing Google Calendar..."
-            refreshGoogleEvents(true)
-        }
+        triggerCalendarSync()
     }
     val googleEvents = remember(googleEventsCache, selectedDay.timeInMillis, nextDay.timeInMillis) {
         googleEventsCache
@@ -2842,7 +2893,7 @@ private fun CalendarScreen(
     ) {
         Row(
             Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
             Text(
@@ -2856,7 +2907,27 @@ private fun CalendarScreen(
                     scope.launch { monthPager.animateScrollToPage(basePage) }
                 },
             )
+            FloatingActionButton(
+                onClick = triggerCalendarSync,
+                containerColor = Color.White,
+                contentColor = Color.Black,
+            ) {
+                if (isSyncing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = Color.Black,
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(Icons.Outlined.Sync, contentDescription = "Sync with Google Calendar")
+                }
+            }
         }
+        Text(
+            lastSyncStatus,
+            color = Color(0xFF8E8E90),
+            style = MaterialTheme.typography.bodySmall,
+        )
         Box(
             Modifier
                 .fillMaxWidth()
