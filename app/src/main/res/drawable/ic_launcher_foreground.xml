@@ -4,14 +4,15 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Abstract stacked bars — minimal productivity mark. -->
+    <!-- Abstract hexagon outline — minimal geometric mark. -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M54,18 L80,33 L80,75 L54,90 L28,75 L28,33 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M30,30 h48 a6,6 0 0,1 6,6 v0 a6,6 0 0,1 -6,6 h-48 a6,6 0 0,1 -6,-6 v0 a6,6 0 0,1 6,-6 z" />
-    <path
-        android:fillColor="#B3FFFFFF"
-        android:pathData="M34,50 h40 a5,5 0 0,1 5,5 v0 a5,5 0 0,1 -5,5 h-40 a5,5 0 0,1 -5,-5 v0 a5,5 0 0,1 5,-5 z" />
-    <path
-        android:fillColor="#66FFFFFF"
-        android:pathData="M38,68 h32 a4,4 0 0,1 4,4 v0 a4,4 0 0,1 -4,4 h-32 a4,4 0 0,1 -4,-4 v0 a4,4 0 0,1 4,-4 z" />
+        android:pathData="M54,54 m-5,0 a5,5 0 1,1 10,0 a5,5 0 1,1 -10,0" />
 </vector>

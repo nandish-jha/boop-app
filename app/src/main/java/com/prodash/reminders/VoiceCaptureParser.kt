@@ -58,6 +58,11 @@ object VoiceCaptureParser {
         "transfer", "move money", "send money", "move from", "transfer from",
     )
 
+    private val noteTriggers = listOf(
+        "add note", "new note", "create note", "write note", "take note", "make a note",
+        "note to self", "jot down", "journal entry", "voice note",
+    )
+
     private val fillerPatterns = listOf(
         Regex("""\bum+\b""", RegexOption.IGNORE_CASE),
         Regex("""\buh+\b""", RegexOption.IGNORE_CASE),
@@ -79,7 +84,7 @@ object VoiceCaptureParser {
         val amount = extractAmount(lower)
         val dueAt = extractDueDate(lower)
         val (fromAccount, toAccount) = matchAccounts(lower, accounts)
-        val type = detectType(lower, amount, fromAccount, toAccount)
+        val type = detectType(lower, amount, fromAccount, toAccount, dueAt)
         val cleaned = cleanText(text)
         val title = extractTitle(cleaned, type)
         val category = extractCategory(lower, type)
@@ -118,6 +123,7 @@ object VoiceCaptureParser {
         amount: Double?,
         fromAccount: BoopAccount?,
         toAccount: BoopAccount?,
+        dueAt: Long?,
     ): VoiceCaptureType {
         if (transferTriggers.any { lower.contains(it) } || (fromAccount != null && toAccount != null)) {
             return VoiceCaptureType.TRANSFER
@@ -130,11 +136,10 @@ object VoiceCaptureParser {
             return VoiceCaptureType.HABIT
         }
         if (eventTriggers.any { lower.contains(it) }) return VoiceCaptureType.EVENT
+        if (noteTriggers.any { lower.contains(it) }) return VoiceCaptureType.NOTE
         if (taskTriggers.any { lower.contains(it) }) return VoiceCaptureType.TASK
-        if (extractDueDate(lower) != null && Regex("""\b(do|get|bring|take|drop|run|go)\b""").containsMatchIn(lower)) {
-            return VoiceCaptureType.TASK
-        }
-        return VoiceCaptureType.NOTE
+        if (dueAt != null) return VoiceCaptureType.TASK
+        return VoiceCaptureType.TASK
     }
 
     private fun extractAmount(lower: String): Double? {
@@ -393,14 +398,36 @@ object VoiceCaptureParser {
         return cleaned
     }
 
+    private val titleSchedulingPatterns = listOf(
+        Regex("""\bat\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b\d{1,2}:\d{2}\s*(?:a\.?m\.?|p\.?m\.?)?\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b\d{1,2}\s*(?:a\.?m\.?|p\.?m\.?)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b\d{1,2}(?::\d{2})?\s+(?:in\s+the\s+)?(morning|afternoon|evening)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b(?:in\s+the\s+)?(morning|afternoon|evening|night)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b(tomorrow|today|tonight|day after tomorrow|next week|next month)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b(noon|midday|midnight)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b(?:a\.?m\.?|p\.?m\.?)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\bin\s+\d+\s+(minute|hour|day|week)s?\b""", RegexOption.IGNORE_CASE),
+    )
+
+    private fun stripSchedulingPhrases(text: String): String {
+        var result = text
+        for (pattern in titleSchedulingPatterns) {
+            result = result.replace(pattern, " ")
+        }
+        return result.replace(Regex("""\s{2,}"""), " ").trim()
+    }
+
     private fun extractTitle(cleaned: String, type: VoiceCaptureType): String {
-        var title = cleaned
-            .replace(Regex("""\bat\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b""", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("""\b(tomorrow|today|tonight|next\s+\w+)\b""", RegexOption.IGNORE_CASE), "")
+        var title = stripSchedulingPhrases(cleaned)
             .replace(Regex("""\$\s*\d+(?:\.\d{1,2})?"""), "")
             .replace(Regex("""\d+(?:\.\d{1,2})?\s*dollars?""", RegexOption.IGNORE_CASE), "")
             .replace(Regex("""\s{2,}"""), " ")
             .trim()
+        // Drop orphaned single letters left from partial am/pm recognition (e.g. "p" from "p.m.")
+        title = title.replace(Regex("""\s+[ap]\s*$""", RegexOption.IGNORE_CASE), "").trim()
 
         val dot = title.indexOfFirst { it == '.' || it == '!' || it == '?' }
         if (dot in 11..79) title = title.substring(0, dot)
