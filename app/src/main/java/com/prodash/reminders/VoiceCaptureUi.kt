@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -37,7 +38,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 
@@ -56,7 +56,7 @@ fun VoiceCaptureSheet(
     var transcript by remember { mutableStateOf("") }
     var partial by remember { mutableStateOf("") }
     var listening by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("Listening…") }
+    var status by remember { mutableStateOf("Tap the mic to start speaking.") }
     var micGranted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -65,8 +65,29 @@ fun VoiceCaptureSheet(
     }
 
     val speechAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
-    val recognizer = remember {
-        if (speechAvailable) SpeechRecognizer.createSpeechRecognizer(context) else null
+    var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+
+    fun releaseRecognizer() {
+        val sr = recognizer ?: return
+        recognizer = null
+        try {
+            sr.stopListening()
+        } catch (_: Throwable) {
+        }
+        try {
+            sr.cancel()
+        } catch (_: Throwable) {
+        }
+        try {
+            sr.destroy()
+        } catch (_: Throwable) {
+        }
+    }
+
+    fun createRecognizer(): SpeechRecognizer? {
+        releaseRecognizer()
+        if (!speechAvailable) return null
+        return SpeechRecognizer.createSpeechRecognizer(context).also { recognizer = it }
     }
 
     fun setListening(active: Boolean) {
@@ -75,9 +96,10 @@ fun VoiceCaptureSheet(
     }
 
     fun startListening() {
-        val sr = recognizer
+        val sr = createRecognizer()
         if (sr == null) {
             status = "Speech recognition is not available on this device."
+            setListening(false)
             return
         }
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -101,6 +123,7 @@ fun VoiceCaptureSheet(
             }
             override fun onError(error: Int) {
                 setListening(false)
+                releaseRecognizer()
                 status = when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH -> "Didn't catch that — tap the mic to try again."
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected — tap the mic to try again."
@@ -110,6 +133,7 @@ fun VoiceCaptureSheet(
             }
             override fun onResults(results: Bundle?) {
                 setListening(false)
+                releaseRecognizer()
                 val text = results
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull()
@@ -130,12 +154,26 @@ fun VoiceCaptureSheet(
             }
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
-        sr.startListening(intent)
+        try {
+            sr.startListening(intent)
+        } catch (_: Throwable) {
+            setListening(false)
+            releaseRecognizer()
+            status = "Could not start listening — tap the mic to try again."
+        }
     }
 
     fun stopListening() {
         setListening(false)
-        recognizer?.stopListening()
+        try {
+            recognizer?.stopListening()
+        } catch (_: Throwable) {
+        }
+        try {
+            recognizer?.cancel()
+        } catch (_: Throwable) {
+        }
+        releaseRecognizer()
         if (transcript.isBlank() && partial.isBlank()) {
             status = "Stopped."
         }
@@ -168,26 +206,10 @@ fun VoiceCaptureSheet(
     }
 
     LaunchedEffect(stopSignal) {
-        if (stopSignal > 0 && listening) stopListening()
+        if (stopSignal > 0) stopListening()
     }
 
-    fun releaseRecognizer() {
-        val sr = recognizer ?: return
-        try {
-            sr.stopListening()
-        } catch (_: Throwable) {
-        }
-        try {
-            sr.cancel()
-        } catch (_: Throwable) {
-        }
-        try {
-            sr.destroy()
-        } catch (_: Throwable) {
-        }
-    }
-
-    DisposableEffect(recognizer) {
+    DisposableEffect(Unit) {
         onDispose {
             releaseRecognizer()
             onListeningChanged(false)
@@ -203,7 +225,6 @@ fun VoiceCaptureSheet(
             Text(
                 "Voice capture",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
                 color = colors.onBackground,
             )
             if (listening) {
@@ -253,7 +274,6 @@ fun VoiceCaptureSheet(
                         "Detected: ${parsed.type.name.lowercase().replaceFirstChar { it.titlecase() }}",
                         color = colors.primary,
                         style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
                     )
                     if (parsed.title.isNotBlank()) {
                         Text(parsed.title, color = colors.onBackground, style = MaterialTheme.typography.bodyMedium)
@@ -281,7 +301,34 @@ fun VoiceCaptureSheet(
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
+        Surface(
+            onClick = {
+                if (listening) {
+                    stopListening()
+                } else {
+                    requestAndStart()
+                }
+            },
+            shape = RoundedCornerShape(12.dp),
+            color = colors.surfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                Modifier.padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.Mic, contentDescription = null, tint = colors.primary, modifier = Modifier.size(18.dp))
+                Text(
+                    if (listening) "  Stop listening" else "  Tap to speak again",
+                    color = colors.onBackground,
+                    style = MaterialTheme.typography.titleSmall,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(
                 onClick = {
@@ -290,7 +337,7 @@ fun VoiceCaptureSheet(
                 },
                 modifier = Modifier.weight(1f),
             ) {
-                Text("Cancel", color = colors.onSurfaceVariant)
+                Text("Cancel", color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
             }
             Surface(
                 onClick = {
@@ -312,7 +359,7 @@ fun VoiceCaptureSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Outlined.Sync, contentDescription = null, tint = colors.onPrimary, modifier = Modifier.size(18.dp))
-                    Text("  Use", color = colors.onPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("  Use", color = colors.onPrimary, style = MaterialTheme.typography.titleSmall)
                 }
             }
         }

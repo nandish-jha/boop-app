@@ -3,6 +3,33 @@
     <style name="Theme.Boop" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowBackground">#141413</item>
+        <item name="android:fontFamily">@font/boop_sans</item>
+        <item name="fontFamily">@font/boop_sans</item>
+        <item name="android:textViewStyle">@style/Boop.Widget.TextView</item>
+        <item name="android:editTextStyle">@style/Boop.Widget.EditText</item>
+        <item name="android:buttonStyle">@style/Boop.Widget.Button</item>
+        <item name="materialAlertDialogTheme">@style/Theme.Boop.Dialog</item>
+        <item name="alertDialogTheme">@style/Theme.Boop.Dialog</item>
+    </style>
+
+    <style name="Boop.Widget.TextView" parent="android:Widget.TextView">
+        <item name="android:fontFamily">@font/boop_sans</item>
+        <item name="fontFamily">@font/boop_sans</item>
+    </style>
+
+    <style name="Boop.Widget.EditText" parent="android:Widget.EditText">
+        <item name="android:fontFamily">@font/boop_sans</item>
+        <item name="fontFamily">@font/boop_sans</item>
+    </style>
+
+    <style name="Boop.Widget.Button" parent="android:Widget.Button">
+        <item name="android:fontFamily">@font/boop_sans</item>
+        <item name="fontFamily">@font/boop_sans</item>
+    </style>
+
+    <style name="Theme.Boop.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="android:fontFamily">@font/boop_sans</item>
+        <item name="fontFamily">@font/boop_sans</item>
     </style>
 </resources>
