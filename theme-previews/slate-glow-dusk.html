@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BOOP — Slate glow dusk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:ital,wght@0,500;1,500&display=swap" rel="stylesheet" />
+  <style>
+/* BOOP theme preview — shared layout (no color-mix variable hacks) */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background: #0c0b10;
+  color: #e8e6e1;
+  line-height: 1.45;
+}
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.back {
+  display: inline-block;
+  color: #9a97a8;
+  text-decoration: none;
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+}
+.back:hover { color: #f2f0eb; }
+
+.page-header { margin-bottom: 24px; }
+.page-header h1 {
+  font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-size: 2rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.page-header p { color: #9a97a8; font-size: 0.92rem; max-width: 52ch; }
+
+.tweaks {
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.tweaks h3 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6e6b78;
+  margin-bottom: 8px;
+}
+.tweaks ul { list-style: none; display: grid; gap: 6px; }
+.tweaks li {
+  font-size: 0.84rem;
+  color: #b0aea5;
+  padding-left: 14px;
+  position: relative;
+}
+.tweaks li::before {
+  content: "·";
+  position: absolute;
+  left: 0;
+  color: #6e6b78;
+}
+
+.phones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.phone-wrap { display: flex; flex-direction: column; gap: 10px; }
+.mode-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #6e6b78;
+  padding-left: 4px;
+}
+
+.phone {
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 28px;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 18px 14px 16px;
+  min-height: 540px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+  position: relative;
+  /* fallbacks when a page omits glow tokens */
+  --quote-fill: var(--surface-variant);
+  --quote-border: rgba(255,255,255,0.2);
+  --quote-shadow: 0 2px 10px rgba(0,0,0,0.12);
+  --card-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  --card-border: rgba(255,255,255,0.1);
+  --fab-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  --fab-border: transparent;
+  --pill-bg: rgba(255,255,255,0.08);
+  --pill-border: rgba(255,255,255,0.15);
+  --ring: var(--accent);
+  --ring-shadow: none;
+  --check-border: rgba(255,255,255,0.25);
+  --accent-on: #fff;
+}
+
+.mock-meta {
+  font-size: 0.65rem;
+  color: var(--accent);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  padding: 4px 8px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 1.35;
+}
+.mock-surface-tag {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border: 1px solid var(--card-border);
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.mock-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.mock-greeting h2 {
+  font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-size: 1.65rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.mock-greeting p { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+.mock-icons { display: flex; gap: 8px; }
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+}
+.icon-btn.filled {
+  background: var(--accent);
+  color: var(--accent-on);
+  box-shadow: var(--fab-shadow);
+  border: 1px solid var(--fab-border);
+}
+.icon-btn.ghost {
+  background: var(--surface-elevated);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.quote {
+  background: var(--quote-fill);
+  border: 1.5px solid var(--quote-border);
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--quote-shadow);
+}
+.quote blockquote {
+  font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.quote cite {
+  display: block;
+  text-align: right;
+  font-style: normal;
+  font-size: 0.75rem;
+  margin-top: 8px;
+  color: var(--text);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.stat {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--card-border);
+}
+.stat .label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.stat .value { font-family: "Source Serif 4", Georgia, serif; font-size: 1.35rem; margin: 2px 0; }
+.stat .cap { font-size: 0.62rem; color: var(--muted); }
+
+.section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 8px;
+}
+.section .bar {
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.section h3 { font-size: 0.88rem; font-weight: 600; }
+
+.task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 12px 12px 12px 14px;
+  margin-bottom: 8px;
+  box-shadow: var(--card-shadow);
+}
+.task-body { flex: 1; min-width: 0; }
+.task-body strong { font-size: 0.82rem; font-weight: 600; display: block; }
+.task-body span { font-size: 0.72rem; color: var(--muted); }
+.check {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--check-border);
+  flex-shrink: 0;
+}
+
+.accent-btn {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  padding: 7px 12px;
+  border-radius: 12px;
+  margin-top: 4px;
+}
+
+.nav-preview {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--card-border);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+.nav-item { font-size: 0.62rem; color: var(--muted); text-align: center; }
+.nav-item.active { color: var(--accent); font-weight: 600; }
+.nav-fab {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-on);
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+  margin-top: -20px;
+  box-shadow: var(--fab-shadow);
+  border: 1px solid var(--fab-border);
+}
+.ring-demo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.ring {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--ring);
+  box-shadow: var(--ring-shadow);
+}
+
+@media (max-width: 640px) {
+  .phones { grid-template-columns: 1fr; }
+}
+
+    .theme-dark {
+      --bg: #0e0d0c;
+      --surface: #262320;
+      --surface-variant: #1c1a18;
+      --surface-elevated: #32302c;
+      --text: #f0ebe4;
+      --muted: #948c84;
+      --accent: #8ea4c4;
+      --accent-on: #0e0d0c;
+      --quote-fill: #221c1e;
+      --quote-border: #7a90b0;
+      --ring: #b098a8;
+      --card-border: rgba(148, 140, 132, 0.14);
+      --quote-shadow: 0 4px 18px rgba(192, 144, 136, 0.18);
+      --card-shadow: 0 3px 14px rgba(0, 0, 0, 0.16);
+      --fab-shadow: 0 4px 20px rgba(155, 176, 212, 0.32);
+      --fab-border: rgba(192, 144, 136, 0.32);
+      --pill-bg: rgba(192, 144, 136, 0.12);
+      --pill-border: rgba(142, 164, 200, 0.45);
+      --ring-shadow: 0 0 12px rgba(192, 144, 136, 0.22);
+      --check-border: rgba(168, 160, 152, 0.45);
+    }
+    .theme-light {
+      --bg: #f3ede5;
+      --surface: #faf6ef;
+      --surface-variant: #e6ddd2;
+      --surface-elevated: #f0e9e0;
+      --text: #181412;
+      --muted: #827870;
+      --accent: #506888;
+      --accent-on: #ffffff;
+      --quote-fill: #efe4e0;
+      --quote-border: #6880a0;
+      --ring: #b8a0b0;
+      --card-border: rgba(130, 120, 112, 0.12);
+      --quote-shadow: 0 4px 18px rgba(184, 120, 112, 0.16);
+      --card-shadow: 0 3px 14px rgba(0, 0, 0, 0.08);
+      --fab-shadow: 0 4px 20px rgba(80, 104, 136, 0.32);
+      --fab-border: rgba(184, 120, 112, 0.3);
+      --pill-bg: rgba(184, 120, 112, 0.12);
+      --pill-border: rgba(104, 128, 160, 0.35);
+      --ring-shadow: 0 0 12px rgba(184, 120, 112, 0.2);
+      --check-border: rgba(130, 120, 112, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <a class="back" href="index.html">← All themes</a>
+    <header class="page-header">
+      <h1>Slate glow — dusk</h1>
+      <p>Darker moody parchment with muted rose glow — evening feel.</p>
+    </header>
+    <section class="tweaks"><h3>Details</h3><ul><li>Darker bg #0E0D0C</li><li>Muted glow #C09088</li><li>Softer contrast</li></ul></section>
+    <div class="phones">
+      <div class="phone-wrap" data-tweak="Evening mood" data-surface="Dusk parchment">
+        <span class="mode-label">Dark</span>
+        <div class="phone theme-dark"></div>
+      </div>
+      <div class="phone-wrap" data-tweak="Evening mood" data-surface="Dusk cream">
+        <span class="mode-label">Light</span>
+        <div class="phone theme-light"></div>
+      </div>
+    </div>
+  </div>
+    <script>
+function renderMock(phone, meta, surface) {
+  phone.innerHTML =
+    (meta ? '<div class="mock-meta">' + meta + '</div>' : '') +
+    (surface ? '<div class="mock-surface-tag">' + surface + '</div>' : '') +
+    '<div class="mock-top">' +
+      '<div class="mock-greeting"><h2>Good evening</h2><p>Wednesday, June 24</p></div>' +
+      '<div class="mock-icons">' +
+        '<div class="icon-btn filled">⌕</div>' +
+        '<div class="icon-btn ghost">⚙</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="quote">' +
+      '<blockquote>"Hope is a discipline. Keep showing up."</blockquote>' +
+      '<cite>— Unknown</cite>' +
+    '</div>' +
+    '<div class="stats">' +
+      '<div class="stat"><div class="label">Today</div><div class="value">3</div><div class="cap">tasks due</div></div>' +
+      '<div class="stat"><div class="label">Habits</div><div class="value">2/4</div><div class="cap">checked in</div></div>' +
+      '<div class="stat"><div class="label">Balance</div><div class="value">1,240</div><div class="cap">CAD</div></div>' +
+    '</div>' +
+    '<div class="section"><span class="bar"></span><h3>Up next</h3></div>' +
+    '<div class="task"><div class="task-body"><strong>Review quarterly notes</strong><span>Today · 6:00 PM</span></div><div class="check"></div></div>' +
+    '<div class="task"><div class="task-body"><strong>Call dentist</strong><span>Tomorrow · 9:30 AM</span></div><div class="check"></div></div>' +
+    '<span class="accent-btn">Week view</span>' +
+    '<div class="ring-demo"><div class="ring"></div><span>App icon / launch ring</span></div>' +
+    '<div class="nav-preview">' +
+      '<div class="nav-item active">Home</div>' +
+      '<div class="nav-item">Tasks</div>' +
+      '<div class="nav-fab">+</div>' +
+      '<div class="nav-item">Calendar</div>' +
+      '<div class="nav-item">Accounts</div>' +
+    '</div>';
+}
+
+function initPreviews() {
+  document.querySelectorAll('.phone').forEach(function (phone) {
+    var wrap = phone.closest('.phone-wrap');
+    var meta = wrap && wrap.getAttribute('data-tweak') ? wrap.getAttribute('data-tweak') : '';
+    var surface = wrap && wrap.getAttribute('data-surface') ? wrap.getAttribute('data-surface') : '';
+    renderMock(phone, meta, surface);
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initPreviews);
+} else {
+  initPreviews();
+}
+
+  </script>
+</body>
+</html>

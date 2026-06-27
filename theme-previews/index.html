@@ -1,0 +1,1588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BOOP — Theme previews</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:ital,wght@0,500;1,500&display=swap" rel="stylesheet" />
+  <style>
+/* BOOP theme preview — shared layout (no color-mix variable hacks) */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background: #0c0b10;
+  color: #e8e6e1;
+  line-height: 1.45;
+}
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.back {
+  display: inline-block;
+  color: #9a97a8;
+  text-decoration: none;
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+}
+.back:hover { color: #f2f0eb; }
+
+.page-header { margin-bottom: 24px; }
+.page-header h1 {
+  font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-size: 2rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.page-header p { color: #9a97a8; font-size: 0.92rem; max-width: 52ch; }
+
+.tweaks {
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.tweaks h3 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6e6b78;
+  margin-bottom: 8px;
+}
+.tweaks ul { list-style: none; display: grid; gap: 6px; }
+.tweaks li {
+  font-size: 0.84rem;
+  color: #b0aea5;
+  padding-left: 14px;
+  position: relative;
+}
+.tweaks li::before {
+  content: "·";
+  position: absolute;
+  left: 0;
+  color: #6e6b78;
+}
+
+.phones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.phone-wrap { display: flex; flex-direction: column; gap: 10px; }
+.mode-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #6e6b78;
+  padding-left: 4px;
+}
+
+.phone {
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 28px;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 18px 14px 16px;
+  min-height: 540px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+  position: relative;
+  /* fallbacks when a page omits glow tokens */
+  --quote-fill: var(--surface-variant);
+  --quote-border: rgba(255,255,255,0.2);
+  --quote-shadow: 0 2px 10px rgba(0,0,0,0.12);
+  --card-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  --card-border: rgba(255,255,255,0.1);
+  --fab-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  --fab-border: transparent;
+  --pill-bg: rgba(255,255,255,0.08);
+  --pill-border: rgba(255,255,255,0.15);
+  --ring: var(--accent);
+  --ring-shadow: none;
+  --check-border: rgba(255,255,255,0.25);
+  --accent-on: #fff;
+}
+
+.mock-meta {
+  font-size: 0.65rem;
+  color: var(--accent);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  padding: 4px 8px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 1.35;
+}
+.mock-surface-tag {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border: 1px solid var(--card-border);
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.mock-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.mock-greeting h2 {
+  font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-size: 1.65rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.mock-greeting p { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+.mock-icons { display: flex; gap: 8px; }
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+}
+.icon-btn.filled {
+  background: var(--accent);
+  color: var(--accent-on);
+  box-shadow: var(--fab-shadow);
+  border: 1px solid var(--fab-border);
+}
+.icon-btn.ghost {
+  background: var(--surface-elevated);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.quote {
+  background: var(--quote-fill);
+  border: 1.5px solid var(--quote-border);
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--quote-shadow);
+}
+.quote blockquote {
+  font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.quote cite {
+  display: block;
+  text-align: right;
+  font-style: normal;
+  font-size: 0.75rem;
+  margin-top: 8px;
+  color: var(--text);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.stat {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--card-border);
+}
+.stat .label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.stat .value { font-family: "Source Serif 4", Georgia, serif; font-size: 1.35rem; margin: 2px 0; }
+.stat .cap { font-size: 0.62rem; color: var(--muted); }
+
+.section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 8px;
+}
+.section .bar {
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.section h3 { font-size: 0.88rem; font-weight: 600; }
+
+.task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 12px 12px 12px 14px;
+  margin-bottom: 8px;
+  box-shadow: var(--card-shadow);
+}
+.task-body { flex: 1; min-width: 0; }
+.task-body strong { font-size: 0.82rem; font-weight: 600; display: block; }
+.task-body span { font-size: 0.72rem; color: var(--muted); }
+.check {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--check-border);
+  flex-shrink: 0;
+}
+
+.accent-btn {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  padding: 7px 12px;
+  border-radius: 12px;
+  margin-top: 4px;
+}
+
+.nav-preview {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--card-border);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+.nav-item { font-size: 0.62rem; color: var(--muted); text-align: center; }
+.nav-item.active { color: var(--accent); font-weight: 600; }
+.nav-fab {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-on);
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+  margin-top: -20px;
+  box-shadow: var(--fab-shadow);
+  border: 1px solid var(--fab-border);
+}
+.ring-demo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.ring {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--ring);
+  box-shadow: var(--ring-shadow);
+}
+
+@media (max-width: 640px) {
+  .phones { grid-template-columns: 1fr; }
+}
+
+
+.hub { max-width: 380px; }
+.hub h1 {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.85rem; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 8px;
+}
+.hub .sub { color: #9a97a8; margin-bottom: 16px; font-size: 0.9rem; line-height: 1.45; }
+.grid { display: grid; gap: 8px; }
+.card-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 12px 14px; background: #1a1816; border: 1px solid rgba(250,246,240,0.1);
+  border-radius: 14px; color: inherit; cursor: pointer; text-align: left;
+  font: inherit; transition: border-color 0.15s, transform 0.15s;
+}
+.card-btn:hover { border-color: rgba(250,246,240,0.22); transform: translateY(-1px); }
+.card-btn.active { border-color: rgba(155,176,212,0.45); background: #201e1c; }
+.card-btn.featured { margin-bottom: 12px; border-color: rgba(155,176,212,0.28); }
+.swatch {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.12); flex-shrink: 0;
+}
+.card-btn h2 { font-size: 0.9rem; font-weight: 600; margin-bottom: 2px; }
+.card-btn p { font-size: 0.76rem; color: #9a97a8; line-height: 1.35; }
+.tag {
+  margin-left: auto; font-size: 0.65rem; color: #9a97a8;
+  border: 1px solid rgba(255,255,255,0.1); padding: 3px 7px; border-radius: 999px;
+}
+.family { margin-top: 18px; }
+.family h2 {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em;
+  color: #948c84; margin-bottom: 8px;
+}
+.app {
+  display: grid; grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 28px; max-width: 1320px; margin: 0 auto; padding: 20px 16px 48px;
+  align-items: start;
+}
+.viewer { min-width: 0; }
+.viewer .page-header h1 { font-size: 1.65rem; }
+.viewer-empty {
+  padding: 48px 24px; text-align: center; color: #6e6b78;
+  border: 1px dashed rgba(255,255,255,0.12); border-radius: 20px; margin-top: 24px;
+}
+.note {
+  margin-top: 18px; padding: 12px 14px; border-radius: 12px;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+  font-size: 0.8rem; color: #9a97a8; line-height: 1.45;
+}
+@media (max-width: 960px) {
+  .app { grid-template-columns: 1fr; }
+}
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="hub">
+      <h1>BOOP themes</h1>
+      <p class="sub">Click any theme to preview dark &amp; light side by side. Everything runs in this one file — no extra pages needed.</p>
+      <button type="button" class="card-btn featured" data-id="slate-glow"><span class="swatch" style="background:linear-gradient(135deg,#9bb0d4,#d4a8a0)"></span><div><h2>Slate + rose glow</h2><p>Baseline — currently in the app</p></div><span class="tag">v5.1.9</span></button><section class="family"><h2>Slate + glow refinements</h2><div class="grid"><button type="button" class="card-btn" data-id="slate-glow-soft"><span class="swatch" style="background:linear-gradient(135deg,#9bb0d4 60%,#d4a8a0 40%)"></span><div><h2>Soft</h2><p>Less rose glow — slate dominates</p></div></button><button type="button" class="card-btn" data-id="slate-glow-strong"><span class="swatch" style="background:linear-gradient(135deg,#9bb0d4 40%,#e0b0a8 60%)"></span><div><h2>Strong</h2><p>Maximum rose atmosphere</p></div></button><button type="button" class="card-btn" data-id="slate-glow-bright"><span class="swatch" style="background:#a8c4e8"></span><div><h2>Bright pop</h2><p>Electric lighter slate accent</p></div></button><button type="button" class="card-btn" data-id="slate-glow-deep"><span class="swatch" style="background:#6a84a8"></span><div><h2>Deep</h2><p>Richer, grounded slate</p></div></button><button type="button" class="card-btn" data-id="slate-glow-dusk"><span class="swatch" style="background:#1a1816;border:2px solid #8ea4c4"></span><div><h2>Dusk</h2><p>Darker moody parchment</p></div></button><button type="button" class="card-btn" data-id="slate-glow-pearl"><span class="swatch" style="background:#fffcf7;border:2px solid #547090"></span><div><h2>Pearl</h2><p>Brighter light mode</p></div></button><button type="button" class="card-btn" data-id="slate-glow-moonlit"><span class="swatch" style="background:linear-gradient(135deg,#94a8c8,#b8a8c8)"></span><div><h2>Moonlit</h2><p>Cool surfaces · lavender glow</p></div></button><button type="button" class="card-btn" data-id="slate-glow-ember"><span class="swatch" style="background:linear-gradient(135deg,#9bb0d4,#d4b090)"></span><div><h2>Ember</h2><p>Slate · gold-rose glow</p></div></button></div></section><section class="family"><h2>Crossovers (accent ↔ glow flip)</h2><div class="grid"><button type="button" class="card-btn" data-id="rose-glow-primary"><span class="swatch" style="background:linear-gradient(135deg,#d4a8a0,#9bb0d4)"></span><div><h2>Rose primary</h2><p>Rose accent · slate glow</p></div></button><button type="button" class="card-btn" data-id="terracotta-glow"><span class="swatch" style="background:linear-gradient(135deg,#d97757,#d4a8a0)"></span><div><h2>Terracotta + glow</h2><p>Orange accent · rose halo</p></div></button><button type="button" class="card-btn" data-id="rose-terracotta-glow"><span class="swatch" style="background:linear-gradient(135deg,#c98b84,#d97757)"></span><div><h2>Rose + terracotta glow</h2><p>Warmest — all three families</p></div></button><button type="button" class="card-btn" data-id="rose-slate-even"><span class="swatch" style="background:#b8a0b0"></span><div><h2>Rose + slate even</h2><p>50/50 mauve blend accent</p></div></button></div></section><section class="family"><h2>Original families (base variants)</h2><div class="grid"><button type="button" class="card-btn" data-id="terracotta"><span class="swatch" style="background:#d97757"></span><div><h2>Terracotta classic</h2><p>Warm orange · parchment</p></div></button><button type="button" class="card-btn" data-id="terracotta-blush"><span class="swatch" style="background:#e09578"></span><div><h2>Terracotta blush</h2><p>Soft peach accent</p></div></button><button type="button" class="card-btn" data-id="rose"><span class="swatch" style="background:#c98b84"></span><div><h2>Rose classic</h2><p>Dusty coral blush</p></div></button><button type="button" class="card-btn" data-id="rose-dust"><span class="swatch" style="background:#b08e88"></span><div><h2>Rose mauve dust</h2><p>Most muted rose</p></div></button><button type="button" class="card-btn" data-id="slate-parchment"><span class="swatch" style="background:#8a9aad"></span><div><h2>Slate on parchment</h2><p>No glow — plain slate</p></div></button><button type="button" class="card-btn" data-id="slate-fog"><span class="swatch" style="background:#a8b6c8"></span><div><h2>Slate fog</h2><p>Soft low-contrast slate</p></div></button></div></section>
+      <p class="note">Tip: bookmark a theme with the URL hash, e.g. <strong>#rose-glow-primary</strong></p>
+    </aside>
+    <main class="viewer">
+      <div id="viewer-empty" class="viewer-empty">Select a theme from the list</div>
+      <div id="viewer-content" style="display:none">
+        <header class="page-header">
+          <h1 id="theme-heading"></h1>
+          <p id="theme-desc"></p>
+        </header>
+        <section class="tweaks" id="theme-tweaks"><h3>Details</h3><ul id="theme-bullets"></ul></section>
+        <div class="phones">
+          <div class="phone-wrap" id="dark-wrap">
+            <span class="mode-label">Dark</span>
+            <div class="phone theme-dark" id="phone-dark"></div>
+          </div>
+          <div class="phone-wrap" id="light-wrap">
+            <span class="mode-label">Light</span>
+            <div class="phone theme-light" id="phone-light"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script>
+var THEMES_DATA = {
+  "slate-glow": {
+    "id": "slate-glow",
+    "heading": "Slate + rose glow",
+    "desc": "Baseline in app v5.1.9 \u2014 popped slate accent, rose faded glow, warm parchment.",
+    "bullets": [
+      "Accent: slate \u00b7 Glow: rose",
+      "Quote tint + card depth",
+      "Serif Medium titles"
+    ],
+    "dark": {
+      "bg": "#141210",
+      "surface": "#2e2b28",
+      "surface-variant": "#242120",
+      "surface-elevated": "#3a3632",
+      "text": "#faf6f0",
+      "muted": "#a8a098",
+      "accent-on": "#141210",
+      "card-border": "rgba(168, 160, 152, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(212, 168, 160, 0.22)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.16)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.4)",
+      "fab-border": "rgba(212, 168, 160, 0.38)",
+      "pill-bg": "rgba(212, 168, 160, 0.16)",
+      "pill-border": "rgba(142, 164, 200, 0.45)",
+      "ring-shadow": "0 0 12px rgba(212, 168, 160, 0.3)",
+      "check-border": "rgba(168, 160, 152, 0.45)",
+      "accent": "#9bb0d4",
+      "quote-fill": "#2a2426",
+      "quote-border": "#8ea4c8",
+      "ring": "#c4a8c0"
+    },
+    "light": {
+      "bg": "#fbf7f1",
+      "surface": "#fffdf9",
+      "surface-variant": "#ede6dc",
+      "surface-elevated": "#f5efe6",
+      "text": "#1a1612",
+      "muted": "#8a8278",
+      "accent-on": "#ffffff",
+      "card-border": "rgba(138, 130, 120, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(200, 136, 128, 0.18)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 20px rgba(90, 116, 148, 0.35)",
+      "fab-border": "rgba(200, 136, 128, 0.32)",
+      "pill-bg": "rgba(200, 136, 128, 0.14)",
+      "pill-border": "rgba(122, 144, 176, 0.4)",
+      "ring-shadow": "0 0 12px rgba(200, 136, 128, 0.25)",
+      "check-border": "rgba(138, 130, 120, 0.4)",
+      "accent": "#5a7494",
+      "quote-fill": "#f5ebe8",
+      "quote-border": "#7a90b0",
+      "ring": "#c4a8c0"
+    },
+    "dark_tweak": "Slate pop \u00b7 rose glow",
+    "light_tweak": "Deeper slate \u00b7 cream rose",
+    "dark_surface": "Warm parchment dark",
+    "light_surface": "Warm cream light",
+    "card_title": "Slate + rose glow",
+    "card_desc": "Baseline \u2014 currently in the app",
+    "tag": "v5.1.9",
+    "swatch": "background:linear-gradient(135deg,#9bb0d4,#d4a8a0)"
+  },
+  "slate-glow-soft": {
+    "id": "slate-glow-soft",
+    "heading": "Slate glow \u2014 soft",
+    "desc": "Same palette as v5.1.9 but rose glow dialed back. Slate reads more dominant; glow is a hint.",
+    "bullets": [
+      "Glow opacity ~12% (was ~22%)",
+      "Quote fill slightly less rose-tinted",
+      "FAB glow border thinner"
+    ],
+    "dark": {
+      "bg": "#141210",
+      "surface": "#2e2b28",
+      "surface-variant": "#242120",
+      "surface-elevated": "#3a3632",
+      "text": "#faf6f0",
+      "muted": "#a8a098",
+      "accent-on": "#141210",
+      "card-border": "rgba(168, 160, 152, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(212, 168, 160, 0.12)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.16)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.28)",
+      "fab-border": "rgba(212, 168, 160, 0.38)",
+      "pill-bg": "rgba(212, 168, 160, 0.16)",
+      "pill-border": "rgba(142, 164, 200, 0.45)",
+      "ring-shadow": "0 0 12px rgba(212, 168, 160, 0.18)",
+      "check-border": "rgba(168, 160, 152, 0.45)",
+      "accent": "#9bb0d4",
+      "quote-fill": "#282422",
+      "quote-border": "#8ea4c8",
+      "ring": "#b8a8b8"
+    },
+    "light": {
+      "bg": "#fbf7f1",
+      "surface": "#fffdf9",
+      "surface-variant": "#ede6dc",
+      "surface-elevated": "#f5efe6",
+      "text": "#1a1612",
+      "muted": "#8a8278",
+      "accent-on": "#ffffff",
+      "card-border": "rgba(138, 130, 120, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(200, 136, 128, 0.1)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 20px rgba(90, 116, 148, 0.28)",
+      "fab-border": "rgba(200, 136, 128, 0.22)",
+      "pill-bg": "rgba(200, 136, 128, 0.1)",
+      "pill-border": "rgba(122, 144, 176, 0.4)",
+      "ring-shadow": "0 0 12px rgba(200, 136, 128, 0.18)",
+      "check-border": "rgba(138, 130, 120, 0.4)",
+      "accent": "#5a7494",
+      "quote-fill": "#f7f0ee",
+      "quote-border": "#7a90b0",
+      "ring": "#c4a8c0"
+    },
+    "dark_tweak": "Whisper rose glow",
+    "light_tweak": "Whisper rose glow",
+    "dark_surface": "Parchment dark",
+    "light_surface": "Cream light",
+    "card_title": "Soft",
+    "card_desc": "Less rose glow \u2014 slate dominates",
+    "tag": "",
+    "swatch": "background:linear-gradient(135deg,#9bb0d4 60%,#d4a8a0 40%)"
+  },
+  "slate-glow-strong": {
+    "id": "slate-glow-strong",
+    "heading": "Slate glow \u2014 strong",
+    "desc": "Maximum rose atmosphere \u2014 quote halo, FAB border, and nav pill all glow harder.",
+    "bullets": [
+      "Glow ~38%",
+      "Rose-tinted quote fill",
+      "Thicker FAB glow ring"
+    ],
+    "dark": {
+      "bg": "#141210",
+      "surface": "#2e2b28",
+      "surface-variant": "#242120",
+      "surface-elevated": "#3a3632",
+      "text": "#faf6f0",
+      "muted": "#a8a098",
+      "accent-on": "#141210",
+      "card-border": "rgba(168, 160, 152, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(212, 168, 160, 0.38)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.22)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.55)",
+      "fab-border": "rgba(212, 168, 160, 0.38)",
+      "pill-bg": "rgba(212, 168, 160, 0.16)",
+      "pill-border": "rgba(142, 164, 200, 0.45)",
+      "ring-shadow": "0 0 12px rgba(212, 168, 160, 0.45)",
+      "check-border": "rgba(168, 160, 152, 0.45)",
+      "accent": "#9bb0d4",
+      "quote-fill": "#322628",
+      "quote-border": "#a0b8dc",
+      "ring": "#d4b0b8"
+    },
+    "light": {
+      "bg": "#fbf7f1",
+      "surface": "#fffdf9",
+      "surface-variant": "#ede6dc",
+      "surface-elevated": "#f5efe6",
+      "text": "#1a1612",
+      "muted": "#8a8278",
+      "accent-on": "#ffffff",
+      "card-border": "rgba(138, 130, 120, 0.12)",
+      "quote-shadow": "0 4px 26px rgba(216, 152, 144, 0.32)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 22px rgba(90, 116, 148, 0.45)",
+      "fab-border": "rgba(216, 152, 144, 0.55)",
+      "pill-bg": "rgba(216, 152, 144, 0.24)",
+      "pill-border": "rgba(122, 144, 176, 0.4)",
+      "ring-shadow": "0 0 14px rgba(216, 152, 144, 0.4)",
+      "check-border": "rgba(138, 130, 120, 0.4)",
+      "accent": "#5a7494",
+      "quote-fill": "#f8e4e0",
+      "quote-border": "#8aa0c0",
+      "ring": "#d4a8b8"
+    },
+    "dark_tweak": "Heavy rose halo",
+    "light_tweak": "Heavy rose halo",
+    "dark_surface": "Parchment dark",
+    "light_surface": "Cream light",
+    "card_title": "Strong",
+    "card_desc": "Maximum rose atmosphere",
+    "tag": "",
+    "swatch": "background:linear-gradient(135deg,#9bb0d4 40%,#e0b0a8 60%)"
+  },
+  "slate-glow-bright": {
+    "id": "slate-glow-bright",
+    "heading": "Slate glow \u2014 bright pop",
+    "desc": "Electric lighter slate accent \u2014 more sky-blue pop on the same warm parchment.",
+    "bullets": [
+      "Accent #A8C4E8 dark / #6480A8 light",
+      "Brighter quote stroke",
+      "Same rose glow"
+    ],
+    "dark": {
+      "bg": "#141210",
+      "surface": "#2e2b28",
+      "surface-variant": "#242120",
+      "surface-elevated": "#3a3632",
+      "text": "#faf6f0",
+      "muted": "#a8a098",
+      "accent-on": "#101010",
+      "card-border": "rgba(168, 160, 152, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(212, 168, 160, 0.22)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.16)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.4)",
+      "fab-border": "rgba(212, 168, 160, 0.38)",
+      "pill-bg": "rgba(212, 168, 160, 0.16)",
+      "pill-border": "rgba(142, 164, 200, 0.45)",
+      "ring-shadow": "0 0 12px rgba(212, 168, 160, 0.3)",
+      "check-border": "rgba(168, 160, 152, 0.45)",
+      "accent": "#a8c4e8",
+      "quote-fill": "#2a2628",
+      "quote-border": "#a8c4e8",
+      "ring": "#c8b0d0"
+    },
+    "light": {
+      "bg": "#fbf7f1",
+      "surface": "#fffdf9",
+      "surface-variant": "#ede6dc",
+      "surface-elevated": "#f5efe6",
+      "text": "#1a1612",
+      "muted": "#8a8278",
+      "accent-on": "#ffffff",
+      "card-border": "rgba(138, 130, 120, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(200, 136, 128, 0.18)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 20px rgba(90, 116, 148, 0.35)",
+      "fab-border": "rgba(200, 136, 128, 0.32)",
+      "pill-bg": "rgba(200, 136, 128, 0.14)",
+      "pill-border": "rgba(122, 144, 176, 0.4)",
+      "ring-shadow": "0 0 12px rgba(200, 136, 128, 0.25)",
+      "check-border": "rgba(138, 130, 120, 0.4)",
+      "accent": "#6480a8",
+      "quote-fill": "#f5ebe8",
+      "quote-border": "#6480a8",
+      "ring": "#a8b8d8"
+    },
+    "dark_tweak": "Electric slate",
+    "light_tweak": "Electric slate",
+    "dark_surface": "Parchment dark",
+    "light_surface": "Cream light",
+    "card_title": "Bright pop",
+    "card_desc": "Electric lighter slate accent",
+    "tag": "",
+    "swatch": "background:#a8c4e8"
+  },
+  "slate-glow-deep": {
+    "id": "slate-glow-deep",
+    "heading": "Slate glow \u2014 deep",
+    "desc": "Richer, grounded slate \u2014 more serious and less pastel.",
+    "bullets": [
+      "Accent #6A84A8 dark / #445A78 light",
+      "Deeper quote stroke",
+      "Muted ring"
+    ],
+    "dark": {
+      "bg": "#141210",
+      "surface": "#2e2b28",
+      "surface-variant": "#242120",
+      "surface-elevated": "#3a3632",
+      "text": "#faf6f0",
+      "muted": "#a8a098",
+      "accent-on": "#ffffff",
+      "card-border": "rgba(168, 160, 152, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(212, 168, 160, 0.22)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.16)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.4)",
+      "fab-border": "rgba(212, 168, 160, 0.38)",
+      "pill-bg": "rgba(212, 168, 160, 0.16)",
+      "pill-border": "rgba(142, 164, 200, 0.45)",
+      "ring-shadow": "0 0 12px rgba(212, 168, 160, 0.3)",
+      "check-border": "rgba(168, 160, 152, 0.45)",
+      "accent": "#6a84a8",
+      "quote-fill": "#2a2426",
+      "quote-border": "#6a84a8",
+      "ring": "#b0a0b0"
+    },
+    "light": {
+      "bg": "#fbf7f1",
+      "surface": "#fffdf9",
+      "surface-variant": "#ede6dc",
+      "surface-elevated": "#f5efe6",
+      "text": "#1a1612",
+      "muted": "#8a8278",
+      "accent-on": "#ffffff",
+      "card-border": "rgba(138, 130, 120, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(200, 136, 128, 0.18)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 20px rgba(90, 116, 148, 0.35)",
+      "fab-border": "rgba(200, 136, 128, 0.32)",
+      "pill-bg": "rgba(200, 136, 128, 0.14)",
+      "pill-border": "rgba(122, 144, 176, 0.4)",
+      "ring-shadow": "0 0 12px rgba(200, 136, 128, 0.25)",
+      "check-border": "rgba(138, 130, 120, 0.4)",
+      "accent": "#445a78",
+      "quote-fill": "#f5ebe8",
+      "quote-border": "#445a78",
+      "ring": "#8898b8"
+    },
+    "dark_tweak": "Grounded slate",
+    "light_tweak": "Grounded slate",
+    "dark_surface": "Parchment dark",
+    "light_surface": "Cream light",
+    "card_title": "Deep",
+    "card_desc": "Richer, grounded slate",
+    "tag": "",
+    "swatch": "background:#6a84a8"
+  },
+  "slate-glow-dusk": {
+    "id": "slate-glow-dusk",
+    "heading": "Slate glow \u2014 dusk",
+    "desc": "Darker moody parchment with muted rose glow \u2014 evening feel.",
+    "bullets": [
+      "Darker bg #0E0D0C",
+      "Muted glow #C09088",
+      "Softer contrast"
+    ],
+    "dark": {
+      "bg": "#0e0d0c",
+      "surface": "#262320",
+      "surface-variant": "#1c1a18",
+      "surface-elevated": "#32302c",
+      "text": "#f0ebe4",
+      "muted": "#948c84",
+      "accent": "#8ea4c4",
+      "accent-on": "#0e0d0c",
+      "quote-fill": "#221c1e",
+      "quote-border": "#7a90b0",
+      "ring": "#b098a8",
+      "card-border": "rgba(148, 140, 132, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(192, 144, 136, 0.18)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.16)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.32)",
+      "fab-border": "rgba(192, 144, 136, 0.32)",
+      "pill-bg": "rgba(192, 144, 136, 0.12)",
+      "pill-border": "rgba(142, 164, 200, 0.45)",
+      "ring-shadow": "0 0 12px rgba(192, 144, 136, 0.22)",
+      "check-border": "rgba(168, 160, 152, 0.45)"
+    },
+    "light": {
+      "bg": "#f3ede5",
+      "surface": "#faf6ef",
+      "surface-variant": "#e6ddd2",
+      "surface-elevated": "#f0e9e0",
+      "text": "#181412",
+      "muted": "#827870",
+      "accent": "#506888",
+      "accent-on": "#ffffff",
+      "quote-fill": "#efe4e0",
+      "quote-border": "#6880a0",
+      "ring": "#b8a0b0",
+      "card-border": "rgba(130, 120, 112, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(184, 120, 112, 0.16)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 20px rgba(80, 104, 136, 0.32)",
+      "fab-border": "rgba(184, 120, 112, 0.3)",
+      "pill-bg": "rgba(184, 120, 112, 0.12)",
+      "pill-border": "rgba(104, 128, 160, 0.35)",
+      "ring-shadow": "0 0 12px rgba(184, 120, 112, 0.2)",
+      "check-border": "rgba(130, 120, 112, 0.4)"
+    },
+    "dark_tweak": "Evening mood",
+    "light_tweak": "Evening mood",
+    "dark_surface": "Dusk parchment",
+    "light_surface": "Dusk cream",
+    "card_title": "Dusk",
+    "card_desc": "Darker moody parchment",
+    "tag": "",
+    "swatch": "background:#1a1816;border:2px solid #8ea4c4"
+  },
+  "slate-glow-pearl": {
+    "id": "slate-glow-pearl",
+    "heading": "Slate glow \u2014 pearl",
+    "desc": "Brighter light mode surfaces with a deeper slate accent for crisp contrast.",
+    "bullets": [
+      "Light bg #FFFCF7",
+      "Accent #547090",
+      "Pearl-white cards"
+    ],
+    "dark": {
+      "bg": "#141210",
+      "surface": "#2e2b28",
+      "surface-variant": "#242120",
+      "surface-elevated": "#3a3632",
+      "text": "#faf6f0",
+      "muted": "#a8a098",
+      "accent-on": "#141210",
+      "card-border": "rgba(168, 160, 152, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(212, 168, 160, 0.22)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.16)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.4)",
+      "fab-border": "rgba(212, 168, 160, 0.38)",
+      "pill-bg": "rgba(212, 168, 160, 0.16)",
+      "pill-border": "rgba(142, 164, 200, 0.45)",
+      "ring-shadow": "0 0 12px rgba(212, 168, 160, 0.3)",
+      "check-border": "rgba(168, 160, 152, 0.45)",
+      "accent": "#9bb0d4",
+      "quote-fill": "#2a2426",
+      "quote-border": "#8ea4c8",
+      "ring": "#c4a8c0"
+    },
+    "light": {
+      "bg": "#fffcf7",
+      "surface": "#ffffff",
+      "surface-variant": "#f2ebe4",
+      "surface-elevated": "#faf6f0",
+      "text": "#161310",
+      "muted": "#908880",
+      "accent": "#547090",
+      "accent-on": "#ffffff",
+      "quote-fill": "#faf0ec",
+      "quote-border": "#6a84a8",
+      "ring": "#b8a8c8",
+      "card-border": "rgba(144, 136, 128, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(208, 160, 152, 0.18)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.07)",
+      "fab-shadow": "0 4px 20px rgba(84, 112, 144, 0.38)",
+      "fab-border": "rgba(208, 160, 152, 0.32)",
+      "pill-bg": "rgba(208, 160, 152, 0.14)",
+      "pill-border": "rgba(106, 132, 168, 0.4)",
+      "ring-shadow": "0 0 12px rgba(208, 160, 152, 0.25)",
+      "check-border": "rgba(144, 136, 128, 0.4)"
+    },
+    "dark_tweak": "Pearl light",
+    "light_tweak": "Pearl light",
+    "dark_surface": "Parchment dark",
+    "light_surface": "Pearl white",
+    "card_title": "Pearl",
+    "card_desc": "Brighter light mode",
+    "tag": "",
+    "swatch": "background:#fffcf7;border:2px solid #547090"
+  },
+  "slate-glow-moonlit": {
+    "id": "slate-glow-moonlit",
+    "heading": "Slate glow \u2014 moonlit",
+    "desc": "Cool blue-grey surfaces with lavender glow \u2014 night-sky mood.",
+    "bullets": [
+      "Cool surfaces #12141A",
+      "Lavender glow #B8A8C8",
+      "Blue-grey accent"
+    ],
+    "dark": {
+      "bg": "#12141a",
+      "surface": "#22262e",
+      "surface-variant": "#1a1e26",
+      "surface-elevated": "#2e3440",
+      "text": "#eef0f4",
+      "muted": "#949aa8",
+      "accent": "#94a8c8",
+      "accent-on": "#101218",
+      "quote-fill": "#1e2228",
+      "quote-border": "#88a0c4",
+      "ring": "#a8b0d0",
+      "card-border": "rgba(148, 154, 168, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(184, 168, 200, 0.22)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.18)",
+      "fab-shadow": "0 4px 20px rgba(148, 168, 200, 0.4)",
+      "fab-border": "rgba(184, 168, 200, 0.38)",
+      "pill-bg": "rgba(184, 168, 200, 0.16)",
+      "pill-border": "rgba(136, 160, 196, 0.45)",
+      "ring-shadow": "0 0 12px rgba(184, 168, 200, 0.3)",
+      "check-border": "rgba(148, 154, 168, 0.45)"
+    },
+    "light": {
+      "bg": "#f6f7fa",
+      "surface": "#ffffff",
+      "surface-variant": "#e8eaef",
+      "surface-elevated": "#f0f2f6",
+      "text": "#141820",
+      "muted": "#707888",
+      "accent": "#587098",
+      "accent-on": "#ffffff",
+      "quote-fill": "#eef0f6",
+      "quote-border": "#587098",
+      "ring": "#98a8c8",
+      "card-border": "rgba(112, 120, 136, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(168, 152, 184, 0.18)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 20px rgba(88, 112, 152, 0.35)",
+      "fab-border": "rgba(168, 152, 184, 0.32)",
+      "pill-bg": "rgba(168, 152, 184, 0.14)",
+      "pill-border": "rgba(88, 112, 152, 0.4)",
+      "ring-shadow": "0 0 12px rgba(168, 152, 184, 0.25)",
+      "check-border": "rgba(112, 120, 136, 0.4)"
+    },
+    "dark_tweak": "Lavender glow",
+    "light_tweak": "Lavender glow",
+    "dark_surface": "Moonlit dark",
+    "light_surface": "Cool light",
+    "card_title": "Moonlit",
+    "card_desc": "Cool surfaces \u00b7 lavender glow",
+    "tag": "",
+    "swatch": "background:linear-gradient(135deg,#94a8c8,#b8a8c8)"
+  },
+  "slate-glow-ember": {
+    "id": "slate-glow-ember",
+    "heading": "Slate glow \u2014 ember",
+    "desc": "Slate accent with warm gold-rose glow \u2014 campfire warmth on parchment.",
+    "bullets": [
+      "Glow #D4B090 ember gold",
+      "Warmer surfaces",
+      "Ring #D4B890"
+    ],
+    "dark": {
+      "bg": "#161310",
+      "surface": "#302c28",
+      "surface-variant": "#262220",
+      "surface-elevated": "#3c3832",
+      "text": "#faf4ec",
+      "muted": "#aca498",
+      "accent": "#9bb0d4",
+      "accent-on": "#141210",
+      "quote-fill": "#2e2620",
+      "quote-border": "#8ea4c8",
+      "ring": "#d4b890",
+      "card-border": "rgba(172, 164, 152, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(212, 176, 144, 0.24)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.16)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.38)",
+      "fab-border": "rgba(212, 176, 144, 0.38)",
+      "pill-bg": "rgba(212, 176, 144, 0.16)",
+      "pill-border": "rgba(142, 164, 200, 0.45)",
+      "ring-shadow": "0 0 12px rgba(212, 184, 144, 0.32)",
+      "check-border": "rgba(168, 160, 152, 0.45)"
+    },
+    "light": {
+      "bg": "#faf5ec",
+      "surface": "#fffaf2",
+      "surface-variant": "#efe6d8",
+      "surface-elevated": "#f7f0e4",
+      "text": "#1c1610",
+      "muted": "#8e8274",
+      "accent": "#5a7494",
+      "accent-on": "#ffffff",
+      "quote-fill": "#f8ece0",
+      "quote-border": "#7a90b0",
+      "ring": "#c8a878",
+      "card-border": "rgba(142, 130, 116, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(200, 160, 112, 0.2)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 20px rgba(90, 116, 148, 0.35)",
+      "fab-border": "rgba(200, 160, 112, 0.32)",
+      "pill-bg": "rgba(200, 160, 112, 0.14)",
+      "pill-border": "rgba(122, 144, 176, 0.4)",
+      "ring-shadow": "0 0 12px rgba(200, 160, 112, 0.28)",
+      "check-border": "rgba(142, 130, 116, 0.4)"
+    },
+    "dark_tweak": "Gold-rose ember",
+    "light_tweak": "Gold-rose ember",
+    "dark_surface": "Warm dark",
+    "light_surface": "Warm cream",
+    "card_title": "Ember",
+    "card_desc": "Slate \u00b7 gold-rose glow",
+    "tag": "",
+    "swatch": "background:linear-gradient(135deg,#9bb0d4,#d4b090)"
+  },
+  "rose-glow-primary": {
+    "id": "rose-glow-primary",
+    "heading": "Rose glow \u2014 primary",
+    "desc": "Flipped crossover: rose is the accent (FAB, links), slate is the faded glow.",
+    "bullets": [
+      "Accent = rose #D4A8A0",
+      "Glow = slate #9BB0D4",
+      "Same parchment surfaces"
+    ],
+    "dark": {
+      "bg": "#141210",
+      "surface": "#2e2b28",
+      "surface-variant": "#242120",
+      "surface-elevated": "#3a3632",
+      "text": "#faf6f0",
+      "muted": "#a8a098",
+      "accent-on": "#141210",
+      "card-border": "rgba(168, 160, 152, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(212, 168, 160, 0.22)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.16)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.4)",
+      "fab-border": "rgba(212, 168, 160, 0.38)",
+      "pill-bg": "rgba(212, 168, 160, 0.16)",
+      "pill-border": "rgba(142, 164, 200, 0.45)",
+      "ring-shadow": "0 0 12px rgba(212, 168, 160, 0.3)",
+      "check-border": "rgba(168, 160, 152, 0.45)",
+      "accent": "#d4a8a0",
+      "quote-fill": "#2e2424",
+      "quote-border": "#d4a8a0",
+      "ring": "#c4a8c0"
+    },
+    "light": {
+      "bg": "#fbf7f1",
+      "surface": "#fffdf9",
+      "surface-variant": "#ede6dc",
+      "surface-elevated": "#f5efe6",
+      "text": "#1a1612",
+      "muted": "#8a8278",
+      "accent-on": "#ffffff",
+      "card-border": "rgba(138, 130, 120, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(200, 136, 128, 0.18)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 20px rgba(90, 116, 148, 0.35)",
+      "fab-border": "rgba(200, 136, 128, 0.32)",
+      "pill-bg": "rgba(200, 136, 128, 0.14)",
+      "pill-border": "rgba(122, 144, 176, 0.4)",
+      "ring-shadow": "0 0 12px rgba(200, 136, 128, 0.25)",
+      "check-border": "rgba(138, 130, 120, 0.4)",
+      "accent": "#c08078",
+      "quote-fill": "#f8ece8",
+      "quote-border": "#c08078",
+      "ring": "#a8b8d0"
+    },
+    "dark_tweak": "Rose accent \u00b7 slate glow",
+    "light_tweak": "Rose accent \u00b7 slate glow",
+    "dark_surface": "Parchment dark",
+    "light_surface": "Cream light",
+    "card_title": "Rose primary",
+    "card_desc": "Rose accent \u00b7 slate glow",
+    "tag": "",
+    "swatch": "background:linear-gradient(135deg,#d4a8a0,#9bb0d4)"
+  },
+  "terracotta-glow": {
+    "id": "terracotta-glow",
+    "heading": "Terracotta + rose glow",
+    "desc": "Terracotta accent with rose glow halo \u2014 classic warm orange on parchment.",
+    "bullets": [
+      "Accent = terracotta #D97757",
+      "Glow = rose",
+      "Classic Claude parchment"
+    ],
+    "dark": {
+      "bg": "#141413",
+      "surface": "#30302e",
+      "surface-variant": "#252320",
+      "surface-elevated": "#3d3d3a",
+      "text": "#faf9f5",
+      "muted": "#b0aea5",
+      "accent": "#d97757",
+      "accent-on": "#ffffff",
+      "quote-fill": "#2e2420",
+      "quote-border": "#d97757",
+      "ring": "#e8a898",
+      "card-border": "rgba(176, 174, 165, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(212, 168, 160, 0.26)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.16)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.4)",
+      "fab-border": "rgba(212, 168, 160, 0.38)",
+      "pill-bg": "rgba(212, 168, 160, 0.16)",
+      "pill-border": "rgba(142, 164, 200, 0.45)",
+      "ring-shadow": "0 0 12px rgba(212, 168, 160, 0.3)",
+      "check-border": "rgba(168, 160, 152, 0.45)"
+    },
+    "light": {
+      "bg": "#faf9f5",
+      "surface": "#f5f4ed",
+      "surface-variant": "#e8e6dc",
+      "surface-elevated": "#efe9de",
+      "text": "#141413",
+      "muted": "#87867f",
+      "accent": "#c96442",
+      "accent-on": "#ffffff",
+      "quote-fill": "#f8ece6",
+      "quote-border": "#c96442",
+      "ring": "#d97757",
+      "card-border": "rgba(135, 134, 127, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(200, 136, 128, 0.2)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 20px rgba(217, 119, 87, 0.38)",
+      "fab-border": "rgba(212, 168, 160, 0.35)",
+      "pill-bg": "rgba(212, 168, 160, 0.15)",
+      "pill-border": "rgba(201, 100, 66, 0.42)",
+      "ring-shadow": "0 0 12px rgba(217, 119, 87, 0.28)",
+      "check-border": "rgba(135, 134, 127, 0.4)"
+    },
+    "dark_tweak": "Terracotta + rose halo",
+    "light_tweak": "Terracotta + rose halo",
+    "dark_surface": "Classic parchment",
+    "light_surface": "Classic cream",
+    "card_title": "Terracotta + glow",
+    "card_desc": "Orange accent \u00b7 rose halo",
+    "tag": "",
+    "swatch": "background:linear-gradient(135deg,#d97757,#d4a8a0)"
+  },
+  "rose-terracotta-glow": {
+    "id": "rose-terracotta-glow",
+    "heading": "Rose + terracotta glow",
+    "desc": "Rose accent with terracotta-orange glow \u2014 warmest crossover of all three families.",
+    "bullets": [
+      "Accent = dusty rose",
+      "Glow = terracotta orange",
+      "All three families at once"
+    ],
+    "dark": {
+      "bg": "#141210",
+      "surface": "#2e2b28",
+      "surface-variant": "#242120",
+      "surface-elevated": "#3a3632",
+      "text": "#faf6f0",
+      "muted": "#a8a098",
+      "accent-on": "#141210",
+      "card-border": "rgba(168, 160, 152, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(212, 168, 160, 0.24)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.16)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.35)",
+      "fab-border": "rgba(212, 168, 160, 0.38)",
+      "pill-bg": "rgba(212, 168, 160, 0.16)",
+      "pill-border": "rgba(142, 164, 200, 0.45)",
+      "ring-shadow": "0 0 12px rgba(212, 168, 160, 0.3)",
+      "check-border": "rgba(168, 160, 152, 0.45)",
+      "accent": "#c98b84",
+      "quote-fill": "#2e2422",
+      "quote-border": "#c98b84",
+      "ring": "#d4a090"
+    },
+    "light": {
+      "bg": "#fbf7f1",
+      "surface": "#fffdf9",
+      "surface-variant": "#ede6dc",
+      "surface-elevated": "#f5efe6",
+      "text": "#1a1612",
+      "muted": "#8a8278",
+      "accent-on": "#ffffff",
+      "card-border": "rgba(138, 130, 120, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(200, 136, 128, 0.18)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 20px rgba(90, 116, 148, 0.35)",
+      "fab-border": "rgba(200, 136, 128, 0.32)",
+      "pill-bg": "rgba(200, 136, 128, 0.14)",
+      "pill-border": "rgba(122, 144, 176, 0.4)",
+      "ring-shadow": "0 0 12px rgba(200, 136, 128, 0.25)",
+      "check-border": "rgba(138, 130, 120, 0.4)",
+      "accent": "#b0746d",
+      "quote-fill": "#f8eae6",
+      "quote-border": "#b0746d",
+      "ring": "#c96442"
+    },
+    "dark_tweak": "Rose + orange glow",
+    "light_tweak": "Rose + orange glow",
+    "dark_surface": "Warm dark",
+    "light_surface": "Warm cream",
+    "card_title": "Rose + terracotta glow",
+    "card_desc": "Warmest \u2014 all three families",
+    "tag": "",
+    "swatch": "background:linear-gradient(135deg,#c98b84,#d97757)"
+  },
+  "rose-slate-even": {
+    "id": "rose-slate-even",
+    "heading": "Rose + slate \u2014 even blend",
+    "desc": "50/50 mauve accent \u2014 neither rose nor slate dominates.",
+    "bullets": [
+      "Accent = mauve #B8A0B0",
+      "Dual glow tones",
+      "Most neutral option"
+    ],
+    "dark": {
+      "bg": "#141210",
+      "surface": "#2e2b28",
+      "surface-variant": "#242120",
+      "surface-elevated": "#3a3632",
+      "text": "#faf6f0",
+      "muted": "#a8a098",
+      "accent-on": "#141210",
+      "card-border": "rgba(168, 160, 152, 0.14)",
+      "quote-shadow": "0 4px 18px rgba(212, 168, 160, 0.22)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.16)",
+      "fab-shadow": "0 4px 20px rgba(155, 176, 212, 0.4)",
+      "fab-border": "rgba(212, 168, 160, 0.38)",
+      "pill-bg": "rgba(155, 176, 212, 0.12)",
+      "pill-border": "rgba(184, 160, 176, 0.4)",
+      "ring-shadow": "0 0 12px rgba(212, 168, 160, 0.3)",
+      "check-border": "rgba(168, 160, 152, 0.45)",
+      "accent": "#b8a0b0",
+      "quote-fill": "#2a2428",
+      "quote-border": "#a898b8",
+      "ring": "#b8a8c8"
+    },
+    "light": {
+      "bg": "#fbf7f1",
+      "surface": "#fffdf9",
+      "surface-variant": "#ede6dc",
+      "surface-elevated": "#f5efe6",
+      "text": "#1a1612",
+      "muted": "#8a8278",
+      "accent-on": "#ffffff",
+      "card-border": "rgba(138, 130, 120, 0.12)",
+      "quote-shadow": "0 4px 18px rgba(200, 136, 128, 0.18)",
+      "card-shadow": "0 3px 14px rgba(0, 0, 0, 0.08)",
+      "fab-shadow": "0 4px 20px rgba(90, 116, 148, 0.35)",
+      "fab-border": "rgba(200, 136, 128, 0.32)",
+      "pill-bg": "rgba(90, 116, 148, 0.1)",
+      "pill-border": "rgba(120, 128, 160, 0.35)",
+      "ring-shadow": "0 0 12px rgba(200, 136, 128, 0.25)",
+      "check-border": "rgba(138, 130, 120, 0.4)",
+      "accent": "#887888",
+      "quote-fill": "#f5eaee",
+      "quote-border": "#7880a0",
+      "ring": "#98a0c0"
+    },
+    "dark_tweak": "Mauve blend",
+    "light_tweak": "Mauve blend",
+    "dark_surface": "Parchment dark",
+    "light_surface": "Cream light",
+    "card_title": "Rose + slate even",
+    "card_desc": "50/50 mauve blend accent",
+    "tag": "",
+    "swatch": "background:#b8a0b0"
+  },
+  "terracotta": {
+    "id": "terracotta",
+    "heading": "Terracotta \u2014 classic parchment",
+    "desc": "Original BOOP direction. Warm orange accent on parchment surfaces.",
+    "bullets": [
+      "Accent #D97757 / #C96442",
+      "Classic parchment surfaces"
+    ],
+    "dark": {
+      "bg": "#141413",
+      "surface": "#30302e",
+      "surface-variant": "#252320",
+      "surface-elevated": "#3d3d3a",
+      "text": "#faf9f5",
+      "muted": "#b0aea5",
+      "accent": "#d97757",
+      "accent-on": "#ffffff",
+      "quote-fill": "#252320",
+      "quote-border": "rgba(250,249,245,0.3)",
+      "ring": "#e8a090",
+      "card-border": "rgba(176,174,165,0.12)"
+    },
+    "light": {
+      "bg": "#faf9f5",
+      "surface": "#f5f4ed",
+      "surface-variant": "#e8e6dc",
+      "surface-elevated": "#efe9de",
+      "text": "#141413",
+      "muted": "#87867f",
+      "accent": "#c96442",
+      "accent-on": "#ffffff",
+      "quote-fill": "#efe9de",
+      "quote-border": "rgba(20,20,19,0.2)",
+      "ring": "#d97757",
+      "card-border": "rgba(135,134,127,0.14)"
+    },
+    "dark_tweak": "Base terracotta",
+    "light_tweak": "Base terracotta",
+    "dark_surface": "Parchment dark",
+    "light_surface": "Parchment light",
+    "card_title": "Terracotta classic",
+    "card_desc": "Warm orange \u00b7 parchment",
+    "tag": "",
+    "swatch": "background:#d97757"
+  },
+  "terracotta-blush": {
+    "id": "terracotta-blush",
+    "heading": "Terracotta blush",
+    "desc": "Soft peach terracotta \u2014 lighter and friendlier.",
+    "bullets": [
+      "Accent #E09578",
+      "Peach ring"
+    ],
+    "dark": {
+      "bg": "#161514",
+      "surface": "#33312e",
+      "surface-variant": "#2a2825",
+      "surface-elevated": "#403d39",
+      "text": "#faf8f4",
+      "muted": "#b5b0a8",
+      "accent": "#e09578",
+      "accent-on": "#1a1412",
+      "quote-fill": "#2a2825",
+      "quote-border": "rgba(250,248,244,0.28)",
+      "ring": "#e8a898",
+      "card-border": "rgba(181,176,168,0.12)"
+    },
+    "light": {
+      "bg": "#fcf9f6",
+      "surface": "#f7f2eb",
+      "surface-variant": "#ebe4da",
+      "surface-elevated": "#f5f0e8",
+      "text": "#1a1816",
+      "muted": "#8a847c",
+      "accent": "#d08268",
+      "accent-on": "#ffffff",
+      "quote-fill": "#f5f0e8",
+      "quote-border": "rgba(26,24,22,0.18)",
+      "ring": "#d08268",
+      "card-border": "rgba(138,132,124,0.14)"
+    },
+    "dark_tweak": "Peach terracotta",
+    "light_tweak": "Peach terracotta",
+    "dark_surface": "Warm dark",
+    "light_surface": "Cream light",
+    "card_title": "Terracotta blush",
+    "card_desc": "Soft peach accent",
+    "tag": "",
+    "swatch": "background:#e09578"
+  },
+  "rose": {
+    "id": "rose",
+    "heading": "Rose classic",
+    "desc": "Dusty coral blush accent on warm neutrals.",
+    "bullets": [
+      "Accent #C98B84",
+      "Rose parchment"
+    ],
+    "dark": {
+      "bg": "#141316",
+      "surface": "#2a272c",
+      "surface-variant": "#211f24",
+      "surface-elevated": "#353239",
+      "text": "#f3f0ee",
+      "muted": "#a8a2a0",
+      "accent": "#c98b84",
+      "accent-on": "#1a1514",
+      "quote-fill": "#211f24",
+      "quote-border": "rgba(243,240,238,0.28)",
+      "ring": "#d4a8a0",
+      "card-border": "rgba(168,162,160,0.12)"
+    },
+    "light": {
+      "bg": "#f8f4f2",
+      "surface": "#f0eae6",
+      "surface-variant": "#e6ded9",
+      "surface-elevated": "#f5efeb",
+      "text": "#1c1817",
+      "muted": "#857a78",
+      "accent": "#b0746d",
+      "accent-on": "#ffffff",
+      "quote-fill": "#f5efeb",
+      "quote-border": "rgba(28,24,23,0.18)",
+      "ring": "#b0746d",
+      "card-border": "rgba(133,122,120,0.14)"
+    },
+    "dark_tweak": "Dusty rose",
+    "light_tweak": "Dusty rose",
+    "dark_surface": "Rose dark",
+    "light_surface": "Rose light",
+    "card_title": "Rose classic",
+    "card_desc": "Dusty coral blush",
+    "tag": "",
+    "swatch": "background:#c98b84"
+  },
+  "rose-dust": {
+    "id": "rose-dust",
+    "heading": "Rose mauve dust",
+    "desc": "Most muted rose \u2014 low saturation, very calm.",
+    "bullets": [
+      "Accent #B08E88",
+      "Muted mauve"
+    ],
+    "dark": {
+      "bg": "#131215",
+      "surface": "#272528",
+      "surface-variant": "#1f1d21",
+      "surface-elevated": "#323035",
+      "text": "#f0ecee",
+      "muted": "#9e989c",
+      "accent": "#b08e88",
+      "accent-on": "#141012",
+      "quote-fill": "#1f1d21",
+      "quote-border": "rgba(240,236,238,0.26)",
+      "ring": "#b8a0a0",
+      "card-border": "rgba(158,152,156,0.12)"
+    },
+    "light": {
+      "bg": "#f6f3f4",
+      "surface": "#ebe6e8",
+      "surface-variant": "#ded8db",
+      "surface-elevated": "#f2eef0",
+      "text": "#1a1718",
+      "muted": "#7d767a",
+      "accent": "#967670",
+      "accent-on": "#ffffff",
+      "quote-fill": "#f2eef0",
+      "quote-border": "rgba(26,23,24,0.16)",
+      "ring": "#967670",
+      "card-border": "rgba(125,118,122,0.14)"
+    },
+    "dark_tweak": "Mauve dust",
+    "light_tweak": "Mauve dust",
+    "dark_surface": "Muted dark",
+    "light_surface": "Muted light",
+    "card_title": "Rose mauve dust",
+    "card_desc": "Most muted rose",
+    "tag": "",
+    "swatch": "background:#b08e88"
+  },
+  "slate-parchment": {
+    "id": "slate-parchment",
+    "heading": "Slate on parchment",
+    "desc": "Plain slate accent on classic parchment \u2014 no rose glow.",
+    "bullets": [
+      "Accent #8A9AAD",
+      "No glow halo"
+    ],
+    "dark": {
+      "bg": "#141413",
+      "surface": "#30302e",
+      "surface-variant": "#252320",
+      "surface-elevated": "#3d3d3a",
+      "text": "#faf9f5",
+      "muted": "#b0aea5",
+      "accent": "#8a9aad",
+      "accent-on": "#101218",
+      "quote-fill": "#252320",
+      "quote-border": "rgba(250,249,245,0.28)",
+      "ring": "#8a9aad",
+      "card-border": "rgba(176,174,165,0.12)"
+    },
+    "light": {
+      "bg": "#faf9f5",
+      "surface": "#f5f4ed",
+      "surface-variant": "#e8e6dc",
+      "surface-elevated": "#efe9de",
+      "text": "#141413",
+      "muted": "#87867f",
+      "accent": "#6d7f96",
+      "accent-on": "#ffffff",
+      "quote-fill": "#efe9de",
+      "quote-border": "rgba(20,20,19,0.18)",
+      "ring": "#6d7f96",
+      "card-border": "rgba(135,134,127,0.14)"
+    },
+    "dark_tweak": "Plain slate",
+    "light_tweak": "Plain slate",
+    "dark_surface": "Parchment dark",
+    "light_surface": "Parchment light",
+    "card_title": "Slate on parchment",
+    "card_desc": "No glow \u2014 plain slate",
+    "tag": "",
+    "swatch": "background:#8a9aad"
+  },
+  "slate-fog": {
+    "id": "slate-fog",
+    "heading": "Slate fog",
+    "desc": "Soft low-contrast slate on cool grey surfaces.",
+    "bullets": [
+      "Accent #A8B6C8",
+      "Cool fog surfaces"
+    ],
+    "dark": {
+      "bg": "#15171c",
+      "surface": "#22262e",
+      "surface-variant": "#1c1f26",
+      "surface-elevated": "#2e333c",
+      "text": "#f0f2f5",
+      "muted": "#a0a6b0",
+      "accent": "#a8b6c8",
+      "accent-on": "#141820",
+      "quote-fill": "#1c1f26",
+      "quote-border": "rgba(240,242,245,0.26)",
+      "ring": "#a8b6c8",
+      "card-border": "rgba(160,166,176,0.12)"
+    },
+    "light": {
+      "bg": "#f8f9fb",
+      "surface": "#eef1f5",
+      "surface-variant": "#e4e8ee",
+      "surface-elevated": "#f4f6f9",
+      "text": "#1a1e24",
+      "muted": "#848c98",
+      "accent": "#8a9cb0",
+      "accent-on": "#ffffff",
+      "quote-fill": "#f4f6f9",
+      "quote-border": "rgba(26,30,36,0.16)",
+      "ring": "#8a9cb0",
+      "card-border": "rgba(132,140,152,0.14)"
+    },
+    "dark_tweak": "Soft fog",
+    "light_tweak": "Soft fog",
+    "dark_surface": "Cool dark",
+    "light_surface": "Cool light",
+    "card_title": "Slate fog",
+    "card_desc": "Soft low-contrast slate",
+    "tag": "",
+    "swatch": "background:#a8b6c8"
+  }
+};
+function renderMock(phone, meta, surface) {
+  phone.innerHTML =
+    (meta ? '<div class="mock-meta">' + meta + '</div>' : '') +
+    (surface ? '<div class="mock-surface-tag">' + surface + '</div>' : '') +
+    '<div class="mock-top">' +
+      '<div class="mock-greeting"><h2>Good evening</h2><p>Wednesday, June 24</p></div>' +
+      '<div class="mock-icons">' +
+        '<div class="icon-btn filled">⌕</div>' +
+        '<div class="icon-btn ghost">⚙</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="quote">' +
+      '<blockquote>"Hope is a discipline. Keep showing up."</blockquote>' +
+      '<cite>— Unknown</cite>' +
+    '</div>' +
+    '<div class="stats">' +
+      '<div class="stat"><div class="label">Today</div><div class="value">3</div><div class="cap">tasks due</div></div>' +
+      '<div class="stat"><div class="label">Habits</div><div class="value">2/4</div><div class="cap">checked in</div></div>' +
+      '<div class="stat"><div class="label">Balance</div><div class="value">1,240</div><div class="cap">CAD</div></div>' +
+    '</div>' +
+    '<div class="section"><span class="bar"></span><h3>Up next</h3></div>' +
+    '<div class="task"><div class="task-body"><strong>Review quarterly notes</strong><span>Today · 6:00 PM</span></div><div class="check"></div></div>' +
+    '<div class="task"><div class="task-body"><strong>Call dentist</strong><span>Tomorrow · 9:30 AM</span></div><div class="check"></div></div>' +
+    '<span class="accent-btn">Week view</span>' +
+    '<div class="ring-demo"><div class="ring"></div><span>App icon / launch ring</span></div>' +
+    '<div class="nav-preview">' +
+      '<div class="nav-item active">Home</div>' +
+      '<div class="nav-item">Tasks</div>' +
+      '<div class="nav-fab">+</div>' +
+      '<div class="nav-item">Calendar</div>' +
+      '<div class="nav-item">Accounts</div>' +
+    '</div>';
+}
+
+function initPreviews() {
+  document.querySelectorAll('.phone').forEach(function (phone) {
+    var wrap = phone.closest('.phone-wrap');
+    var meta = wrap && wrap.getAttribute('data-tweak') ? wrap.getAttribute('data-tweak') : '';
+    var surface = wrap && wrap.getAttribute('data-surface') ? wrap.getAttribute('data-surface') : '';
+    renderMock(phone, meta, surface);
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initPreviews);
+} else {
+  initPreviews();
+}
+
+
+var INDEX_THEMES = THEMES_DATA;
+
+function applyTokens(phone, tokens) {
+  Object.keys(tokens).forEach(function (key) {
+    phone.style.setProperty('--' + key, tokens[key]);
+  });
+}
+
+function showTheme(id) {
+  var t = INDEX_THEMES[id];
+  if (!t) return;
+
+  document.getElementById('viewer-empty').style.display = 'none';
+  document.getElementById('viewer-content').style.display = 'block';
+  document.getElementById('theme-heading').textContent = t.heading;
+  document.getElementById('theme-desc').textContent = t.desc;
+
+  var bullets = document.getElementById('theme-bullets');
+  bullets.innerHTML = '';
+  (t.bullets || []).forEach(function (b) {
+    var li = document.createElement('li');
+    li.textContent = b;
+    bullets.appendChild(li);
+  });
+  document.getElementById('theme-tweaks').style.display = (t.bullets && t.bullets.length) ? 'block' : 'none';
+
+  var darkWrap = document.getElementById('dark-wrap');
+  var lightWrap = document.getElementById('light-wrap');
+  darkWrap.setAttribute('data-tweak', t.dark_tweak);
+  darkWrap.setAttribute('data-surface', t.dark_surface);
+  lightWrap.setAttribute('data-tweak', t.light_tweak);
+  lightWrap.setAttribute('data-surface', t.light_surface);
+
+  var darkPhone = document.getElementById('phone-dark');
+  var lightPhone = document.getElementById('phone-light');
+  applyTokens(darkPhone, t.dark);
+  applyTokens(lightPhone, t.light);
+  renderMock(darkPhone, t.dark_tweak, t.dark_surface);
+  renderMock(lightPhone, t.light_tweak, t.light_surface);
+
+  document.querySelectorAll('.card-btn').forEach(function (btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-id') === id);
+  });
+
+  if (location.hash !== '#' + id) {
+    history.replaceState(null, '', '#' + id);
+  }
+}
+
+document.querySelectorAll('.card-btn').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    showTheme(btn.getAttribute('data-id'));
+  });
+});
+
+window.addEventListener('hashchange', function () {
+  var id = location.hash.replace('#', '');
+  if (id && INDEX_THEMES[id]) showTheme(id);
+});
+
+var startId = location.hash.replace('#', '') || 'slate-glow';
+if (!INDEX_THEMES[startId]) startId = 'slate-glow';
+showTheme(startId);
+
+  </script>
+</body>
+</html>
