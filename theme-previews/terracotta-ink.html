@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BOOP — Terracotta on ink</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="preview.css" />
+  <style>
+    .theme-dark {
+      --bg: #12111a; --surface: #1e1d26; --surface-variant: #18171f; --surface-elevated: #2a2933;
+      --text: #f2f0eb; --muted: #9a97a8; --accent: #d97757; --accent-on: #ffffff;
+      --nav-pill: rgba(217, 119, 87, 0.2); --danger: #e0867a; --positive: #7cb88a;
+      --card-border: rgba(154, 151, 168, 0.14); --quote-border: rgba(242, 240, 235, 0.32); --ring: #e8a090;
+    }
+    .theme-light {
+      --bg: #f7f5f0; --surface: #efebe3; --surface-variant: #e4dfd5; --surface-elevated: #f0ece4;
+      --text: #1a1820; --muted: #7a7685; --accent: #c96442; --accent-on: #ffffff;
+      --nav-pill: rgba(201, 100, 66, 0.14); --danger: #c45f54; --positive: #5a9a68;
+      --card-border: rgba(122, 118, 133, 0.14); --quote-border: rgba(26, 24, 32, 0.22); --ring: #d97757;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <a class="back" href="index.html">← All themes</a>
+    <header class="page-header">
+      <h1>Terracotta — on cool ink</h1>
+      <p>Same terracotta accent you liked, but cool ink-stone neutrals instead of warm parchment. More contrast pop.</p>
+    </header>
+    <section class="tweaks"><h3>What’s tweaked</h3><ul>
+      <li>Accent unchanged from classic terracotta</li>
+      <li>Surfaces swapped to cool ink (#12111A family)</li>
+      <li>Muted text shifts violet-grey (less beige)</li>
+      <li>Hybrid: warm accent + cool base — test if you want both</li>
+    </ul></section>
+    <div class="phones">
+      <div class="phone-wrap" data-tweak="Terracotta + cool ink" data-surface="Cool ink dark">
+        <span class="mode-label">Dark</span><div class="phone theme-dark"></div>
+      </div>
+      <div class="phone-wrap" data-tweak="Terracotta + cool cream" data-surface="Cool ink light">
+        <span class="mode-label">Light</span><div class="phone theme-light"></div>
+      </div>
+    </div>
+  </div>
+  <script src="mock.js"></script>
+</body>
+</html>

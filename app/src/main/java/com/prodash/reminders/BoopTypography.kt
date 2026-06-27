@@ -4,12 +4,23 @@ import android.content.Context
 import android.graphics.Typeface
 import android.widget.EditText
 import android.widget.TextView
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -19,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.core.content.res.ResourcesCompat
+import kotlinx.coroutines.delay
 
 /** Claude UI sans — Inter static cuts per weight. */
 val BoopSansFamily = FontFamily(
@@ -38,49 +50,49 @@ val BoopSerifFamily = FontFamily(
 fun boopTypography(): Typography = Typography(
     displayLarge = TextStyle(
         fontFamily = BoopSerifFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 52.sp,
-        lineHeight = 56.sp,
-        letterSpacing = (-0.75).sp,
+        fontWeight = FontWeight.Medium,
+        fontSize = 46.sp,
+        lineHeight = 50.sp,
+        letterSpacing = (-0.6).sp,
     ),
     displayMedium = TextStyle(
         fontFamily = BoopSerifFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 44.sp,
-        lineHeight = 48.sp,
-        letterSpacing = (-0.5).sp,
+        fontWeight = FontWeight.Medium,
+        fontSize = 40.sp,
+        lineHeight = 44.sp,
+        letterSpacing = (-0.4).sp,
     ),
     displaySmall = TextStyle(
         fontFamily = BoopSerifFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 36.sp,
-        lineHeight = 40.sp,
-        letterSpacing = (-0.25).sp,
+        fontWeight = FontWeight.Medium,
+        fontSize = 32.sp,
+        lineHeight = 36.sp,
+        letterSpacing = (-0.2).sp,
     ),
     headlineLarge = TextStyle(
         fontFamily = BoopSerifFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 32.sp,
-        lineHeight = 36.sp,
-        letterSpacing = (-0.25).sp,
+        fontWeight = FontWeight.Medium,
+        fontSize = 30.sp,
+        lineHeight = 34.sp,
+        letterSpacing = (-0.2).sp,
     ),
     headlineMedium = TextStyle(
         fontFamily = BoopSerifFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 28.sp,
-        lineHeight = 32.sp,
+        fontWeight = FontWeight.Medium,
+        fontSize = 26.sp,
+        lineHeight = 30.sp,
     ),
     headlineSmall = TextStyle(
         fontFamily = BoopSerifFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 24.sp,
-        lineHeight = 28.sp,
+        fontWeight = FontWeight.Medium,
+        fontSize = 22.sp,
+        lineHeight = 26.sp,
     ),
     titleLarge = TextStyle(
         fontFamily = BoopSerifFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
+        fontWeight = FontWeight.Medium,
+        fontSize = 20.sp,
+        lineHeight = 26.sp,
     ),
     titleMedium = TextStyle(
         fontFamily = BoopSansFamily,
@@ -171,10 +183,53 @@ fun EditText.applyBoopSans(weight: FontWeight = FontWeight.Normal) {
 @Composable
 fun BoopTextTheme(content: @Composable () -> Unit) {
     val body = MaterialTheme.typography.bodyMedium
-    CompositionLocalProvider(
+    androidx.compose.runtime.CompositionLocalProvider(
         LocalTextStyle provides body.copy(fontFamily = BoopSansFamily),
     ) {
         content()
+    }
+}
+
+private val BoopEnterTransition = fadeIn(tween(420, easing = FastOutSlowInEasing)) +
+    slideInVertically(
+        initialOffsetY = { it / 5 },
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+    )
+
+@Composable
+fun BoopAnimatedEnter(
+    key: Any? = Unit,
+    animated: Boolean = true,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    var visible by remember { mutableStateOf(!animated) }
+    LaunchedEffect(key, animated) {
+        if (!animated) {
+            visible = true
+        } else {
+            visible = false
+            delay(16)
+            visible = true
+        }
+    }
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = BoopEnterTransition,
+    ) {
+        content()
+    }
+}
+
+@Composable
+fun BoopPageTitle(text: String, modifier: Modifier = Modifier, animated: Boolean = true) {
+    BoopAnimatedEnter(key = text, animated = animated, modifier = modifier) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.displayLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
     }
 }
 
@@ -185,16 +240,6 @@ fun BoopFieldLabel(text: String, modifier: Modifier = Modifier) {
         modifier = modifier,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-}
-
-@Composable
-fun BoopPageTitle(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.displayLarge,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = modifier,
     )
 }
 
