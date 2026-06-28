@@ -1,6 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Native Boop app (v5.5+) — JSON blob sync per anonymous user
+    match /boopUsers/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Legacy PWA path — kept for older clients
     match /users/{userId}/reminders/{reminderId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }

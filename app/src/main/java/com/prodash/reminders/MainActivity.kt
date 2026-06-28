@@ -25,6 +25,7 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
 import android.provider.CalendarContract
+import android.provider.Settings
 import android.text.Editable
 import android.text.Html
 import android.text.InputType
@@ -78,6 +79,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -207,8 +209,8 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -216,6 +218,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.border
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
@@ -259,22 +262,37 @@ import java.util.UUID
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.clipPath
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        var pendingShortcutAction: String? = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         ReminderNotifier.createChannel(this)
+        pendingShortcutAction = intent?.getStringExtra("boop_action")
+        ingestVoiceAssistantIntent(intent)
         setContent { BoopApp() }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        pendingShortcutAction = intent.getStringExtra("boop_action")
+        ingestVoiceAssistantIntent(intent)
+    }
+
+    private fun ingestVoiceAssistantIntent(intent: Intent?) {
+        if (intent?.action != VoiceAssistantBridge.ACTION_VOICE_RESULT) return
+        val json = intent.getStringExtra(VoiceAssistantBridge.EXTRA_PARSED_JSON).orEmpty()
+        VoiceAssistantBridge.parseVoiceCapture(json)?.let { BoopVoiceResultHolder.deliver(it) }
     }
 }
 
@@ -359,16 +377,6 @@ private sealed class ItemSheet {
     ) : ItemSheet()
 }
 
-private enum class ThemeMode(val storageKey: String, val label: String) {
-    DARK("dark", "Dark"),
-    LIGHT("light", "Light"),
-    SYSTEM("system", "System"),
-    ;
-
-    companion object {
-        fun fromStorage(value: String?) = entries.find { it.storageKey == value } ?: SYSTEM
-    }
-}
 
 private enum class BoopTab(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Outlined.Dashboard),
@@ -406,8 +414,8 @@ private data class BoopPalette(
     val quoteStroke: Color,
 )
 
-/** Classic parchment · popped terracotta accent · warm rose glow. */
-private fun boopDarkPalette() = BoopPalette(
+/** Classic terracotta + rose glow palette pair. */
+private fun boopTerracottaDarkPalette() = BoopPalette(
     background = Color(0xFF141413),
     surface = Color(0xFF30302E),
     surfaceVariant = Color(0xFF252320),
@@ -427,7 +435,7 @@ private fun boopDarkPalette() = BoopPalette(
     quoteStroke = Color(0xFFE88868),
 )
 
-private fun boopLightPalette() = BoopPalette(
+private fun boopTerracottaLightPalette() = BoopPalette(
     background = Color(0xFFFAF9F5),
     surface = Color(0xFFF5F4ED),
     surfaceVariant = Color(0xFFE8E6DC),
@@ -445,6 +453,48 @@ private fun boopLightPalette() = BoopPalette(
     recording = Color(0xFFD46E48),
     quoteFill = Color(0xFFF8ECE6),
     quoteStroke = Color(0xFFD46E48),
+)
+
+/** AMOLED black · soft-white accent · outer glow on raised surfaces. */
+private fun boopDarkPalette() = BoopPalette(
+    background = Color(0xFF000000),
+    surface = Color(0xFF0C0C0C),
+    surfaceVariant = Color(0xFF141414),
+    surfaceElevated = Color(0xFF1C1C1C),
+    onBackground = Color(0xFFE0DEDA),
+    muted = Color(0xFF848484),
+    accent = Color(0xFFF0F0F0),
+    accentGlow = Color(0xFFFFFFFF),
+    accentOn = Color(0xFF0A0A0A),
+    navPill = Color(0x33FFFFFF),
+    navSelected = Color(0xFFF0F0F0),
+    navUnselected = Color(0xFF6E6E6E),
+    inputField = Color(0xFF101010),
+    danger = Color(0xFFFF8A80),
+    recording = Color(0xFFF0F0F0),
+    quoteFill = Color(0xFF111111),
+    quoteStroke = Color(0xFFD8D8D8),
+)
+
+/** Warm cream surfaces · soft-white accent · amber outer glow. */
+private fun boopLightPalette() = BoopPalette(
+    background = Color(0xFFFFFAF3),
+    surface = Color(0xFFFFF6EC),
+    surfaceVariant = Color(0xFFF3E8DA),
+    surfaceElevated = Color(0xFFFFFCF6),
+    onBackground = Color(0xFF38302A),
+    muted = Color(0xFF94887C),
+    accent = Color(0xFFFFFCF8),
+    accentGlow = Color(0xFFE8C4A8),
+    accentOn = Color(0xFF1C1612),
+    navPill = Color(0x38E8C4A8),
+    navSelected = Color(0xFF2A2420),
+    navUnselected = Color(0xFF9A8E84),
+    inputField = Color(0xFFFFF0E4),
+    danger = Color(0xFFC45850),
+    recording = Color(0xFF2A2420),
+    quoteFill = Color(0xFFFFF0E6),
+    quoteStroke = Color(0xFFD8B8A0),
 )
 
 private val LocalBoopPalette = staticCompositionLocalOf { boopDarkPalette() }
@@ -473,6 +523,7 @@ private fun BoopApp() {
     var dashboardSearchOpen by rememberSaveable { mutableStateOf(false) }
     var tasksTabShowNotes by rememberSaveable { mutableStateOf(false) }
     var themeMode by remember { mutableStateOf(LocalStore.readThemeMode()) }
+    var paletteFamily by remember { mutableStateOf(LocalStore.readPaletteFamily()) }
     var showHabitsPage by remember { mutableStateOf(LocalStore.readShowHabitsPage()) }
     var showWalletPage by remember { mutableStateOf(LocalStore.readShowWalletPage()) }
     val visibleTabs = remember(showHabitsPage, showWalletPage) {
@@ -493,7 +544,10 @@ private fun BoopApp() {
         ThemeMode.LIGHT -> false
         ThemeMode.SYSTEM -> systemDark
     }
-    val palette = if (useDarkTheme) boopDarkPalette() else boopLightPalette()
+    val palette = when (paletteFamily) {
+        PaletteFamily.TERRACOTTA -> if (useDarkTheme) boopTerracottaDarkPalette() else boopTerracottaLightPalette()
+        PaletteFamily.AMOLED -> if (useDarkTheme) boopDarkPalette() else boopLightPalette()
+    }
     var dataEpoch by remember { mutableIntStateOf(0) }
 
     fun refresh() {
@@ -511,9 +565,14 @@ private fun BoopApp() {
     }
 
     LaunchedEffect(Unit) {
-        repository.ensureSession { refresh() }
+        repository.ensureSession(
+            onRemoteLoaded = { refresh() },
+            onFailure = { /* status shown in Settings via BoopSyncState */ },
+        )
         refresh()
     }
+
+    var pendingShortcut by remember { mutableStateOf(MainActivity.pendingShortcutAction) }
 
     val notificationPermission = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission(),
@@ -627,6 +686,25 @@ private fun BoopApp() {
         speedDialExpanded = false
     }
 
+    LaunchedEffect(pendingShortcut) {
+        when (pendingShortcut) {
+            "voice" -> {
+                voiceCaptureOpen = true
+                voiceStartSignal++
+                pendingShortcut = null
+            }
+            "new_task" -> {
+                openTaskSheet(null)
+                pendingShortcut = null
+            }
+            "new_note" -> {
+                openNoteSheet(null)
+                pendingShortcut = null
+            }
+        }
+        MainActivity.pendingShortcutAction = null
+    }
+
     val context = LocalContext.current
     val launchActivity = context as? Activity
     var pendingOpenTaskId by rememberSaveable { mutableStateOf(launchActivity?.intent?.getStringExtra("openTaskId")) }
@@ -659,138 +737,48 @@ private fun BoopApp() {
         openEventSheet(existing = detail)
     }
 
-    var pendingVoiceCapture by remember { mutableStateOf<ParsedVoiceCapture?>(null) }
+
+    fun commitVoiceCapture(parsed: ParsedVoiceCapture) {
+        when (val outcome = VoiceCaptureCommit.commit(context.applicationContext, parsed)) {
+            is VoiceCommitOutcome.Ok -> {
+                Toast.makeText(context, outcome.message, Toast.LENGTH_SHORT).show()
+                if (parsed.type == VoiceCaptureType.EVENT && outcome.message == "Event saved to Calendar") {
+                    calendarSyncRequest++
+                }
+            }
+            is VoiceCommitOutcome.FinanceNeedsEditor -> {
+                Toast.makeText(context, outcome.message, Toast.LENGTH_SHORT).show()
+                openFinanceEntrySheet(
+                    type = when (outcome.parsed.type) {
+                        VoiceCaptureType.INCOME -> "income"
+                        VoiceCaptureType.TRANSFER -> "transfer"
+                        else -> "expense"
+                    },
+                    prefilledTitle = outcome.parsed.title,
+                    prefilledAmount = outcome.parsed.amount?.let { "%.2f".format(it) }.orEmpty(),
+                    prefilledAccountId = outcome.parsed.accountId.orEmpty(),
+                    prefilledToAccountId = outcome.parsed.toAccountId.orEmpty(),
+                    prefilledCategory = outcome.parsed.category,
+                    prefilledNote = outcome.parsed.body,
+                )
+            }
+        }
+        refresh()
+        speedDialExpanded = false
+    }
 
     fun applyVoiceCapture(parsed: ParsedVoiceCapture) {
         voiceStopSignal++
         voiceListening = false
         voiceCaptureOpen = false
-        pendingVoiceCapture = parsed
+        commitVoiceCapture(parsed)
     }
 
-    fun openVoiceCaptureResult(parsed: ParsedVoiceCapture) {
-        when (parsed.type) {
-            VoiceCaptureType.TASK -> {
-                itemSheet = ItemSheet.TaskSheet(
-                    id = null,
-                    sessionKey = UUID.randomUUID().toString(),
-                    title = parsed.title,
-                    reminderAt = parsed.dueAtMillis ?: (System.currentTimeMillis() + 30 * 60_000),
-                    done = false,
-                    repeatEveryDays = parsed.repeatEveryDays,
-                )
-            }
-            VoiceCaptureType.EVENT -> {
-                val start = parsed.dueAtMillis ?: (startOfDayMillis(System.currentTimeMillis()) + 9 * 60 * 60_000L)
-                val end = parsed.endAtMillis ?: (start + 60 * 60_000L)
-                itemSheet = ItemSheet.EventSheet(
-                    eventId = null,
-                    calendarId = null,
-                    sessionKey = UUID.randomUUID().toString(),
-                    title = parsed.title,
-                    description = parsed.body,
-                    location = parsed.location,
-                    allDay = parsed.allDay,
-                    startAt = start,
-                    endAt = end,
-                    notifyWeeksBefore = 0,
-                    notifyDaysBefore = 0,
-                    notifyHoursBefore = 0,
-                    repeatEveryDays = parsed.repeatEveryDays,
-                )
-            }
-            VoiceCaptureType.HABIT -> {
-                itemSheet = ItemSheet.HabitSheet(
-                    id = null,
-                    sessionKey = UUID.randomUUID().toString(),
-                    title = parsed.title,
-                    dayPeriodCategory = parsed.habitDayPeriod,
-                    goal = 30,
-                    progress = 0,
-                    dayKeys = "",
-                    quantityMode = false,
-                    quantityUnit = "",
-                    quantityDailyTarget = 30,
-                    quantityDayValues = "",
-                )
-            }
-            VoiceCaptureType.EXPENSE -> openFinanceEntrySheet(
-                type = "expense",
-                prefilledTitle = parsed.title,
-                prefilledAmount = parsed.amount?.let { "%.2f".format(it) }.orEmpty(),
-                prefilledAccountId = parsed.accountId.orEmpty(),
-                prefilledCategory = parsed.category,
-                prefilledNote = parsed.body,
-            )
-            VoiceCaptureType.INCOME -> openFinanceEntrySheet(
-                type = "income",
-                prefilledTitle = parsed.title,
-                prefilledAmount = parsed.amount?.let { "%.2f".format(it) }.orEmpty(),
-                prefilledAccountId = parsed.accountId.orEmpty(),
-                prefilledCategory = parsed.category,
-                prefilledNote = parsed.body,
-            )
-            VoiceCaptureType.TRANSFER -> openFinanceEntrySheet(
-                type = "transfer",
-                prefilledTitle = parsed.title,
-                prefilledAmount = parsed.amount?.let { "%.2f".format(it) }.orEmpty(),
-                prefilledAccountId = parsed.accountId.orEmpty(),
-                prefilledToAccountId = parsed.toAccountId.orEmpty(),
-                prefilledNote = parsed.body,
-            )
-            VoiceCaptureType.NOTE -> {
-                val trimmedTitle = parsed.title.trim()
-                val trimmedBody = parsed.body.trim()
-                if (trimmedTitle.isNotBlank() || trimmedBody.isNotBlank()) {
-                    val noteId = UUID.randomUUID().toString()
-                    val now = System.currentTimeMillis()
-                    val note = BoopNote(
-                        id = noteId,
-                        title = trimmedTitle,
-                        body = trimmedBody,
-                        attachmentUri = null,
-                        audioUri = null,
-                        tagsCsv = "",
-                        ocrText = "",
-                        linkedTaskId = null,
-                        archived = false,
-                        createdAtMillis = now,
-                        updatedAtMillis = now,
-                    )
-                    repository.saveNote(note)
-                    refresh()
-                    itemSheet = ItemSheet.NoteSheet(
-                        id = noteId,
-                        sessionKey = noteId,
-                        title = trimmedTitle,
-                        body = trimmedBody,
-                        attachmentUri = null,
-                        audioUri = null,
-                        tagsCsv = "",
-                        createdAtMillis = now,
-                        updatedAtMillis = now,
-                    )
-                } else {
-                    itemSheet = ItemSheet.NoteSheet(
-                        id = null,
-                        sessionKey = UUID.randomUUID().toString(),
-                        title = "",
-                        body = "",
-                        attachmentUri = null,
-                        audioUri = null,
-                        tagsCsv = "",
-                    )
-                }
-            }
-        }
-        speedDialExpanded = false
-    }
-
-    LaunchedEffect(pendingVoiceCapture) {
-        val parsed = pendingVoiceCapture ?: return@LaunchedEffect
-        delay(120)
-        openVoiceCaptureResult(parsed)
-        pendingVoiceCapture = null
+    val voiceAssistantNonce = BoopVoiceResultHolder.nonce.intValue
+    LaunchedEffect(voiceAssistantNonce) {
+        val parsed = BoopVoiceResultHolder.pending ?: return@LaunchedEffect
+        BoopVoiceResultHolder.pending = null
+        applyVoiceCapture(parsed)
     }
 
     LaunchedEffect(tasks, pendingOpenTaskId) {
@@ -919,7 +907,6 @@ private fun BoopApp() {
             onFinished = { showLaunchSplash = false },
         ) {
         Surface(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize()) {
             Scaffold(
                 containerColor = darkBg,
                 bottomBar = {
@@ -1058,10 +1045,16 @@ private fun BoopApp() {
                             ),
                     ) {
                         SettingsScreen(
+                            repository = repository,
                             themeMode = themeMode,
                             onThemeModeChange = { mode ->
                                 themeMode = mode
                                 LocalStore.saveThemeMode(mode)
+                            },
+                            paletteFamily = paletteFamily,
+                            onPaletteFamilyChange = { family ->
+                                paletteFamily = family
+                                LocalStore.savePaletteFamily(family)
                             },
                             showHabitsPage = showHabitsPage,
                             onShowHabitsPageChange = { enabled ->
@@ -1073,6 +1066,7 @@ private fun BoopApp() {
                                 showWalletPage = enabled
                                 LocalStore.saveShowWalletPage(enabled)
                             },
+                            onDataRefresh = { refresh() },
                             onBack = { settingsOpen = false },
                         )
                     }
@@ -1105,7 +1099,13 @@ private fun BoopApp() {
                             .verticalScroll(rememberScrollState()),
                     ) {
                         when (sheet) {
-                            is ItemSheet.TaskSheet -> TaskEditorSheet(
+                            is ItemSheet.TaskSheet -> {
+                                val persistTask: (BoopTask) -> Unit = { task ->
+                                    repository.saveTask(task)
+                                    ReminderScheduler.schedule(AppContextHolder.context, task)
+                                    refresh()
+                                }
+                                TaskEditorSheet(
                                 initial = sheet,
                                 notes = notes.filter { !it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis },
                                 onDismiss = { itemSheet = null },
@@ -1119,13 +1119,14 @@ private fun BoopApp() {
                                 onSaveNote = { note ->
                                     repository.saveNote(note)
                                 },
+                                onPersist = persistTask,
                                 onSave = { task ->
-                                    repository.saveTask(task)
-                                    ReminderScheduler.schedule(AppContextHolder.context, task)
-                                    refresh()
+                                    persistTask(task)
                                     itemSheet = null
                                 },
+                                onOpenLinkedNote = { note -> openNoteSheet(note) },
                             )
+                            }
                             is ItemSheet.NoteSheet -> NoteEditorSheet(
                                 initial = sheet,
                                 onDismiss = { itemSheet = null },
@@ -1275,10 +1276,9 @@ private fun BoopApp() {
                     onOpenTask = { openTaskSheet(null) },
                     onOpenEvent = { openEventSheet(startAt = calendarCreateAtMillis) },
                     onOpenExternalCalendar = {
-                        try {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://calendar.formula1.com/")))
-                        } catch (_: Throwable) {
-                        }
+                        selectTab(BoopTab.CALENDAR)
+                        calendarSyncRequest++
+                        Toast.makeText(context, "Syncing device calendars…", Toast.LENGTH_SHORT).show()
                         speedDialExpanded = false
                     },
                     onOpenNote = { openNoteSheet(null) },
@@ -1289,7 +1289,6 @@ private fun BoopApp() {
                     onOpenAccount = { openAccountSheet(null) },
                     onExpandedChange = { speedDialExpanded = it },
                 )
-            }
             }
         }
         }
@@ -1407,21 +1406,69 @@ private fun BoopPagerPage(
 
 @Composable
 private fun SettingsScreen(
+    repository: BoopRepository,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    paletteFamily: PaletteFamily,
+    onPaletteFamilyChange: (PaletteFamily) -> Unit,
     showHabitsPage: Boolean,
     onShowHabitsPageChange: (Boolean) -> Unit,
     showWalletPage: Boolean,
     onShowWalletPageChange: (Boolean) -> Unit,
+    onDataRefresh: () -> Unit,
     onBack: () -> Unit,
 ) {
     val palette = LocalBoopPalette.current
+    val context = LocalContext.current
+    var syncBusy by remember { mutableStateOf(false) }
+    var authBusy by remember { mutableStateOf(false) }
+    var authUid by remember { mutableStateOf(BoopSyncState.signedInUid ?: repository.currentUserId()) }
+    var syncStatusTick by remember { mutableIntStateOf(0) }
+    DisposableEffect(Unit) {
+        val listener = FirebaseAuth.AuthStateListener { auth ->
+            authUid = auth.currentUser?.uid
+            BoopSyncState.signedInUid = auth.currentUser?.uid
+            syncStatusTick++
+        }
+        FirebaseAuth.getInstance().addAuthStateListener(listener)
+        onDispose { FirebaseAuth.getInstance().removeAuthStateListener(listener) }
+    }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.openOutputStream(uri)?.use { stream ->
+                stream.write(repository.exportBackupJson().toByteArray(Charsets.UTF_8))
+            }
+            Toast.makeText(context, "Backup exported", Toast.LENGTH_SHORT).show()
+        }.onFailure {
+            Toast.makeText(context, "Export failed", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText().orEmpty()
+            if (repository.importBackupJson(raw)) {
+                onDataRefresh()
+                Toast.makeText(context, "Backup imported", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Invalid backup file", Toast.LENGTH_SHORT).show()
+            }
+        }.onFailure {
+            Toast.makeText(context, "Import failed", Toast.LENGTH_SHORT).show()
+        }
+    }
     Column(
         Modifier
             .fillMaxSize()
             .background(palette.background)
             .padding(horizontal = 16.dp)
-            .padding(top = 12.dp, bottom = 24.dp),
+            .padding(top = 12.dp, bottom = 24.dp)
+            .verticalScroll(rememberScrollState()),
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -1443,11 +1490,7 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(20.dp))
-        Text(
-            "Appearance",
-            style = MaterialTheme.typography.titleMedium,
-            color = palette.onBackground,
-        )
+        Text("Appearance", style = MaterialTheme.typography.titleMedium, color = palette.onBackground)
         Spacer(Modifier.height(8.dp))
         ThemeMode.entries.forEach { mode ->
             val selected = themeMode == mode
@@ -1474,30 +1517,131 @@ private fun SettingsScreen(
                         ),
                     )
                     Column(Modifier.padding(start = 4.dp)) {
-                        Text(
-                            mode.label,
-                            style = if (selected) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium,
-                            color = palette.onBackground,
-                        )
-                        Text(
-                            when (mode) {
-                                ThemeMode.DARK -> "Always use dark theme"
-                                ThemeMode.LIGHT -> "Always use light theme"
-                                ThemeMode.SYSTEM -> "Match your device setting"
-                            },
-                            color = palette.muted,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                        Text(mode.label, color = palette.onBackground, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
         }
+        Spacer(Modifier.height(12.dp))
+        Text("Color palette", style = MaterialTheme.typography.titleSmall, color = palette.muted)
+        Spacer(Modifier.height(6.dp))
+        PaletteFamily.entries.forEach { family ->
+            val selected = paletteFamily == family
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clickable { onPaletteFamilyChange(family) },
+                shape = RoundedCornerShape(14.dp),
+                color = if (selected) palette.surface else palette.background,
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = selected,
+                        onClick = { onPaletteFamilyChange(family) },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = palette.onBackground,
+                            unselectedColor = palette.muted,
+                        ),
+                    )
+                    Text(family.label, color = palette.onBackground, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
         Spacer(Modifier.height(24.dp))
+        Text("Account & sync", style = MaterialTheme.typography.titleMedium, color = palette.onBackground)
+        Spacer(Modifier.height(8.dp))
+        val syncLabel = remember(syncStatusTick, BoopSyncState.lastSyncMillis, BoopSyncState.lastSyncError, BoopSyncState.lastSyncOk) {
+            when {
+                BoopSyncState.lastSyncOk && BoopSyncState.lastSyncMillis > 0L ->
+                    "Last synced ${SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(BoopSyncState.lastSyncMillis)}"
+                BoopSyncState.lastSyncError != null -> BoopSyncState.lastSyncError!!
+                else -> "Local data ready — tap Sync now to back up"
+            }
+        }
+        Text(syncLabel, color = palette.muted, style = MaterialTheme.typography.bodySmall)
         Text(
-            "Navigation",
-            style = MaterialTheme.typography.titleMedium,
-            color = palette.onBackground,
+            if (authUid != null) "Account ID: ${authUid!!.take(8)}…" else "Not signed in to cloud yet",
+            color = palette.muted,
+            style = MaterialTheme.typography.labelSmall,
         )
+        Text(
+            "Tasks and notes always save on this device, even if cloud sync fails.",
+            color = palette.muted,
+            style = MaterialTheme.typography.labelSmall,
+        )
+        Spacer(Modifier.height(8.dp))
+        if (authUid == null) {
+            BoopWhiteButton(if (authBusy) "Signing in…" else "Retry sign-in") {
+                if (authBusy) return@BoopWhiteButton
+                authBusy = true
+                repository.ensureAnonymousAuth { ok, error ->
+                    authBusy = false
+                    syncStatusTick++
+                    if (ok) {
+                        Toast.makeText(context, "Signed in", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, error ?: "Sign-in failed", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        BoopWhiteButton(if (syncBusy) "Syncing…" else "Sync now") {
+            if (syncBusy) return@BoopWhiteButton
+            syncBusy = true
+            repository.pushAllToCloud { ok, error ->
+                syncBusy = false
+                syncStatusTick++
+                if (ok) {
+                    Toast.makeText(context, "Synced to cloud", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, error ?: "Sync failed", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        BoopWhiteButton("Export backup") {
+            exportLauncher.launch("boop-backup-${System.currentTimeMillis()}.json")
+        }
+        Spacer(Modifier.height(8.dp))
+        BoopWhiteButton("Import backup") {
+            importLauncher.launch(arrayOf("application/json", "text/*"))
+        }
+        Spacer(Modifier.height(24.dp))
+        Text("Reminders", style = MaterialTheme.typography.titleMedium, color = palette.onBackground)
+        Spacer(Modifier.height(8.dp))
+        SettingsActionRow(
+            title = "Exact alarm permission",
+            subtitle = "Helps reminders fire on time (Android 12+)",
+            onClick = {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                    }
+                    if (intent.resolveActivity(context.packageManager) != null) {
+                        context.startActivity(intent)
+                    } else {
+                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                        })
+                    }
+                } else {
+                    Toast.makeText(context, "Exact alarms are allowed on this Android version", Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
+        Spacer(Modifier.height(24.dp))
+        Text("Voice", style = MaterialTheme.typography.titleMedium, color = palette.onBackground)
+        Spacer(Modifier.height(8.dp))
+        AssistantSetupRow()
+        Spacer(Modifier.height(24.dp))
+        Text("Navigation", style = MaterialTheme.typography.titleMedium, color = palette.onBackground)
         Spacer(Modifier.height(8.dp))
         SettingsToggleRow(
             title = "Habits page",
@@ -1515,6 +1659,71 @@ private fun SettingsScreen(
 }
 
 @Composable
+private fun SettingsActionRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    val palette = LocalBoopPalette.current
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = palette.surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text(title, color = palette.onBackground, style = MaterialTheme.typography.titleSmall)
+            Text(subtitle, color = palette.muted, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun AssistantSetupRow() {
+    val palette = LocalBoopPalette.current
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+    val rowShape = RoundedCornerShape(14.dp)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable {
+                val roleIntent = Intent("android.app.action.REQUEST_ROLE").apply {
+                    putExtra("android.app.extra.ROLE_NAME", "android.app.role.ASSISTANT")
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                    roleIntent.resolveActivity(context.packageManager) != null
+                ) {
+                    launcher.launch(roleIntent)
+                } else {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                }
+            },
+        shape = rowShape,
+        color = palette.surface,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                "Power button voice",
+                style = MaterialTheme.typography.titleSmall,
+                color = palette.onBackground,
+            )
+            Text(
+                "Tap above, then choose BOOP in the assistant list. After that, long-press the power button opens BOOP voice capture.",
+                color = palette.muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
 private fun SettingsToggleRow(
     title: String,
     subtitle: String,
@@ -1522,11 +1731,12 @@ private fun SettingsToggleRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val palette = LocalBoopPalette.current
+    val rowShape = RoundedCornerShape(14.dp)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = rowShape,
         color = palette.surface,
     ) {
         Row(
@@ -1697,7 +1907,7 @@ private fun BoopBottomBar(
         Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .height(68.dp),
+            .height(76.dp),
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -1707,8 +1917,9 @@ private fun BoopBottomBar(
             Surface(
                 shape = RoundedCornerShape(32.dp),
                 color = palette.surfaceElevated,
-                shadowElevation = 4.dp,
-                border = BorderStroke(1.dp, palette.muted.copy(alpha = 0.2f)),
+                shadowElevation = 0.dp,
+                border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.2f)),
+                modifier = Modifier,
             ) {
                 Row(
                     Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
@@ -1736,7 +1947,7 @@ private fun BoopBottomBar(
             )
             Box(
                 Modifier
-                    .size(44.dp)
+                    .size(52.dp)
                     .onGloballyPositioned { coordinates ->
                         if (!expanded) {
                             onAddAnchorChanged(coordinates.boundsInWindow())
@@ -1878,12 +2089,14 @@ private fun BoopSpeedDialOverlay(
                 dismissOnClickOutside = false,
             ),
         ) {
+            val menuShape = RoundedCornerShape(22.dp)
             Surface(
-                shape = RoundedCornerShape(22.dp),
+                shape = menuShape,
                 color = palette.surfaceElevated.copy(alpha = 0.98f),
-                shadowElevation = 8.dp,
+                shadowElevation = 0.dp,
                 border = BorderStroke(1.dp, palette.muted.copy(alpha = 0.18f)),
-                modifier = Modifier.graphicsLayer {
+                modifier = Modifier
+                    .graphicsLayer {
                     alpha = menuAlpha
                     scaleX = menuScale
                     scaleY = menuScale
@@ -1967,7 +2180,7 @@ private fun BoopPersistentActionButton(
     val pulseScale = if (listening) listeningPulse else 1f
     Surface(
         modifier = modifier
-            .size(44.dp)
+            .size(52.dp)
             .graphicsLayer {
                 scaleX = pressScale * pulseScale
                 scaleY = pressScale * pulseScale
@@ -1984,14 +2197,11 @@ private fun BoopPersistentActionButton(
             ),
         shape = CircleShape,
         color = bgColor,
-        shadowElevation = when {
-            filled || listening -> 6.dp
-            else -> 2.dp
-        },
+        shadowElevation = 0.dp,
         border = when {
-            filled -> BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.38f))
-            listening -> BorderStroke(1.dp, palette.recording.copy(alpha = 0.35f))
-            else -> BorderStroke(1.dp, palette.muted.copy(alpha = 0.2f))
+            filled -> BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.45f))
+            listening -> BorderStroke(1.dp, palette.recording.copy(alpha = 0.4f))
+            else -> BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.18f))
         },
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -2000,7 +2210,7 @@ private fun BoopPersistentActionButton(
                 contentDescription = contentDescription,
                 tint = iconTint,
                 modifier = Modifier
-                    .size(21.dp)
+                    .size(24.dp)
                     .graphicsLayer { rotationZ = iconRotation },
             )
         }
@@ -2161,10 +2371,9 @@ private fun BoopNavTabButton(
         palette.accentOn,
         progress,
     )
-    val elevation = 2f + progress * 3f
     Surface(
         modifier = Modifier
-            .size(44.dp)
+            .size(48.dp)
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
@@ -2181,11 +2390,11 @@ private fun BoopNavTabButton(
             ),
         shape = CircleShape,
         color = bgColor,
-        shadowElevation = elevation.dp,
+        shadowElevation = 0.dp,
         border = if (progress > 0.5f) {
-            BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.28f))
+            BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.38f))
         } else {
-            BorderStroke(1.dp, palette.muted.copy(alpha = 0.24f))
+            BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.16f))
         },
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -2193,7 +2402,7 @@ private fun BoopNavTabButton(
                 icon,
                 contentDescription = contentDescription,
                 tint = iconTint,
-                modifier = Modifier.size(21.dp),
+                modifier = Modifier.size(23.dp),
             )
         }
     }
@@ -2235,6 +2444,9 @@ private fun plainNoteSnippet(html: String, maxLen: Int): String {
     if (plain.length <= maxLen) return plain
     return plain.take(maxLen - 1).trimEnd() + "…"
 }
+
+private fun noteBodyHasVisibleContent(html: String): Boolean =
+    plainNoteSnippet(html, 1).isNotBlank()
 
 private fun extractLinksFromBody(htmlOrText: String): List<String> {
     val plain = HtmlCompat.fromHtml(htmlOrText, HtmlCompat.FROM_HTML_MODE_COMPACT).toString()
@@ -2462,8 +2674,8 @@ private fun DashboardStatCard(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
         color = palette.surface,
-        shadowElevation = 3.dp,
-        border = BorderStroke(1.dp, palette.muted.copy(alpha = 0.12f)),
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, palette.muted.copy(alpha = 0.14f)),
     ) {
         Column(
             Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
@@ -2703,9 +2915,10 @@ private fun DashboardScreen(
                 Surface(
                     shape = RoundedCornerShape(18.dp),
                     color = palette.quoteFill,
-                    shadowElevation = 4.dp,
+                    shadowElevation = 0.dp,
                     border = BorderStroke(1.5.dp, palette.quoteStroke),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth(),
                 ) {
                     BoopAnimatedEnter {
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
@@ -2789,8 +3002,6 @@ private fun DashboardScreen(
                             ) {
                                 Row(
                                     Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 13.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Column(Modifier.weight(1f)) {
                                         Text(
@@ -2806,11 +3017,6 @@ private fun DashboardScreen(
                                             style = MaterialTheme.typography.bodySmall,
                                         )
                                     }
-                                    Icon(
-                                        Icons.Outlined.Notifications,
-                                        contentDescription = null,
-                                        tint = palette.accent.copy(alpha = 0.85f),
-                                    )
                                 }
                             }
                         }
@@ -3090,6 +3296,7 @@ private fun BoopFilledTextField(
     minLines: Int = 1,
 ) {
     val palette = LocalBoopPalette.current
+    val fieldShape = RoundedCornerShape(14.dp)
     TextField(
         value = value,
         onValueChange = onValueChange,
@@ -3098,14 +3305,8 @@ private fun BoopFilledTextField(
             color = palette.onBackground,
         ),
         modifier = modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = 2.dp,
-                shape = RoundedCornerShape(14.dp),
-                ambientColor = Color.Black.copy(alpha = 0.12f),
-                spotColor = Color.Black.copy(alpha = 0.16f),
-            ),
-        shape = RoundedCornerShape(14.dp),
+            .fillMaxWidth(),
+        shape = fieldShape,
         colors = TextFieldDefaults.colors(
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
@@ -3324,7 +3525,8 @@ private fun NoteRichTextToolbar(editText: EditText?, context: Context) {
 
 @Composable
 private fun BoopNoteHtmlSnippet(html: String, maxLines: Int = 8) {
-    val payload = html.ifBlank { "&nbsp;" }
+    if (!noteBodyHasVisibleContent(html)) return
+    val payload = plainNoteSnippet(html, 8_000)
     AndroidView(
         modifier = Modifier.fillMaxWidth(),
         factory = { ctx ->
@@ -3752,8 +3954,11 @@ private fun TaskListScreen(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 72.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = 4.dp,
+                bottom = 72.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (activeTasks.isEmpty()) {
                 item {
@@ -3761,6 +3966,7 @@ private fun TaskListScreen(
                 }
             }
             items(activeTasks, key = { it.id }) { task ->
+                val taskShape = RoundedCornerShape(16.dp)
                 val isCompleting = pendingArchiveTaskId == task.id
                 val cardScale by animateFloatAsState(
                     targetValue = if (isCompleting) 0.9f else 1f,
@@ -3779,8 +3985,8 @@ private fun TaskListScreen(
                 )
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                    shape = taskShape,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .graphicsLayer {
@@ -3799,6 +4005,7 @@ private fun TaskListScreen(
                                 .weight(1f)
                                 .clickable { onOpenTask(task) }
                                 .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Text(task.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground)
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -4397,8 +4604,11 @@ private fun CalendarScreen(
                 .weight(1f)
                 .fillMaxWidth(),
             state = timelineState,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = 4.dp,
+                bottom = 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (!calendarGranted) {
                 item {
@@ -4414,9 +4624,11 @@ private fun CalendarScreen(
                 items(timelineRenderItems, key = { it.item.id }) { render ->
                     val item = render.item
                     val isTask = item.isTask
+                    val eventShape = RoundedCornerShape(14.dp)
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = eventShape,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(uniformBlockHeight)
@@ -4541,13 +4753,18 @@ private fun NotesListScreen(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 72.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = 4.dp,
+                bottom = 72.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(visibleNotes, key = { it.id }) { note ->
+                val noteShape = RoundedCornerShape(16.dp)
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = noteShape,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onOpenNote(note) },
@@ -4555,7 +4772,41 @@ private fun NotesListScreen(
                     val images = parseNoteAttachments(note.attachmentUri)
                     val hasImage = images.isNotEmpty()
                     val hasAudio = !note.audioUri.isNullOrBlank()
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column {
+                        if (hasImage) {
+                            val ctx = LocalContext.current
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(132.dp)
+                                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                images.take(3).forEach { imageUri ->
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(ctx)
+                                            .data(storedAttachmentForCoil(imageUri))
+                                            .crossfade(false)
+                                            .build(),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .background(Color(0xFF0A0A0B)),
+                                    )
+                                }
+                            }
+                        }
+                        Column(
+                            Modifier.padding(
+                                start = 14.dp,
+                                end = 14.dp,
+                                top = if (hasImage) 10.dp else 14.dp,
+                                bottom = 14.dp,
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
                         Text(note.title.ifBlank { "Untitled note" }, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground)
                         Text(
                             formatNoteCardTime(note),
@@ -4574,34 +4825,8 @@ private fun NotesListScreen(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (note.body.isNotBlank()) {
-                            BoopNoteHtmlSnippet(note.body)
-                        }
-                        if (hasImage) {
-                            val ctx = LocalContext.current
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(160.dp)
-                                    .clip(RoundedCornerShape(12.dp)),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                images.take(3).forEach { imageUri ->
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(ctx)
-                                            .data(storedAttachmentForCoil(imageUri))
-                                            .crossfade(false)
-                                            .build(),
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(Color(0xFF0A0A0B)),
-                                    )
-                                }
-                            }
+                        if (noteBodyHasVisibleContent(note.body)) {
+                            BoopNoteHtmlSnippet(note.body, maxLines = 4)
                         }
                         if (hasAudio) {
                             Text("Audio attached", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
@@ -4611,6 +4836,7 @@ private fun NotesListScreen(
                             links.take(2).forEach { link ->
                                 NoteLinkPreviewCard(link)
                             }
+                        }
                         }
                     }
                 }
@@ -4673,52 +4899,45 @@ private fun HabitsListScreen(
     onPersistHabit: (BoopHabit) -> Unit,
     onOpenHabit: (BoopHabit) -> Unit,
 ) {
+    val palette = LocalBoopPalette.current
     val epoch = LocalBoopDataEpoch.current
     val sortedHabits = remember(epoch) { habits.sortedBy { it.title.lowercase(Locale.getDefault()) } }
     val dayHabits = remember(epoch) { sortedHabits.filter { normalizeHabitCategory(it.dayPeriodCategory) == "day" } }
     val nightHabits = remember(epoch) { sortedHabits.filter { normalizeHabitCategory(it.dayPeriodCategory) == "night" } }
-    var dayExpanded by rememberSaveable { mutableStateOf(true) }
-    var nightExpanded by rememberSaveable { mutableStateOf(true) }
     Column(
         Modifier
             .fillMaxSize()
             .padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         BoopPageTitle("Habits")
         Column(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(top = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            DashboardCompactSection(
-                title = "Day habits",
-                summary = if (dayHabits.isEmpty()) "No day habits" else "${dayHabits.size} habits",
-                expanded = dayExpanded,
-                onToggle = { dayExpanded = !dayExpanded },
-            ) {
-                dayHabits.forEach { habit ->
-                    key(habit.id, habit.dayKeys, habit.quantityDayValues) {
-                        HabitWeekStripCard(habit = habit, onPersist = onPersistHabit, onOpenHabit = onOpenHabit)
-                    }
-                }
-            }
-            DashboardCompactSection(
-                title = "Night habits",
-                summary = if (nightHabits.isEmpty()) "No night habits" else "${nightHabits.size} habits",
-                expanded = nightExpanded,
-                onToggle = { nightExpanded = !nightExpanded },
-            ) {
-                nightHabits.forEach { habit ->
-                    key(habit.id, habit.dayKeys, habit.quantityDayValues) {
-                        HabitWeekStripCard(habit = habit, onPersist = onPersistHabit, onOpenHabit = onOpenHabit)
-                    }
-                }
-            }
             if (sortedHabits.isEmpty()) {
-                Text("No habits yet.", color = Color(0xFF8E8E90), style = MaterialTheme.typography.bodyMedium)
+                Text("No habits yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
+            } else {
+                if (dayHabits.isNotEmpty()) {
+                    DashboardSectionLabel("Day habits")
+                    dayHabits.forEach { habit ->
+                        key(habit.id, habit.dayKeys, habit.quantityDayValues) {
+                            HabitWeekStripCard(habit = habit, onPersist = onPersistHabit, onOpenHabit = onOpenHabit)
+                        }
+                    }
+                }
+                if (nightHabits.isNotEmpty()) {
+                    DashboardSectionLabel("Night habits")
+                    nightHabits.forEach { habit ->
+                        key(habit.id, habit.dayKeys, habit.quantityDayValues) {
+                            HabitWeekStripCard(habit = habit, onPersist = onPersistHabit, onOpenHabit = onOpenHabit)
+                        }
+                    }
+                }
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -4770,10 +4989,11 @@ private fun FinanceAccountBalanceCard(
 ) {
     val palette = LocalBoopPalette.current
     val interaction = remember(name) { MutableInteractionSource() }
+    val cardShape = RoundedCornerShape(18.dp)
     Surface(
         modifier = modifier
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
+        shape = cardShape,
         color = if (selected) palette.accent.copy(alpha = 0.1f) else palette.surfaceVariant,
         border = BorderStroke(
             1.dp,
@@ -4804,11 +5024,13 @@ private fun FinanceAccountExpandedPanel(
     onApplyDelta: (Double, Boolean) -> Unit,
 ) {
     val palette = LocalBoopPalette.current
+    val panelShape = RoundedCornerShape(18.dp)
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = panelShape,
         color = palette.surface,
         border = BorderStroke(1.dp, palette.muted.copy(alpha = 0.14f)),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth(),
     ) {
         Column(
             Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -4863,10 +5085,12 @@ private fun FinanceTransactionRow(
     val palette = LocalBoopPalette.current
     val typeColor = ledgerTypeColor(entry.type, palette)
     val rowInteraction = remember(entry.id) { MutableInteractionSource() }
+    val rowShape = RoundedCornerShape(16.dp)
     Card(
         colors = CardDefaults.cardColors(containerColor = palette.surface),
-        shape = RoundedCornerShape(16.dp),
+        shape = rowShape,
         border = BorderStroke(1.dp, palette.muted.copy(alpha = 0.1f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = modifier
             .fillMaxWidth()
             .clickable(interactionSource = rowInteraction, indication = null, onClick = onEdit),
@@ -5008,11 +5232,14 @@ private fun FinanceScreen(
                 } else {
                     LazyColumn(
                         Modifier.weight(1f).fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 72.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            top = 4.dp,
+                            bottom = 72.dp,
+                        ),
                     ) {
                         items(accounts.chunked(2), key = { row -> row.joinToString { it.id } }) { rowAccounts ->
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Row(
                                     Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -5073,8 +5300,11 @@ private fun FinanceScreen(
                 } else {
                     LazyColumn(
                         Modifier.weight(1f).fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 72.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            top = 4.dp,
+                            bottom = 72.dp,
+                        ),
                     ) {
                         items(sortedEntries, key = { it.id }) { entry ->
                             FinanceTransactionRow(
@@ -5090,7 +5320,7 @@ private fun FinanceScreen(
             else -> {
                 LazyColumn(
                     Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 72.dp),
                 ) {
                     if (accounts.isNotEmpty()) {
@@ -5137,10 +5367,12 @@ private fun FinanceScreen(
                                 BoopAccentTextButton(label = "Transactions", onClick = { viewMode = "transactions" })
                             }
                             if (sortedEntries.isEmpty()) {
+                                val emptyShape = RoundedCornerShape(16.dp)
                                 Surface(
-                                    shape = RoundedCornerShape(16.dp),
+                                    shape = emptyShape,
                                     color = palette.surfaceVariant,
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth(),
                                 ) {
                                     Text(
                                         "No transactions yet — add income, expense, or transfer from +.",
@@ -5150,7 +5382,7 @@ private fun FinanceScreen(
                                     )
                                 }
                             } else {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     sortedEntries.take(5).forEach { entry ->
                                         FinanceTransactionRow(
                                             entry = entry,
@@ -5794,11 +6026,6 @@ private fun habitSearchHaystack(habit: BoopHabit): String {
         .lowercase(Locale.getDefault())
 }
 
-private fun normalizeHabitCategory(raw: String): String = when (raw.lowercase(Locale.getDefault())) {
-    "night" -> "night"
-    else -> "day"
-}
-
 private fun habitCategoryLabel(raw: String): String =
     normalizeHabitCategory(raw).replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
 
@@ -5911,15 +6138,20 @@ private fun HabitWeekStripCard(
     onPersist: (BoopHabit) -> Unit,
     onOpenHabit: (BoopHabit) -> Unit,
 ) {
+    val palette = LocalBoopPalette.current
     val todayKey = todayHabitDayKey()
     val dayValues = parseHabitDayValues(habit.quantityDayValues)
     val todayAmount = dayValues[todayKey] ?: 0
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth(),
+    val cardShape = RoundedCornerShape(16.dp)
+    Surface(
+        shape = cardShape,
+        color = palette.surfaceElevated,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.2f)),
+        modifier = Modifier
+            .fillMaxWidth(),
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -5930,15 +6162,15 @@ private fun HabitWeekStripCard(
                     modifier = Modifier
                         .weight(1f)
                         .clickable { onOpenHabit(habit) },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.onBackground,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     "${habit.progress}/${habit.goal}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = palette.muted,
                 )
             }
             Row(
@@ -5960,18 +6192,36 @@ private fun HabitWeekStripCard(
                     val dayNum = cal.get(Calendar.DAY_OF_MONTH).toString()
                     val dayAmount = dayValues[key] ?: 0
                     val interaction = remember(habit.id, i) { MutableInteractionSource() }
-                    val cellHeight = if (isToday) 52.dp else 48.dp
+                    val cellShape = RoundedCornerShape(10.dp)
+                    val cellHeight = if (isToday) 56.dp else 52.dp
+                    val cellBg = when {
+                        done -> palette.accent
+                        isToday -> palette.surfaceVariant
+                        else -> palette.surface
+                    }
+                    val cellText = when {
+                        done -> palette.accentOn
+                        else -> palette.onBackground
+                    }
+                    val cellLabel = when {
+                        done -> palette.accentOn.copy(alpha = 0.75f)
+                        else -> palette.muted
+                    }
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .height(cellHeight)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (done) Color(0xFF1B5E20) else Color(0xFF222224))
+                            .clip(cellShape)
+                            .background(cellBg)
                             .then(
                                 if (isToday) {
-                                    Modifier.border(2.dp, Color.White, RoundedCornerShape(10.dp))
+                                    Modifier.border(
+                                        2.dp,
+                                        palette.accentGlow.copy(alpha = 0.75f),
+                                        cellShape,
+                                    )
                                 } else {
-                                    Modifier
+                                    Modifier.border(1.dp, palette.accentGlow.copy(alpha = 0.12f), cellShape)
                                 },
                             )
                             .clickable(
@@ -5986,15 +6236,15 @@ private fun HabitWeekStripCard(
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(label, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            Text(label, color = cellLabel, style = MaterialTheme.typography.labelMedium, maxLines = 1)
                             if (habit.quantityMode) {
                                 Text(
                                     if (dayAmount == 0) dayNum else dayAmount.toString(),
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    style = MaterialTheme.typography.labelLarge,
+                                    color = cellText,
+                                    style = MaterialTheme.typography.titleSmall,
                                 )
                             } else {
-                                Text(dayNum, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.labelLarge)
+                                Text(dayNum, color = cellText, style = MaterialTheme.typography.titleSmall)
                             }
                         }
                     }
@@ -6007,7 +6257,11 @@ private fun HabitWeekStripCard(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("${todayAmount} / ${habit.quantityDailyTarget} $unit today", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        "${todayAmount} / ${habit.quantityDailyTarget} $unit today",
+                        color = palette.muted,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
                     Spacer(Modifier.width(10.dp))
                     val quickAdd = listOf(
                         1,
@@ -6015,31 +6269,30 @@ private fun HabitWeekStripCard(
                         maxOf(10, habit.quantityDailyTarget / 2),
                     ).distinct()
                     quickAdd.forEach { delta ->
+                        val chipShape = RoundedCornerShape(999.dp)
                         Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.clickable {
-                                val map = dayValues.toMutableMap()
-                                map[todayKey] = todayAmount + delta
-                                onPersist(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
-                            },
+                            shape = chipShape,
+                            color = palette.surfaceVariant,
+                            shadowElevation = 0.dp,
+                            border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.28f)),
+                            modifier = Modifier
+                                .clickable {
+                                    val map = dayValues.toMutableMap()
+                                    map[todayKey] = todayAmount + delta
+                                    onPersist(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
+                                },
                         ) {
                             Text(
                                 "+$delta",
-                                color = MaterialTheme.colorScheme.onBackground,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                color = palette.onBackground,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                             )
                         }
                         Spacer(Modifier.width(6.dp))
                     }
                 }
             }
-            Text(
-                if (habit.quantityMode) "Quick-add amount chips for today · tap title for details." else "Tap today’s column to log · tap the title for details.",
-                color = Color(0xFF6E6E70),
-                style = MaterialTheme.typography.labelSmall,
-            )
         }
     }
 }
@@ -6051,6 +6304,7 @@ private fun HabitTodayCheckInSheet(
     onEditHabit: (BoopHabit) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val palette = LocalBoopPalette.current
     val scroll = rememberScrollState()
     Column(
         Modifier
@@ -6068,12 +6322,16 @@ private fun HabitTodayCheckInSheet(
             Column(Modifier.weight(1f)) {
                 BoopSheetHeaderTitle("Habits week")
                 Spacer(Modifier.height(4.dp))
-                Text("Check-off habits toggle today; quantity habits let you add minutes/mL with +/-.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Check-off habits toggle today; quantity habits let you add minutes/mL with +/-.",
+                    color = palette.muted,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         }
         Spacer(Modifier.height(12.dp))
         if (habits.isEmpty()) {
-            Text("No habits yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text("No habits yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
         } else {
             habits.forEach { habit ->
                 key(habit.id, habit.dayKeys, habit.quantityDayValues) {
@@ -6521,7 +6779,9 @@ private fun TaskEditorSheet(
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
     onSaveNote: (BoopNote) -> Unit,
+    onPersist: (BoopTask) -> Unit,
     onSave: (BoopTask) -> Unit,
+    onOpenLinkedNote: (BoopNote) -> Unit,
 ) {
     val sheetKey = initial.sessionKey
     var title by rememberSaveable(sheetKey) { mutableStateOf(initial.title) }
@@ -6561,9 +6821,14 @@ private fun TaskEditorSheet(
     DisposableEffect(sheetKey) {
         onDispose {
             if (!hasExplicitSave && !skipAutoSaveOnDispose) {
-                buildTaskForSaveOrNull()?.let(onSave)
+                buildTaskForSaveOrNull()?.let(onPersist)
             }
         }
+    }
+    fun openLinkedNote(note: BoopNote) {
+        skipAutoSaveOnDispose = true
+        buildTaskForSaveOrNull()?.let(onPersist)
+        onOpenLinkedNote(note)
     }
     Row(
         Modifier.fillMaxWidth(),
@@ -6696,7 +6961,13 @@ private fun TaskEditorSheet(
             Surface(
                 shape = RoundedCornerShape(999.dp),
                 color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.clickable { linkedNoteId = note.id },
+                modifier = Modifier.clickable {
+                    if (active) {
+                        openLinkedNote(note)
+                    } else {
+                        linkedNoteId = note.id
+                    }
+                },
             ) {
                 Text(
                     note.title.ifBlank { "Untitled note" },
@@ -6705,6 +6976,58 @@ private fun TaskEditorSheet(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                )
+            }
+        }
+    }
+    val linkedNote = linkedNoteId?.let { id -> notes.firstOrNull { it.id == id } }
+    if (linkedNote != null) {
+        Spacer(Modifier.height(8.dp))
+        Surface(
+            onClick = { openLinkedNote(linkedNote) },
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 2.dp,
+            shadowElevation = 2.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.EditNote,
+                    contentDescription = null,
+                    tint = Color(0xFFB3D5FF),
+                    modifier = Modifier.size(22.dp),
+                )
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        linkedNote.title.ifBlank { "Untitled note" },
+                        color = MaterialTheme.colorScheme.onBackground,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val preview = plainNoteSnippet(linkedNote.body, 96)
+                    if (preview.isNotBlank()) {
+                        Text(
+                            preview,
+                            color = Color(0xFFBFBFBF),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = "Open linked note",
+                    tint = Color(0xFFB3D5FF),
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
@@ -6985,6 +7308,33 @@ private fun NoteEditorSheet(
         placeholder = { Text("work, urgent, ideas", color = Color(0xFF8A8A8A)) },
     )
     Spacer(Modifier.height(8.dp))
+    if (attachmentStored.isNotEmpty()) {
+        attachmentStored.chunked(3).forEach { row ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                row.forEach { stored ->
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(storedAttachmentForCoil(stored))
+                            .crossfade(false)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(12.dp)),
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+        }
+        Spacer(Modifier.height(4.dp))
+    }
     Text("Note", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
     Spacer(Modifier.height(4.dp))
     AndroidView(
@@ -7157,33 +7507,6 @@ private fun NoteEditorSheet(
             previewLinks.forEach { link ->
                 NoteLinkPreviewCard(link)
             }
-        }
-    }
-    if (attachmentStored.isNotEmpty()) {
-        Spacer(Modifier.height(8.dp))
-        attachmentStored.chunked(3).forEach { row ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(120.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                row.forEach { stored ->
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(storedAttachmentForCoil(stored))
-                            .crossfade(false)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(12.dp)),
-                    )
-                }
-            }
-            Spacer(Modifier.height(4.dp))
         }
     }
     Spacer(Modifier.height(20.dp))
@@ -7398,20 +7721,20 @@ private fun BoopHeaderIconButton(
     val palette = LocalBoopPalette.current
     Surface(
         modifier = modifier
-            .size(48.dp)
+            .size(54.dp)
             .clickable(onClick = onClick),
         shape = CircleShape,
         color = if (filled) palette.accent else palette.surfaceElevated,
-        shadowElevation = if (filled) 6.dp else 2.dp,
+        shadowElevation = 0.dp,
         border = when {
-            filled -> BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.4f))
-            else -> BorderStroke(1.dp, palette.muted.copy(alpha = 0.22f))
+            filled -> BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.45f))
+            else -> BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.2f))
         },
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (loading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(22.dp),
                     color = if (filled) palette.accentOn else palette.accent,
                     strokeWidth = 2.dp,
                 )
@@ -7424,7 +7747,7 @@ private fun BoopHeaderIconButton(
                         iconTint != null -> iconTint
                         else -> palette.muted
                     },
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(26.dp),
                 )
             }
         }
@@ -7438,18 +7761,20 @@ private fun BoopAccentTextButton(
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalBoopPalette.current
+    val shape = RoundedCornerShape(14.dp)
     Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        color = palette.accentGlow.copy(alpha = 0.16f),
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.48f)),
+        modifier = modifier
+            .clickable(onClick = onClick),
+        shape = shape,
+        color = palette.surfaceElevated,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.42f)),
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.labelMedium,
-            color = palette.accent,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = palette.onBackground,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 11.dp),
         )
     }
 }
@@ -7500,471 +7825,23 @@ private fun BoopCalendarDayCell(
 @Composable
 private fun BoopWhiteButton(label: String, onClick: () -> Unit) {
     val palette = LocalBoopPalette.current
+    val shape = RoundedCornerShape(14.dp)
     Button(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
+        shape = shape,
+        modifier = Modifier
+            .fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = palette.accent,
             contentColor = palette.accentOn,
         ),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 8.dp,
+            pressedElevation = 4.dp,
+        ),
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = palette.accentOn)
-    }
-}
-
-data class BoopTask(
-    val id: String,
-    val title: String,
-    val reminderAt: Long,
-    val done: Boolean,
-    val repeatEveryDays: Int = 0,
-    val linkedNoteId: String? = null,
-    /** Filed away from the main list (separate from [done]). */
-    val archived: Boolean = false,
-)
-data class BoopNote(
-    val id: String,
-    val title: String,
-    val body: String,
-    val attachmentUri: String?,
-    val audioUri: String? = null,
-    val tagsCsv: String = "",
-    val ocrText: String = "",
-    val linkedTaskId: String? = null,
-    val archived: Boolean = false,
-    /** First save time (local). */
-    val createdAtMillis: Long = 0L,
-    /** Last save time (local), used for week strip & search ordering. */
-    val updatedAtMillis: Long = 0L,
-)
-/** [dayKeys] comma-separated yyyyMMdd calendar days marked done (dashboard strip). */
-data class BoopHabit(
-    val id: String,
-    val title: String,
-    val dayPeriodCategory: String = "day",
-    val goal: Int,
-    val progress: Int,
-    val dayKeys: String = "",
-    val quantityMode: Boolean = false,
-    val quantityUnit: String = "",
-    val quantityDailyTarget: Int = 30,
-    val quantityDayValues: String = "",
-)
-data class BoopAccount(
-    val id: String,
-    val name: String,
-    val createdAtMillis: Long = System.currentTimeMillis(),
-)
-data class BoopLedgerEntry(
-    val id: String,
-    val type: String, // income | expense | transfer
-    val accountId: String,
-    val toAccountId: String? = null,
-    val amount: Double,
-    val title: String,
-    val category: String = "",
-    val subcategory: String = "",
-    val note: String = "",
-    val dueAtMillis: Long? = null,
-    val createdAtMillis: Long = System.currentTimeMillis(),
-)
-
-private object AppContextHolder {
-    lateinit var context: Context
-}
-
-private object LocalStore {
-    fun init(context: Context) {
-        AppContextHolder.context = context.applicationContext
-    }
-
-    private fun pref() = AppContextHolder.context.getSharedPreferences("boop_store", Context.MODE_PRIVATE)
-
-    fun save(key: String, payload: String) = pref().edit().putString(key, payload).apply()
-    fun read(key: String): String = pref().getString(key, "[]").orEmpty()
-
-    fun readThemeMode(): ThemeMode = ThemeMode.fromStorage(pref().getString("theme_mode", null))
-    fun saveThemeMode(mode: ThemeMode) = pref().edit().putString("theme_mode", mode.storageKey).apply()
-
-    fun readShowHabitsPage(): Boolean = pref().getBoolean("show_habits_page", true)
-    fun saveShowHabitsPage(show: Boolean) = pref().edit().putBoolean("show_habits_page", show).apply()
-
-    fun readShowWalletPage(): Boolean = pref().getBoolean("show_wallet_page", true)
-    fun saveShowWalletPage(show: Boolean) = pref().edit().putBoolean("show_wallet_page", show).apply()
-}
-
-private class BoopRepository(private val store: LocalStore) {
-    private val auth = FirebaseAuth.getInstance()
-    private val db = FirebaseFirestore.getInstance()
-
-    fun ensureSession(onRemoteLoaded: () -> Unit) {
-        store.init(AppContextHolder.context)
-        val continueWithSync = sync@{
-            val uid = auth.currentUser?.uid ?: return@sync
-            db.collection("boopUsers").document(uid).get().addOnSuccessListener { snap ->
-                snap.getString("tasks")?.let { store.save("tasks", it) }
-                snap.getString("notes")?.let { store.save("notes", it) }
-                snap.getString("habits")?.let { store.save("habits", it) }
-                snap.getString("accounts")?.let { store.save("accounts", it) }
-                snap.getString("ledgerEntries")?.let { store.save("ledgerEntries", it) }
-                onRemoteLoaded()
-            }
-        }
-        if (auth.currentUser == null) {
-            auth.signInAnonymously().addOnSuccessListener { continueWithSync() }
-        } else {
-            continueWithSync()
-        }
-    }
-
-    fun readTasks(): List<BoopTask> {
-        return parseArray(store.read("tasks")) { item ->
-            val hasArchivedKey = item.has("archived")
-            val archived = if (hasArchivedKey) item.optBoolean("archived", false) else false
-            val done = item.optBoolean("done", false)
-            BoopTask(
-                id = item.getString("id"),
-                title = item.getString("title"),
-                reminderAt = item.getLong("reminderAt"),
-                done = done,
-                repeatEveryDays = item.optInt("repeatEveryDays", 0),
-                linkedNoteId = item.optString("linkedNoteId").ifBlank { null },
-                archived = archived,
-            )
-        }.sortedBy { it.reminderAt }
-    }
-
-    fun readNotes(): List<BoopNote> {
-        val json = store.read("notes")
-        val arr = JSONArray(json)
-        val out = mutableListOf<BoopNote>()
-        for (i in 0 until arr.length()) {
-            val item = arr.getJSONObject(i)
-            val rawU = item.optLong("updatedAt", 0L)
-            val u = if (rawU == 0L) {
-                System.currentTimeMillis() - i * 3_600_000L
-            } else {
-                rawU
-            }
-            val createdRaw = item.optLong("createdAt", 0L)
-            val createdAt = if (createdRaw > 0L) createdRaw else u
-            out.add(
-                BoopNote(
-                    id = item.getString("id"),
-                    title = item.optString("title"),
-                    body = item.optString("body"),
-                    attachmentUri = item.optString("attachmentUri").ifBlank { null },
-                    audioUri = item.optString("audioUri").ifBlank { null },
-                    tagsCsv = item.optString("tags"),
-                    ocrText = item.optString("ocrText"),
-                    linkedTaskId = item.optString("linkedTaskId").ifBlank { null },
-                    archived = item.optBoolean("archived", false),
-                    createdAtMillis = createdAt,
-                    updatedAtMillis = u,
-                ),
-            )
-        }
-        return out.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
-    }
-
-    fun readHabits(): List<BoopHabit> {
-        return parseArray(store.read("habits")) { item ->
-            BoopHabit(
-                item.getString("id"),
-                item.getString("title"),
-                normalizeHabitCategory(item.optString("dayPeriodCategory", "day")),
-                item.getInt("goal"),
-                item.getInt("progress"),
-                item.optString("dayKeys"),
-                item.optBoolean("quantityMode", false),
-                item.optString("quantityUnit"),
-                item.optInt("quantityDailyTarget", 30),
-                item.optString("quantityDayValues"),
-            )
-        }.sortedBy { it.title.lowercase(Locale.getDefault()) }
-    }
-
-    fun readAccounts(): List<BoopAccount> {
-        return parseArray(store.read("accounts")) { item ->
-            BoopAccount(
-                id = item.getString("id"),
-                name = item.optString("name"),
-                createdAtMillis = item.optLong("createdAt", System.currentTimeMillis()),
-            )
-        }.sortedBy { it.name.lowercase(Locale.getDefault()) }
-    }
-
-    fun readLedgerEntries(): List<BoopLedgerEntry> {
-        return parseArray(store.read("ledgerEntries")) { item ->
-            BoopLedgerEntry(
-                id = item.getString("id"),
-                type = item.optString("type", "expense"),
-                accountId = item.optString("accountId"),
-                toAccountId = item.optString("toAccountId").ifBlank { null },
-                amount = item.optDouble("amount", 0.0),
-                title = item.optString("title"),
-                category = item.optString("category"),
-                subcategory = item.optString("subcategory"),
-                note = item.optString("note"),
-                dueAtMillis = item.optLong("dueAt", 0L).takeIf { it > 0L },
-                createdAtMillis = item.optLong("createdAt", System.currentTimeMillis()),
-            )
-        }.sortedByDescending { it.createdAtMillis }
-    }
-
-    fun saveTask(task: BoopTask) {
-        upsertTasks(readTasks(), task)
-    }
-
-    fun deleteTask(id: String) {
-        val updated = readTasks().filterNot { it.id == id }
-        upsertTasks(updated, null)
-    }
-
-    fun saveNote(note: BoopNote) {
-        val existing = readNotes().firstOrNull { it.id == note.id }
-        val created = when {
-            note.createdAtMillis > 0L -> note.createdAtMillis
-            existing != null && existing.createdAtMillis > 0L -> existing.createdAtMillis
-            existing != null && existing.updatedAtMillis > 0L -> existing.updatedAtMillis
-            else -> System.currentTimeMillis()
-        }
-        val stamped = note.copy(createdAtMillis = created, updatedAtMillis = System.currentTimeMillis())
-        val updated = readNotes().toMutableList().apply {
-            removeAll { it.id == stamped.id }
-            add(0, stamped)
-        }
-        val arr = JSONArray()
-        updated.forEach {
-            arr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("title", it.title)
-                    .put("body", it.body)
-                    .put("attachmentUri", it.attachmentUri ?: "")
-                    .put("audioUri", it.audioUri ?: "")
-                    .put("tags", it.tagsCsv)
-                    .put("ocrText", it.ocrText)
-                    .put("linkedTaskId", it.linkedTaskId ?: "")
-                    .put("archived", it.archived)
-                    .put("createdAt", it.createdAtMillis)
-                    .put("updatedAt", it.updatedAtMillis),
-            )
-        }
-        store.save("notes", arr.toString())
-        sync("notes", arr.toString())
-    }
-
-    fun deleteNote(id: String) {
-        val updated = readNotes().filterNot { it.id == id }
-        val arr = JSONArray()
-        updated.forEach {
-            arr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("title", it.title)
-                    .put("body", it.body)
-                    .put("attachmentUri", it.attachmentUri ?: "")
-                    .put("audioUri", it.audioUri ?: "")
-                    .put("tags", it.tagsCsv)
-                    .put("ocrText", it.ocrText)
-                    .put("linkedTaskId", it.linkedTaskId ?: "")
-                    .put("archived", it.archived)
-                    .put("createdAt", it.createdAtMillis)
-                    .put("updatedAt", it.updatedAtMillis),
-            )
-        }
-        store.save("notes", arr.toString())
-        sync("notes", arr.toString())
-    }
-
-    fun saveHabit(habit: BoopHabit) {
-        val updated = readHabits().toMutableList().apply {
-            removeAll { it.id == habit.id }
-            add(0, habit.copy(dayPeriodCategory = normalizeHabitCategory(habit.dayPeriodCategory)))
-        }
-        val arr = JSONArray()
-        updated.forEach {
-            arr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("title", it.title)
-                    .put("dayPeriodCategory", normalizeHabitCategory(it.dayPeriodCategory))
-                    .put("goal", it.goal)
-                    .put("progress", it.progress)
-                    .put("dayKeys", it.dayKeys)
-                    .put("quantityMode", it.quantityMode)
-                    .put("quantityUnit", it.quantityUnit)
-                    .put("quantityDailyTarget", it.quantityDailyTarget)
-                    .put("quantityDayValues", it.quantityDayValues),
-            )
-        }
-        store.save("habits", arr.toString())
-        sync("habits", arr.toString())
-    }
-
-    fun deleteHabit(id: String) {
-        val updated = readHabits().filterNot { it.id == id }
-        val arr = JSONArray()
-        updated.forEach {
-            arr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("title", it.title)
-                    .put("dayPeriodCategory", normalizeHabitCategory(it.dayPeriodCategory))
-                    .put("goal", it.goal)
-                    .put("progress", it.progress)
-                    .put("dayKeys", it.dayKeys)
-                    .put("quantityMode", it.quantityMode)
-                    .put("quantityUnit", it.quantityUnit)
-                    .put("quantityDailyTarget", it.quantityDailyTarget)
-                    .put("quantityDayValues", it.quantityDayValues),
-            )
-        }
-        store.save("habits", arr.toString())
-        sync("habits", arr.toString())
-    }
-
-    fun saveAccount(account: BoopAccount) {
-        val updated = readAccounts().toMutableList().apply {
-            removeAll { it.id == account.id }
-            add(0, account)
-        }
-        val arr = JSONArray()
-        updated.forEach {
-            arr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("name", it.name)
-                    .put("createdAt", it.createdAtMillis),
-            )
-        }
-        store.save("accounts", arr.toString())
-        sync("accounts", arr.toString())
-    }
-
-    fun deleteAccount(accountId: String) {
-        val updatedAccounts = readAccounts().filterNot { it.id == accountId }
-        val accountsArr = JSONArray()
-        updatedAccounts.forEach {
-            accountsArr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("name", it.name)
-                    .put("createdAt", it.createdAtMillis),
-            )
-        }
-        store.save("accounts", accountsArr.toString())
-        sync("accounts", accountsArr.toString())
-
-        val updatedEntries = readLedgerEntries().filterNot { it.accountId == accountId || it.toAccountId == accountId }
-        val entriesArr = JSONArray()
-        updatedEntries.forEach {
-            entriesArr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("type", it.type)
-                    .put("accountId", it.accountId)
-                    .put("toAccountId", it.toAccountId ?: "")
-                    .put("amount", it.amount)
-                    .put("title", it.title)
-                    .put("category", it.category)
-                    .put("subcategory", it.subcategory)
-                    .put("note", it.note)
-                    .put("dueAt", it.dueAtMillis ?: 0L)
-                    .put("createdAt", it.createdAtMillis),
-            )
-        }
-        store.save("ledgerEntries", entriesArr.toString())
-        sync("ledgerEntries", entriesArr.toString())
-    }
-
-    fun saveLedgerEntry(entry: BoopLedgerEntry) {
-        val updated = readLedgerEntries().toMutableList()
-        val index = updated.indexOfFirst { it.id == entry.id }
-        if (index >= 0) {
-            updated[index] = entry
-        } else {
-            updated.add(0, entry)
-        }
-        val arr = JSONArray()
-        updated.forEach {
-            arr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("type", it.type)
-                    .put("accountId", it.accountId)
-                    .put("toAccountId", it.toAccountId ?: "")
-                    .put("amount", it.amount)
-                    .put("title", it.title)
-                    .put("category", it.category)
-                    .put("subcategory", it.subcategory)
-                    .put("note", it.note)
-                    .put("dueAt", it.dueAtMillis ?: 0L)
-                    .put("createdAt", it.createdAtMillis),
-            )
-        }
-        store.save("ledgerEntries", arr.toString())
-        sync("ledgerEntries", arr.toString())
-    }
-
-    fun deleteLedgerEntry(id: String) {
-        val updated = readLedgerEntries().filter { it.id != id }
-        val arr = JSONArray()
-        updated.forEach {
-            arr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("type", it.type)
-                    .put("accountId", it.accountId)
-                    .put("toAccountId", it.toAccountId ?: "")
-                    .put("amount", it.amount)
-                    .put("title", it.title)
-                    .put("category", it.category)
-                    .put("subcategory", it.subcategory)
-                    .put("note", it.note)
-                    .put("dueAt", it.dueAtMillis ?: 0L)
-                    .put("createdAt", it.createdAtMillis),
-            )
-        }
-        store.save("ledgerEntries", arr.toString())
-        sync("ledgerEntries", arr.toString())
-    }
-
-    private fun upsertTasks(tasks: List<BoopTask>, task: BoopTask?) {
-        val updated = tasks.toMutableList().apply {
-            task?.let {
-                removeAll { item -> item.id == it.id }
-                add(0, it)
-            }
-        }
-        val arr = JSONArray()
-        updated.forEach {
-            arr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("title", it.title)
-                    .put("reminderAt", it.reminderAt)
-                    .put("done", it.done)
-                    .put("repeatEveryDays", it.repeatEveryDays)
-                    .put("linkedNoteId", it.linkedNoteId ?: "")
-                    .put("archived", it.archived),
-            )
-        }
-        store.save("tasks", arr.toString())
-        sync("tasks", arr.toString())
-    }
-
-    private fun sync(key: String, value: String) {
-        val uid = auth.currentUser?.uid ?: return
-        db.collection("boopUsers").document(uid).set(mapOf(key to value), com.google.firebase.firestore.SetOptions.merge())
-    }
-
-    private fun <T> parseArray(json: String, mapper: (JSONObject) -> T): List<T> {
-        val array = JSONArray(json)
-        val result = mutableListOf<T>()
-        for (i in 0 until array.length()) result.add(mapper(array.getJSONObject(i)))
-        return result
+        Text(label, style = MaterialTheme.typography.titleSmall, color = palette.accentOn)
     }
 }
 
@@ -7972,13 +7849,6 @@ private fun formatTaskReminderLine(timeInMillis: Long): String {
     val day = SimpleDateFormat("EEE, MMM d", Locale.US).format(timeInMillis)
     val time = SimpleDateFormat("HH:mm", Locale.US).format(timeInMillis)
     return "$day   $time"
-}
-
-private fun nextRepeatReminderMillis(currentReminderAt: Long, repeatEveryDays: Int): Long {
-    val step = repeatEveryDays * 24L * 60L * 60L * 1000L
-    var next = currentReminderAt + step
-    while (next <= System.currentTimeMillis()) next += step
-    return next
 }
 
 private fun formatNoteCardTime(note: BoopNote): String {
@@ -8238,41 +8108,7 @@ object ReminderNotifier {
 
 private object TaskNotificationActions {
     fun markTaskCompleted(context: Context, taskId: String) {
-        val pref = context.getSharedPreferences("boop_store", Context.MODE_PRIVATE)
-        val raw = pref.getString("tasks", "[]").orEmpty()
-        val arr = JSONArray(raw)
-        var changed = false
-        var rescheduleTask: BoopTask? = null
-        for (i in 0 until arr.length()) {
-            val item = arr.getJSONObject(i)
-            if (item.optString("id") == taskId) {
-                val repeatEveryDays = item.optInt("repeatEveryDays", 0)
-                val archived = item.optBoolean("archived", false)
-                if (repeatEveryDays > 0) {
-                    val base = item.optLong("reminderAt", System.currentTimeMillis())
-                    val nextAt = nextRepeatReminderMillis(base, repeatEveryDays)
-                    item.put("reminderAt", nextAt)
-                    item.put("done", false)
-                    changed = true
-                    rescheduleTask = BoopTask(
-                        id = item.optString("id"),
-                        title = item.optString("title"),
-                        reminderAt = nextAt,
-                        done = false,
-                        repeatEveryDays = repeatEveryDays,
-                        linkedNoteId = item.optString("linkedNoteId").ifBlank { null },
-                        archived = archived,
-                    )
-                } else if (!item.optBoolean("done", false)) {
-                    item.put("done", true)
-                    changed = true
-                }
-                break
-            }
-        }
-        if (changed) {
-            pref.edit().putString("tasks", arr.toString()).apply()
-            rescheduleTask?.let { ReminderScheduler.schedule(context, it) }
-        }
+        val repo = BoopData.repository(context)
+        repo.completeTaskFromNotification(taskId)?.let { ReminderScheduler.schedule(context, it) }
     }
 }

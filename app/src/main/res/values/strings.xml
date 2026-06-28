@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">BOOP</string>
+    <string name="voice_interaction_service_label">BOOP</string>
+    <string name="voice_recognition_service_label">BOOP speech recognition</string>
+    <string name="widget_tasks_title">Today\'s tasks</string>
+    <string name="widget_tasks_description">Shows your next task due today</string>
+    <string name="shortcut_voice_short">Voice</string>
+    <string name="shortcut_voice_long">Voice capture</string>
+    <string name="shortcut_task_short">New task</string>
+    <string name="shortcut_task_long">Create a new task</string>
+    <string name="shortcut_note_short">New note</string>
+    <string name="shortcut_note_long">Create a new note</string>
 </resources>

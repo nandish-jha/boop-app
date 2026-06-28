@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.prodash.reminders.BoopVoiceInteractionSessionService"
+    android:recognitionService="com.prodash.reminders.BoopRecognitionService"
+    android:settingsActivity="com.prodash.reminders.MainActivity"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="true" />
