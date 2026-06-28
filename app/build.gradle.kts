@@ -5,6 +5,8 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+import java.util.Properties
+
 android {
     namespace = "com.prodash.reminders"
     compileSdk = 35
@@ -13,8 +15,22 @@ android {
         applicationId = "com.prodash.reminders"
         minSdk = 26
         targetSdk = 35
-        versionCode = 46
-        versionName = "5.2.0"
+        versionCode = 66
+        versionName = "5.5.5"
+    }
+
+    signingConfigs {
+        create("release") {
+            val keystorePropertiesFile = rootProject.file("keystore.properties")
+            if (keystorePropertiesFile.exists()) {
+                val keystoreProperties = Properties()
+                keystoreProperties.load(keystorePropertiesFile.inputStream())
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -24,8 +40,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Installable GitHub/APK sideload builds until a release keystore is wired (e.g. keystore.properties).
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (rootProject.file("keystore.properties").exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

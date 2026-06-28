@@ -74,7 +74,7 @@ object VoiceCaptureParser {
     )
 
     private val noteIntentPattern = Regex(
-        """\b(?:""" +
+        """\\b(?:""" +
             """tak(?:e|ing)\s+(?:a\s+)?notes?(?:\s+(?:of|about|that))?|""" +
             """mak(?:e|ing)\s+(?:a\s+)?notes?(?:\s+(?:of|about|that))?|""" +
             """writ(?:e|ing)\s+(?:a\s+)?notes?(?:\s+(?:of|about|that|down))?|""" +
@@ -83,7 +83,7 @@ object VoiceCaptureParser {
             """notes?\s+(?:to\s+self|that|about)|""" +
             """jot\s+down|voice\s+notes?|""" +
             """write\s+down|remember\s+(?:that|this)""" +
-            """)\b""",
+            """)\\b""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -98,15 +98,53 @@ object VoiceCaptureParser {
         Regex("""^voice note$OPTIONAL_COMMA_OR_COLON\s*""", RegexOption.IGNORE_CASE),
     )
 
+    private val schedulingDayWords =
+        "tomorrow|today|tonight|day after tomorrow|next week|next month|" +
+            "next\\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|" +
+            "(?:on\\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
+
+    private val taskCommandPrefixPatterns = listOf(
+        Regex(
+            "^(?:please\\s+)?(?:can you\\s+)?remind me(?:\\s+(?:$schedulingDayWords))?(?:\\s+at\\s+[\\d:apm\\s]+)?\\s+to\\s+",
+            RegexOption.IGNORE_CASE,
+        ),
+        Regex(
+            "^(?:please\\s+)?(?:can you\\s+)?remind me\\s+to\\s+",
+            RegexOption.IGNORE_CASE,
+        ),
+        Regex(
+            "^(?:please\\s+)?(?:can you\\s+)?remind me(?:\\s+(?:$schedulingDayWords))?\\s+",
+            RegexOption.IGNORE_CASE,
+        ),
+        Regex(
+            "^(?:please\\s+)?(?:don't|do not) forget to\\s+",
+            RegexOption.IGNORE_CASE,
+        ),
+        Regex(
+            "^(?:please\\s+)?(?:make sure|remember) to\\s+",
+            RegexOption.IGNORE_CASE,
+        ),
+        Regex(
+            "^(?:please\\s+)?(?:set|create)\\s+(?:a\\s+)?reminder(?:\\s+to|\\s+for me to)\\s+",
+            RegexOption.IGNORE_CASE,
+        ),
+    )
+
     private val fillerPatterns = listOf(
-        Regex("""\bum+\b""", RegexOption.IGNORE_CASE),
-        Regex("""\buh+\b""", RegexOption.IGNORE_CASE),
-        Regex("""\badd (a |an )?(task|reminder|note|event|habit|expense|income) (for |to )?(me )?""", RegexOption.IGNORE_CASE),
-        Regex("""\bremind me to\b""", RegexOption.IGNORE_CASE),
-        Regex("""\bcreate (a |an )?(new )?(task|reminder|note|event|habit)\b""", RegexOption.IGNORE_CASE),
-        Regex("""\bschedule (a |an )?""", RegexOption.IGNORE_CASE),
-        Regex("""\bplease\b""", RegexOption.IGNORE_CASE),
-        Regex("""\bcan you\b""", RegexOption.IGNORE_CASE),
+        Regex("\\bum+\\b", RegexOption.IGNORE_CASE),
+        Regex("\\buh+\\b", RegexOption.IGNORE_CASE),
+        Regex("\\badd (a |an )?(task|reminder|note|event|habit|expense|income) (for |to )?(me )?", RegexOption.IGNORE_CASE),
+        Regex("\\b(?:set|create)\\s+(?:a\\s+)?reminder(?:\\s+to|\\s+for me to)?\\b", RegexOption.IGNORE_CASE),
+        Regex("\\bremind me to\\b", RegexOption.IGNORE_CASE),
+        Regex("\\bremind me\\b", RegexOption.IGNORE_CASE),
+        Regex("\\b(?:don't|do not) forget to\\b", RegexOption.IGNORE_CASE),
+        Regex("\\bmake sure to\\b", RegexOption.IGNORE_CASE),
+        Regex("\\bremember to\\b", RegexOption.IGNORE_CASE),
+        Regex("\\bcreate (a |an )?(new )?(task|reminder|note|event|habit)\\b", RegexOption.IGNORE_CASE),
+        Regex("\\bschedule (a |an )?", RegexOption.IGNORE_CASE),
+        Regex("\\bplease\\b", RegexOption.IGNORE_CASE),
+        Regex("\\bcan you\\b", RegexOption.IGNORE_CASE),
+        Regex("^(?:$schedulingDayWords)\\s+to\\s+", RegexOption.IGNORE_CASE),
     )
 
     fun parse(raw: String, accounts: List<BoopAccount>): ParsedVoiceCapture {
@@ -187,13 +225,21 @@ object VoiceCaptureParser {
     }
 
     private fun containsWord(text: String, word: String): Boolean {
-        return Regex("""\b${Regex.escape(word)}\b""", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        return Regex("\\b${Regex.escape(word)}\\b", RegexOption.IGNORE_CASE).containsMatchIn(text)
+    }
+
+    private fun stripTaskCommandPhrases(text: String): String {
+        var result = text.trim()
+        for (pattern in taskCommandPrefixPatterns) {
+            result = pattern.replaceFirst(result, "").trim()
+        }
+        return result
     }
 
     private fun isNoteIntent(lower: String): Boolean {
         if (noteTriggers.any { lower.contains(it) }) return true
         if (noteIntentPattern.containsMatchIn(lower)) return true
-        if (Regex("""^(?:please\s+)?(?:tak(?:e|ing)|mak(?:e|ing)|writ(?:e|ing)|creat(?:e|ing)|add(?:ing)?)\s+(?:a\s+)?notes?\b""", RegexOption.IGNORE_CASE)
+        if (Regex("""^(?:please\s+)?(?:tak(?:e|ing)|mak(?:e|ing)|writ(?:e|ing)|creat(?:e|ing)|add(?:ing)?)\s+(?:a\s+)?notes?\\b""", RegexOption.IGNORE_CASE)
                 .containsMatchIn(lower.trim())) {
             return true
         }
@@ -298,19 +344,23 @@ object VoiceCaptureParser {
         }
 
         val timeMatch = Regex(
-            """\bat\s*(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\b""" +
-                """|\b(\d{1,2}):(\d{2})\s*(a\.?m\.?|p\.?m\.?)?\b""" +
-                """|\b(\d{1,2})\s*(a\.?m\.?|p\.?m\.?)\b""" +
-                """|\b(\d{1,2})(?::(\d{2}))?\s+(?:in\s+the\s+)?(morning|afternoon|evening)\b""",
+            "\\bat\\s+(\\d{1,2})(?::(\\d{2}))?\\s+in\\s+the\\s+(morning|afternoon|evening)\\b|" +
+                "\\b(\\d{1,2}):(\\d{2})\\s+in\\s+the\\s+(morning|afternoon|evening)\\b|" +
+                "\\bat\\s*(\\d{1,2})(?::(\\d{2}))?\\s*(a\\.?m\\.?|p\\.?m\\.?)?\\b|" +
+                "\\b(\\d{1,2}):(\\d{2})\\s*(a\\.?m\\.?|p\\.?m\\.?)?\\b|" +
+                "\\b(\\d{1,2})\\s*(a\\.?m\\.?|p\\.?m\\.?)\\b|" +
+                "\\b(\\d{1,2})(?::(\\d{2}))?\\s+(?:in\\s+the\\s+)?(morning|afternoon|evening)\\b",
             RegexOption.IGNORE_CASE,
         ).find(lower)
 
         if (timeMatch != null) {
             val g = timeMatch.groupValues
-            val hours = listOf(1, 4, 7, 9).firstNotNullOfOrNull { g.getOrNull(it)?.toIntOrNull() } ?: 9
-            val minutes = listOf(2, 5, 10).firstNotNullOfOrNull { g.getOrNull(it)?.toIntOrNull() } ?: 0
+            val hours = listOf(1, 3, 5, 7, 9).firstNotNullOfOrNull { g.getOrNull(it)?.toIntOrNull() } ?: 9
+            val minutes = listOf(2, 4, 6, 8, 10).firstNotNullOfOrNull { g.getOrNull(it)?.toIntOrNull() } ?: 0
             val explicitMeridiem = listOf(3, 6, 8).firstNotNullOfOrNull { g.getOrNull(it)?.takeIf { it.isNotBlank() } }.orEmpty()
-            val contextWord = g.getOrNull(11).orEmpty()
+            val contextWord = listOf(3, 5, 11).firstNotNullOfOrNull { index ->
+                g.getOrNull(index)?.takeIf { it.isNotBlank() }
+            }.orEmpty()
             val resolvedHours = resolveHourWithMeridiem(
                 hours = hours,
                 explicitMeridiem = explicitMeridiem,
@@ -350,7 +400,7 @@ object VoiceCaptureParser {
             return base.timeInMillis
         }
 
-        val inMatch = Regex("""\bin\s+(\d+)\s+(minute|hour|day|week)s?\b""").find(lower)
+        val inMatch = Regex("\\bin\\s+(\\d+)\\s+(minute|hour|day|week)s?\\b").find(lower)
         if (inMatch != null) {
             val n = inMatch.groupValues[1].toLongOrNull() ?: return null
             val unit = inMatch.groupValues[2]
@@ -383,10 +433,11 @@ object VoiceCaptureParser {
     private fun meridiemFromSpeechContext(lower: String): String? = when {
         lower.contains("midnight") -> "am"
         lower.contains("noon") || lower.contains("midday") || lower.contains("lunch time") || lower.contains("lunchtime") -> "pm"
-        lower.contains("in the morning") || Regex("""\bmorning\b""").containsMatchIn(lower) -> "am"
-        lower.contains("in the afternoon") || Regex("""\bafternoon\b""").containsMatchIn(lower) -> "pm"
+        lower.contains("in the morning") || Regex("\\bmorning\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower) -> "am"
+        lower.contains("in the afternoon") || Regex("\\bafternoon\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower) -> "pm"
         lower.contains("in the evening") || lower.contains("tonight") ||
-            Regex("""\bevening\b""").containsMatchIn(lower) || Regex("""\bnight\b""").containsMatchIn(lower) -> "pm"
+            Regex("\\bevening\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower) ||
+            Regex("\\bnight\\b", RegexOption.IGNORE_CASE).containsMatchIn(lower) -> "pm"
         else -> null
     }
 
@@ -437,7 +488,7 @@ object VoiceCaptureParser {
     }
 
     private fun extractLocation(lower: String): String {
-        val atMatch = Regex("""\bat\s+([a-z0-9][a-z0-9\s'.-]{2,40})""", RegexOption.IGNORE_CASE).find(lower)
+        val atMatch = Regex("\\bat\\s+([a-z0-9][a-z0-9\\s'.-]{2,40})", RegexOption.IGNORE_CASE).find(lower)
             ?: return ""
         val phrase = atMatch.groupValues[1].trim()
         if (phrase.matches(Regex("""\d{1,2}(:\d{2})?\s*(am|pm)?""", RegexOption.IGNORE_CASE))) return ""
@@ -445,11 +496,12 @@ object VoiceCaptureParser {
     }
 
     private fun cleanText(text: String): String {
-        var cleaned = text
+        var cleaned = stripTaskCommandPhrases(text)
         for (pattern in fillerPatterns) {
             cleaned = cleaned.replace(pattern, " ")
         }
-        cleaned = cleaned.replace(Regex("""\s{2,}"""), " ").trim()
+        cleaned = cleaned.replace(Regex("\\s{2,}"), " ").trim()
+        cleaned = cleaned.replace(Regex("^to\\s+", RegexOption.IGNORE_CASE), "").trim()
         if (cleaned.isNotEmpty()) {
             cleaned = cleaned.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
         }
@@ -457,17 +509,17 @@ object VoiceCaptureParser {
     }
 
     private val titleSchedulingPatterns = listOf(
-        Regex("""\bat\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?\b""", RegexOption.IGNORE_CASE),
-        Regex("""\b\d{1,2}:\d{2}\s*(?:a\.?m\.?|p\.?m\.?)?\b""", RegexOption.IGNORE_CASE),
-        Regex("""\b\d{1,2}\s*(?:a\.?m\.?|p\.?m\.?)\b""", RegexOption.IGNORE_CASE),
-        Regex("""\b\d{1,2}(?::\d{2})?\s+(?:in\s+the\s+)?(morning|afternoon|evening)\b""", RegexOption.IGNORE_CASE),
-        Regex("""\b(?:in\s+the\s+)?(morning|afternoon|evening|night)\b""", RegexOption.IGNORE_CASE),
-        Regex("""\b(tomorrow|today|tonight|day after tomorrow|next week|next month)\b""", RegexOption.IGNORE_CASE),
-        Regex("""\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b""", RegexOption.IGNORE_CASE),
-        Regex("""\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b""", RegexOption.IGNORE_CASE),
-        Regex("""\b(noon|midday|midnight)\b""", RegexOption.IGNORE_CASE),
-        Regex("""\b(?:a\.?m\.?|p\.?m\.?)\b""", RegexOption.IGNORE_CASE),
-        Regex("""\bin\s+\d+\s+(minute|hour|day|week)s?\b""", RegexOption.IGNORE_CASE),
+        Regex("\\bat\\s+\\d{1,2}:\\d{2}\\s+in\\s+the\\s+(morning|afternoon|evening)\\b", RegexOption.IGNORE_CASE),
+        Regex("\\b\\d{1,2}:\\d{2}\\s+in\\s+the\\s+(morning|afternoon|evening)\\b", RegexOption.IGNORE_CASE),
+        Regex("\\bat\\s+\\d{1,2}(?::\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?)?\\b", RegexOption.IGNORE_CASE),
+        Regex("\\b\\d{1,2}:\\d{2}\\s*(?:a\\.?m\\.?|p\\.?m\\.?)?\\b", RegexOption.IGNORE_CASE),
+        Regex("\\b\\d{1,2}\\s*(?:a\\.?m\\.?|p\\.?m\\.?)\\b", RegexOption.IGNORE_CASE),
+        Regex("\\b\\d{1,2}(?::\\d{2})?\\s+(?:in\\s+the\\s+)?(morning|afternoon|evening)\\b", RegexOption.IGNORE_CASE),
+        Regex("\\b(?:in\\s+the\\s+)?(morning|afternoon|evening|night)\\b", RegexOption.IGNORE_CASE),
+        Regex("\\b($schedulingDayWords)\\b", RegexOption.IGNORE_CASE),
+        Regex("\\b(noon|midday|midnight)\\b", RegexOption.IGNORE_CASE),
+        Regex("\\b(?:a\\.?m\\.?|p\\.?m\\.?)\\b", RegexOption.IGNORE_CASE),
+        Regex("\\bin\\s+\\d+\\s+(minute|hour|day|week)s?\\b", RegexOption.IGNORE_CASE),
     )
 
     private fun stripSchedulingPhrases(text: String): String {
@@ -548,7 +600,9 @@ object VoiceCaptureParser {
             .replace(Regex("""\s{2,}"""), " ")
             .trim()
         // Drop orphaned single letters left from partial am/pm recognition (e.g. "p" from "p.m.")
-        title = title.replace(Regex("""\s+[ap]\s*$""", RegexOption.IGNORE_CASE), "").trim()
+        title = title.replace(Regex("\\s+[ap]\\s*$", RegexOption.IGNORE_CASE), "").trim()
+        title = title.replace(Regex("\\bat\\s*$", RegexOption.IGNORE_CASE), "").trim()
+        title = title.replace(Regex("^to\\s+", RegexOption.IGNORE_CASE), "").trim()
 
         val dot = title.indexOfFirst { it == '.' || it == '!' || it == '?' }
         if (dot in 11..79) title = title.substring(0, dot)

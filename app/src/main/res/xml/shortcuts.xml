@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="voice_capture"
+        android:enabled="true"
+        android:icon="@drawable/ic_notification_minimal"
+        android:shortcutShortLabel="@string/shortcut_voice_short"
+        android:shortcutLongLabel="@string/shortcut_voice_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.prodash.reminders.MainActivity"
+            android:targetPackage="com.prodash.reminders">
+            <extra android:name="boop_action" android:value="voice" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="new_task"
+        android:enabled="true"
+        android:icon="@drawable/ic_notification_minimal"
+        android:shortcutShortLabel="@string/shortcut_task_short"
+        android:shortcutLongLabel="@string/shortcut_task_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.prodash.reminders.MainActivity"
+            android:targetPackage="com.prodash.reminders">
+            <extra android:name="boop_action" android:value="new_task" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="new_note"
+        android:enabled="true"
+        android:icon="@drawable/ic_notification_minimal"
+        android:shortcutShortLabel="@string/shortcut_note_short"
+        android:shortcutLongLabel="@string/shortcut_note_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.prodash.reminders.MainActivity"
+            android:targetPackage="com.prodash.reminders">
+            <extra android:name="boop_action" android:value="new_note" />
+        </intent>
+    </shortcut>
+</shortcuts>
