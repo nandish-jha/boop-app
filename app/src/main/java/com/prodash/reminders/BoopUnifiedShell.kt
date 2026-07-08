@@ -267,7 +267,7 @@ fun UnifiedCreateSheet(
                         options.chunked(3).forEach { row ->
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 row.forEach { option ->
-                                    val colors = unifiedTypeColors(option.type, dark)
+                                    val colors = unifiedTypeColors(option.type, dark, palette.monochrome)
                                     Surface(
                                         onClick = {
                                             option.onClick()

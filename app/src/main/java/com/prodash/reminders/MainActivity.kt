@@ -445,9 +445,10 @@ internal data class BoopPalette(
     val topbarBg: Color,
     val chipBg: Color,
     val surfaceBorder: Color,
-    val sheetBg: Color,
+    val     sheetBg: Color,
     val overlay: Color,
     val sheetHandle: Color,
+    val monochrome: Boolean = false,
 )
 
 /** Classic terracotta + rose glow palette pair. */
@@ -505,60 +506,62 @@ private fun boopTerracottaLightPalette() = BoopPalette(
     sheetHandle = Color(0x26141313),
 )
 
-/** Unified warm dark — matches Boop Unified.html */
+/** AMOLED monochrome — true black with whites and greys */
 private fun boopDarkPalette() = BoopPalette(
-    background = Color(0xFF0C0B10),
-    phoneBg = Color(0xFF141210),
-    surface = Color(0xFF2E2B28),
-    surfaceVariant = Color(0xFF3A3632),
-    surfaceElevated = Color(0xFF2E2B28),
-    onBackground = Color(0xFFFAF6F0),
-    muted = Color(0xFFA8A098),
-    accent = Color(0xFFC08078),
-    accentGlow = Color(0xFFE8A898),
-    accentOn = Color(0xFFFFFFFF),
-    navPill = Color(0x33E8A898),
-    navSelected = Color(0xFFC08078),
-    navUnselected = Color(0xFFA8A098),
-    inputField = Color(0xFF242120),
-    danger = Color(0xFFFF8A80),
-    recording = Color(0xFFC08078),
-    quoteFill = Color(0xFF2E2B28),
-    quoteStroke = Color(0xFFC08078),
-    topbarBg = Color(0xD9141210),
-    chipBg = Color(0xFF3A3632),
-    surfaceBorder = Color(0x1AFAF6F0),
-    sheetBg = Color(0xFF2E2B28),
+    background = Color(0xFF000000),
+    phoneBg = Color(0xFF000000),
+    surface = Color(0xFF1A1A1A),
+    surfaceVariant = Color(0xFF141414),
+    surfaceElevated = Color(0xFF222222),
+    onBackground = Color(0xFFFFFFFF),
+    muted = Color(0xFF9E9E9E),
+    accent = Color(0xFFE0E0E0),
+    accentGlow = Color(0xFFBDBDBD),
+    accentOn = Color(0xFF000000),
+    navPill = Color(0x33FFFFFF),
+    navSelected = Color(0xFFFFFFFF),
+    navUnselected = Color(0xFF8A8A8A),
+    inputField = Color(0xFF141414),
+    danger = Color(0xFFE57373),
+    recording = Color(0xFFE0E0E0),
+    quoteFill = Color(0xFF1A1A1A),
+    quoteStroke = Color(0xFFE0E0E0),
+    topbarBg = Color(0xD9000000),
+    chipBg = Color(0xFF1F1F1F),
+    surfaceBorder = Color(0x1AFFFFFF),
+    sheetBg = Color(0xFF1A1A1A),
     overlay = Color(0x8C000000),
-    sheetHandle = Color(0x33FAF6F0),
+    sheetHandle = Color(0x33FFFFFF),
+    monochrome = true,
 )
 
-/** Unified warm light — matches Boop Unified.html */
+/** AMOLED monochrome light — white with greys */
 private fun boopLightPalette() = BoopPalette(
-    background = Color(0xFFEFE9DF),
-    phoneBg = Color(0xFFFBF7F1),
-    surface = Color(0xFFFFFCF9),
-    surfaceVariant = Color(0xFFEDE6DC),
-    surfaceElevated = Color(0xFFFFFCF9),
-    onBackground = Color(0xFF1A1612),
-    muted = Color(0xFF8A8278),
-    accent = Color(0xFFC08078),
-    accentGlow = Color(0xFFE8A898),
+    background = Color(0xFFF2F2F2),
+    phoneBg = Color(0xFFFFFFFF),
+    surface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFFEDEDED),
+    surfaceElevated = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF121212),
+    muted = Color(0xFF757575),
+    accent = Color(0xFF3A3A3A),
+    accentGlow = Color(0xFF9E9E9E),
     accentOn = Color(0xFFFFFFFF),
-    navPill = Color(0x28E8A898),
-    navSelected = Color(0xFFC08078),
-    navUnselected = Color(0xFF8A8278),
-    inputField = Color(0xFFFBF7F1),
+    navPill = Color(0x1F000000),
+    navSelected = Color(0xFF121212),
+    navUnselected = Color(0xFF9E9E9E),
+    inputField = Color(0xFFF5F5F5),
     danger = Color(0xFFC45850),
-    recording = Color(0xFFC08078),
-    quoteFill = Color(0xFFFFFCF9),
-    quoteStroke = Color(0xFFC08078),
-    topbarBg = Color(0xEBFBF7F1),
-    chipBg = Color(0xFFEDE6DC),
-    surfaceBorder = Color(0x141A1612),
-    sheetBg = Color(0xFFFFFCF9),
-    overlay = Color(0x591A1612),
-    sheetHandle = Color(0x261A1612),
+    recording = Color(0xFF3A3A3A),
+    quoteFill = Color(0xFFF5F5F5),
+    quoteStroke = Color(0xFF3A3A3A),
+    topbarBg = Color(0xEBFFFFFF),
+    chipBg = Color(0xFFEDEDED),
+    surfaceBorder = Color(0x14121212),
+    sheetBg = Color(0xFFFFFFFF),
+    overlay = Color(0x59121212),
+    sheetHandle = Color(0x26121212),
+    monochrome = true,
 )
 
 internal val LocalBoopPalette = staticCompositionLocalOf { boopDarkPalette() }
@@ -3093,7 +3096,6 @@ private fun DashboardScreen(
                                             .fillMaxHeight(),
                                     )
                                 }
-                                if (rowItems.size == 1) Spacer(Modifier.weight(1f))
                             }
                         }
                     }
@@ -3911,10 +3913,15 @@ private fun TaskListScreen(
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 activeTasks.chunked(2).forEach { rowTasks ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
                         rowTasks.forEach { task ->
                             val isCompleting = pendingArchiveTaskId == task.id
-                            Box(Modifier.weight(1f)) {
+                            Box(Modifier.weight(1f).fillMaxHeight()) {
                                 UnifiedTintCard(
                                     type = UnifiedItemType.REMINDER,
                                     title = task.title,
@@ -3935,10 +3942,10 @@ private fun TaskListScreen(
                                     },
                                     onClick = { onOpenTask(task) },
                                     titleDecoration = if (isCompleting) TextDecoration.LineThrough else TextDecoration.None,
+                                    modifier = Modifier.fillMaxHeight(),
                                 )
                             }
                         }
-                        if (rowTasks.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
@@ -3947,7 +3954,12 @@ private fun TaskListScreen(
             UnifiedSectionLabel("Completed", modifier = Modifier.padding(top = 8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 completedTasks.take(6).chunked(2).forEach { rowTasks ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
                         rowTasks.forEach { task ->
                             UnifiedTintCard(
                                 type = UnifiedItemType.REMINDER,
@@ -3959,10 +3971,9 @@ private fun TaskListScreen(
                                 onDelete = { onArchiveTask(task) },
                                 onClick = { onOpenTask(task) },
                                 titleDecoration = TextDecoration.LineThrough,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
                             )
                         }
-                        if (rowTasks.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
@@ -4412,6 +4423,39 @@ private fun CalendarScreen(
                 loading = isSyncing,
             )
         }
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            BoopHeaderIconButton(
+                onClick = {
+                    selectedMillis = (Calendar.getInstance().apply {
+                        timeInMillis = selectedMillis
+                        add(Calendar.DAY_OF_MONTH, -7)
+                    }).timeInMillis
+                },
+                icon = Icons.Outlined.ChevronLeft,
+                contentDescription = "Previous week",
+                iconTint = palette.accent,
+            )
+            Text(
+                SimpleDateFormat("MMMM yyyy", Locale.US).format(selectedMillis),
+                color = palette.onBackground,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            BoopHeaderIconButton(
+                onClick = {
+                    selectedMillis = (Calendar.getInstance().apply {
+                        timeInMillis = selectedMillis
+                        add(Calendar.DAY_OF_MONTH, 7)
+                    }).timeInMillis
+                },
+                icon = Icons.Outlined.ChevronRight,
+                contentDescription = "Next week",
+                iconTint = palette.accent,
+            )
+        }
         UnifiedWeekStrip(
             selectedMillis = selectedMillis,
             onSelectDay = { selectedMillis = it },
@@ -4456,20 +4500,15 @@ private fun CalendarScreen(
             Text("No events scheduled.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                dayCalendarItems.chunked(2).forEach { rowItems ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        rowItems.forEach { (meta, onClick) ->
-                            val (type, title, detail) = meta
-                            UnifiedTintCard(
-                                type = type,
-                                title = title,
-                                meta = detail,
-                                onClick = onClick,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        if (rowItems.size == 1) Spacer(Modifier.weight(1f))
-                    }
+                dayCalendarItems.forEach { (meta, onClick) ->
+                    val (type, title, detail) = meta
+                    UnifiedTintCard(
+                        type = type,
+                        title = title,
+                        meta = detail,
+                        onClick = onClick,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }
@@ -4552,7 +4591,18 @@ private fun NotesListScreen(
                     Text("No notes yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            items(visibleNotes, key = { it.id }) { note ->
+            items(
+                visibleNotes.size,
+                key = { visibleNotes[it].id },
+                span = { index ->
+                    if (index == visibleNotes.lastIndex && visibleNotes.size % 2 == 1) {
+                        GridItemSpan(maxLineSpan)
+                    } else {
+                        GridItemSpan(1)
+                    }
+                },
+            ) { index ->
+                val note = visibleNotes[index]
                 val images = parseNoteAttachments(note.attachmentUri)
                 val tags = parseNoteTags(note.tagsCsv)
                 val cardHint = buildString {
@@ -4693,8 +4743,7 @@ private fun HabitsListScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         PageHeaderTile(title = "Habits")
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+        LazyColumn(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
@@ -4702,11 +4751,10 @@ private fun HabitsListScreen(
                 top = 4.dp,
                 bottom = 72.dp,
             ),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (sortedHabits.isEmpty()) {
-                item(span = { GridItemSpan(2) }) {
+                item {
                     Text("No habits yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
@@ -4950,7 +4998,7 @@ private fun WalletAccountRow(
 ) {
     val palette = LocalBoopPalette.current
     val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
-    val colors = unifiedTypeColors(UnifiedItemType.WALLET, dark)
+    val colors = unifiedTypeColors(UnifiedItemType.WALLET, dark, palette.monochrome)
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = colors.bg,
@@ -5931,7 +5979,7 @@ private fun HabitWeekStripCard(
 ) {
     val palette = LocalBoopPalette.current
     val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
-    val habitColors = unifiedTypeColors(UnifiedItemType.HABIT, dark)
+    val habitColors = unifiedTypeColors(UnifiedItemType.HABIT, dark, palette.monochrome)
     val todayKey = todayHabitDayKey()
     val dayValues = parseHabitDayValues(habit.quantityDayValues)
     val todayAmount = dayValues[todayKey] ?: 0

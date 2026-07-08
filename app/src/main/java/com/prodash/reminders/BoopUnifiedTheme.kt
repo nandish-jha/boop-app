@@ -65,19 +65,20 @@ data class UnifiedTypeColors(
     val accent: Color,
 )
 
-fun unifiedTypeColors(type: UnifiedItemType, dark: Boolean): UnifiedTypeColors {
+fun unifiedTypeColors(type: UnifiedItemType, dark: Boolean, monochrome: Boolean = false): UnifiedTypeColors {
     val h = type.hue
+    val sat = if (monochrome) 0f else 1f
     return if (dark) {
         UnifiedTypeColors(
-            bg = Color.hsl(h, 0.12f, 0.22f),
-            border = Color.hsl(h, 0.18f, 0.42f),
-            accent = Color.hsl(h, 0.14f, 0.78f),
+            bg = Color.hsl(h, 0.12f * sat, if (monochrome) 0.16f else 0.22f),
+            border = Color.hsl(h, 0.18f * sat, if (monochrome) 0.34f else 0.42f),
+            accent = Color.hsl(h, 0.14f * sat, if (monochrome) 0.86f else 0.78f),
         )
     } else {
         UnifiedTypeColors(
-            bg = Color.hsl(h, 0.10f, 0.94f),
-            border = Color.hsl(h, 0.16f, 0.72f),
-            accent = Color.hsl(h, 0.18f, 0.38f),
+            bg = Color.hsl(h, 0.10f * sat, if (monochrome) 0.95f else 0.94f),
+            border = Color.hsl(h, 0.16f * sat, if (monochrome) 0.80f else 0.72f),
+            accent = Color.hsl(h, 0.18f * sat, if (monochrome) 0.28f else 0.38f),
         )
     }
 }
@@ -102,7 +103,7 @@ fun UnifiedTintCard(
 ) {
     val palette = LocalBoopPalette.current
     val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
-    val colors = unifiedTypeColors(type, dark)
+    val colors = unifiedTypeColors(type, dark, palette.monochrome)
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -255,7 +256,7 @@ fun UnifiedWalletHero(
 ) {
     val palette = LocalBoopPalette.current
     val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
-    val colors = unifiedTypeColors(UnifiedItemType.WALLET, dark)
+    val colors = unifiedTypeColors(UnifiedItemType.WALLET, dark, palette.monochrome)
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
@@ -301,7 +302,7 @@ fun UnifiedWeekStrip(
 ) {
     val palette = LocalBoopPalette.current
     val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
-    val colors = unifiedTypeColors(UnifiedItemType.CALENDAR, dark)
+    val colors = unifiedTypeColors(UnifiedItemType.CALENDAR, dark, palette.monochrome)
     val todayKey = SimpleDateFormat("yyyyMMdd", Locale.US).format(System.currentTimeMillis())
     val selectedKey = SimpleDateFormat("yyyyMMdd", Locale.US).format(selectedMillis)
     val weekDays = remember(selectedMillis) {
@@ -375,7 +376,7 @@ fun UnifiedHabitDots(
 ) {
     val palette = LocalBoopPalette.current
     val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
-    val colors = unifiedTypeColors(UnifiedItemType.HABIT, dark)
+    val colors = unifiedTypeColors(UnifiedItemType.HABIT, dark, palette.monochrome)
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         dots.forEach { done ->
             Box(
