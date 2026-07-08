@@ -4024,7 +4024,6 @@ private fun TaskListScreen(
                 )
             },
         )
-        UnifiedSectionLabel("Pending")
         if (activeTasks.isEmpty()) {
             Text("No pending reminders.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
         } else {
@@ -6112,6 +6111,7 @@ private fun HabitWeekStripCard(
     val todayAmount = dayValues[todayKey] ?: 0
     val cardShape = RoundedCornerShape(16.dp)
     val streakCount = habitStreakCount(habit)
+    val pillHeight = 28.dp
     val todayDone = if (habit.quantityMode) {
         todayAmount >= habit.quantityDailyTarget.coerceAtLeast(1)
     } else {
@@ -6137,12 +6137,7 @@ private fun HabitWeekStripCard(
         border = BorderStroke(1.dp, habitColors.border),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 13.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -6151,9 +6146,12 @@ private fun HabitWeekStripCard(
                 Surface(
                     shape = RoundedCornerShape(999.dp),
                     color = if (dark) Color.Black.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.height(pillHeight),
                 ) {
                     Row(
-                        Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                        Modifier
+                            .fillMaxHeight()
+                            .padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
@@ -6169,6 +6167,7 @@ private fun HabitWeekStripCard(
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 9.sp,
                                 letterSpacing = 0.5.sp,
+                                lineHeight = 11.sp,
                             ),
                         )
                     }
@@ -6187,26 +6186,40 @@ private fun HabitWeekStripCard(
                         shape = RoundedCornerShape(999.dp),
                         color = if (todayDone) habitColors.accent else habitColors.bg,
                         border = BorderStroke(1.dp, habitColors.border),
+                        modifier = Modifier.height(pillHeight),
                     ) {
-                        Text(
-                            if (todayDone) "Done" else "Check in",
-                            color = if (todayDone) palette.accentOn else habitColors.accent,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                        )
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                if (todayDone) "Done today" else "Check in today",
+                                color = if (todayDone) palette.accentOn else habitColors.accent,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
                     }
                 } else if (todayDone) {
                     Surface(
                         shape = RoundedCornerShape(999.dp),
                         color = habitColors.accent,
                         border = BorderStroke(1.dp, habitColors.border),
+                        modifier = Modifier.height(pillHeight),
                     ) {
-                        Text(
-                            "Done",
-                            color = palette.accentOn,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                        )
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "Done today",
+                                color = palette.accentOn,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
                     }
                 }
             }
@@ -6220,9 +6233,11 @@ private fun HabitWeekStripCard(
                     modifier = Modifier
                         .weight(1f)
                         .clickable { onOpenHabit(habit) },
-                    style = MaterialTheme.typography.titleSmall.copy(
+                    style = MaterialTheme.typography.titleMedium.copy(
                         fontFamily = BoopSerifFamily,
-                        lineHeight = 18.sp,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 22.sp,
                     ),
                     color = palette.onBackground,
                     maxLines = 2,
@@ -6233,23 +6248,24 @@ private fun HabitWeekStripCard(
                         shape = RoundedCornerShape(999.dp),
                         color = if (dark) Color.Black.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.55f),
                         border = BorderStroke(1.dp, habitColors.border.copy(alpha = 0.7f)),
+                        modifier = Modifier.height(pillHeight),
                     ) {
-                        Text(
-                            "$streakCount day streak",
-                            color = habitColors.accent,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 10.sp,
-                            ),
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                        )
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "$streakCount day streak",
+                                color = habitColors.accent,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            )
+                        }
                     }
                 }
             }
-            UnifiedHabitDots(
-                dots = weekDots,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            UnifiedHabitDots(dots = weekDots, modifier = Modifier.fillMaxWidth())
             if (habit.quantityMode) {
                 val unit = habit.quantityUnit.ifBlank { "units" }
                 Row(
@@ -6260,9 +6276,9 @@ private fun HabitWeekStripCard(
                     Text(
                         "${todayAmount}/${habit.quantityDailyTarget} $unit today",
                         color = palette.muted,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        style = MaterialTheme.typography.labelSmall,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf(1, maxOf(5, habit.quantityDailyTarget / 4)).distinct().forEach { delta ->
                             Surface(
                                 shape = RoundedCornerShape(999.dp),
