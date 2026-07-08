@@ -206,6 +206,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -408,7 +409,7 @@ private sealed class ItemSheet {
 enum class BoopTab(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Rounded.Home),
     NOTES("Notes", Icons.Rounded.StickyNote2),
-    REMINDERS("Reminders", Icons.Rounded.Notifications),
+    REMINDERS("Tasks", Icons.Rounded.Notifications),
     CALENDAR("Calendar", Icons.Rounded.CalendarMonth),
     HABITS("Habits", Icons.Rounded.Flag),
     WALLET("Wallet", Icons.Rounded.AttachMoney),
@@ -1372,7 +1373,7 @@ private fun BoopPagerPage(
                 onCompleteTask = onCompleteTask,
                 onUnarchiveTask = onUnarchiveTask,
                 onRestoreCompletedTask = onRestoreCompletedTask,
-                title = "Reminders",
+                title = "Tasks",
             )
             BoopTab.CALENDAR -> CalendarScreen(
                 tasks = tasks,
@@ -1612,7 +1613,7 @@ private fun SettingsScreen(
             importLauncher.launch(arrayOf("application/json", "text/*"))
         }
         Spacer(Modifier.height(24.dp))
-        Text("Reminders", style = MaterialTheme.typography.titleMedium, color = palette.onBackground)
+        Text("Tasks", style = MaterialTheme.typography.titleMedium, color = palette.onBackground)
         Spacer(Modifier.height(8.dp))
         SettingsActionRow(
             title = "Exact alarm permission",
@@ -2968,7 +2969,7 @@ private fun DashboardScreen(
     val homeFilterChips = listOf(
         "all" to "All",
         "note" to "Notes",
-        "reminder" to "Reminders",
+        "reminder" to "Tasks",
         "calendar" to "Calendar",
         "habit" to "Habits",
         "wallet" to "Wallet",
@@ -3404,6 +3405,7 @@ private fun BoopFilledTextField(
         trailingIcon = trailingIcon,
         singleLine = singleLine,
         minLines = minLines,
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
     )
 }
 
@@ -3989,7 +3991,7 @@ private fun TaskListScreen(
     onCompleteTask: (BoopTask) -> Unit,
     onUnarchiveTask: (BoopTask) -> Unit,
     onRestoreCompletedTask: (BoopTask) -> Unit,
-    title: String = "Reminders",
+    title: String = "Tasks",
 ) {
     val palette = LocalBoopPalette.current
     val scope = rememberCoroutineScope()
@@ -4006,7 +4008,7 @@ private fun TaskListScreen(
             .fillMaxSize()
             .padding(top = 8.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         PageHeaderTile(
             title = title,
@@ -4332,7 +4334,6 @@ private fun CalendarScreen(
         tasks.filter { !it.done && !it.archived && it.reminderAt >= selectedDay.timeInMillis && it.reminderAt < nextDay.timeInMillis }
             .sortedBy { it.reminderAt }
     }
-    val headerLabel = remember(selectedMillis) { SimpleDateFormat("EEE, MMM dd", Locale.US).format(selectedMillis) }
     val syncRangeStart = remember {
         Calendar.getInstance().apply {
             add(Calendar.DAY_OF_MONTH, -60)
@@ -4583,7 +4584,6 @@ private fun CalendarScreen(
                 )
             },
         )
-        UnifiedSectionLabel(headerLabel)
         val dayCalendarItems = remember(allDayEvents, dayTasks, timedGoogleEvents) {
             buildList {
                 allDayEvents.forEach { event ->
@@ -4662,7 +4662,7 @@ private fun NotesListScreen(
         Modifier
             .fillMaxSize()
             .padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         PageHeaderTile(
             title = title,
@@ -4706,7 +4706,6 @@ private fun NotesListScreen(
                 .weight(1f)
                 .fillMaxWidth(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                top = 4.dp,
                 bottom = 72.dp,
             ),
             horizontalArrangement = Arrangement.spacedBy(10.dp),

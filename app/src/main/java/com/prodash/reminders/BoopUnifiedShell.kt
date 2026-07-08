@@ -371,7 +371,7 @@ fun defaultCreateOptions(
     onAccount: () -> Unit = {},
 ): List<UnifiedCreateOption> = buildList {
     add(UnifiedCreateOption("Note", Icons.Outlined.EditNote, UnifiedItemType.NOTE, onNote))
-    add(UnifiedCreateOption("Reminder", Icons.Outlined.Notifications, UnifiedItemType.REMINDER, onReminder))
+    add(UnifiedCreateOption("Task", Icons.Outlined.Notifications, UnifiedItemType.REMINDER, onReminder))
     add(UnifiedCreateOption("Event", Icons.Outlined.CalendarMonth, UnifiedItemType.CALENDAR, onEvent))
     if (showHabits) add(UnifiedCreateOption("Habit", Icons.Outlined.Flag, UnifiedItemType.HABIT, onHabit))
     if (showWallet) {

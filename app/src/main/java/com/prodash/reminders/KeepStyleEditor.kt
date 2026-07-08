@@ -36,6 +36,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.shape.CircleShape
@@ -58,6 +59,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+private val KeepSentenceKeyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
 
 @Composable
 fun KeepToolbarIconButton(
@@ -161,6 +164,7 @@ fun KeepOutlinedTitleField(
             .padding(horizontal = 16.dp),
         placeholder = { Text(placeholder) },
         singleLine = true,
+        keyboardOptions = KeepSentenceKeyboard,
         shape = RoundedCornerShape(14.dp),
         colors = KeepOutlinedFieldColors(),
     )
@@ -182,6 +186,7 @@ fun KeepOutlinedBodyField(
             .padding(horizontal = 16.dp),
         placeholder = { Text(placeholder) },
         minLines = minLines,
+        keyboardOptions = KeepSentenceKeyboard,
         shape = RoundedCornerShape(14.dp),
         colors = KeepOutlinedFieldColors(),
     )
@@ -275,6 +280,7 @@ fun KeepBorderlessTitleField(
             textDecoration = titleDecoration,
         ),
         cursorBrush = SolidColor(palette.accent),
+        keyboardOptions = KeepSentenceKeyboard,
         singleLine = true,
         decorationBox = { inner ->
             Box {
@@ -317,6 +323,7 @@ fun KeepBorderlessBodyField(
             lineHeight = 22.sp,
         ),
         cursorBrush = SolidColor(palette.accent),
+        keyboardOptions = KeepSentenceKeyboard,
         minLines = minLines,
         decorationBox = { inner ->
             Box {
