@@ -299,22 +299,25 @@ fun UnifiedWeekStrip(
     selectedMillis: Long,
     onSelectDay: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    weekStartMillis: Long? = null,
 ) {
     val palette = LocalBoopPalette.current
     val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
     val colors = unifiedTypeColors(UnifiedItemType.CALENDAR, dark, palette.monochrome)
     val todayKey = SimpleDateFormat("yyyyMMdd", Locale.US).format(System.currentTimeMillis())
     val selectedKey = SimpleDateFormat("yyyyMMdd", Locale.US).format(selectedMillis)
-    val weekDays = remember(selectedMillis) {
+    val weekDays = remember(selectedMillis, weekStartMillis) {
         val anchor = Calendar.getInstance().apply {
-            timeInMillis = selectedMillis
+            timeInMillis = weekStartMillis ?: selectedMillis
             set(Calendar.HOUR_OF_DAY, 12)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        val mondayOffset = (anchor.get(Calendar.DAY_OF_WEEK) + 5) % 7
-        anchor.add(Calendar.DAY_OF_MONTH, -mondayOffset)
+        if (weekStartMillis == null) {
+            val mondayOffset = (anchor.get(Calendar.DAY_OF_WEEK) + 5) % 7
+            anchor.add(Calendar.DAY_OF_MONTH, -mondayOffset)
+        }
         List(7) { offset ->
             (anchor.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, offset) }
         }
@@ -377,11 +380,12 @@ fun UnifiedHabitDots(
     val palette = LocalBoopPalette.current
     val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
     val colors = unifiedTypeColors(UnifiedItemType.HABIT, dark, palette.monochrome)
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         dots.forEach { done ->
             Box(
                 Modifier
-                    .size(12.dp)
+                    .weight(1f)
+                    .height(16.dp)
                     .background(
                         if (done) colors.accent else palette.surfaceVariant,
                         CircleShape,

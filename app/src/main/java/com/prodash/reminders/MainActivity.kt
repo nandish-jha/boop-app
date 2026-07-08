@@ -2416,6 +2416,31 @@ private val habitDayKeyFormat = SimpleDateFormat("yyyyMMdd", Locale.US)
 
 private fun todayHabitDayKey(): String = habitDayKeyFormat.format(Calendar.getInstance().time)
 
+private fun mondayStartOfWeek(millis: Long): Long {
+    val anchor = Calendar.getInstance().apply {
+        timeInMillis = millis
+        set(Calendar.HOUR_OF_DAY, 12)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    val mondayOffset = (anchor.get(Calendar.DAY_OF_WEEK) + 5) % 7
+    anchor.add(Calendar.DAY_OF_MONTH, -mondayOffset)
+    return anchor.timeInMillis
+}
+
+private fun habitProgressCount(habit: BoopHabit): Int =
+    if (habit.quantityMode) {
+        parseHabitDayValues(habit.quantityDayValues).count { (_, value) ->
+            value >= habit.quantityDailyTarget.coerceAtLeast(1)
+        }
+    } else {
+        parseHabitDayKeys(habit.dayKeys).size
+    }
+
+private fun habitWithSyncedProgress(habit: BoopHabit): BoopHabit =
+    habit.copy(progress = habitProgressCount(habit).coerceAtMost(habit.goal.coerceAtLeast(1)))
+
 private fun parseHabitDayKeys(raw: String): Set<String> =
     raw.split(',').map { it.trim() }.filter { it.length == 8 }.toSet()
 
@@ -2778,6 +2803,7 @@ private fun PageHeaderTile(
     title: String,
     modifier: Modifier = Modifier,
     actions: @Composable RowScope.() -> Unit = {},
+    belowTitle: (@Composable () -> Unit)? = null,
 ) {
     val palette = LocalBoopPalette.current
     Surface(
@@ -2786,28 +2812,36 @@ private fun PageHeaderTile(
         border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.14f)),
         modifier = modifier.fillMaxWidth(),
     ) {
-        Row(
+        Column(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontFamily = BoopSerifFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 27.sp,
-                ),
-                color = palette.onBackground,
-                modifier = Modifier.weight(1f),
-            )
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                content = actions,
-            )
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontFamily = BoopSerifFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 27.sp,
+                    ),
+                    color = palette.onBackground,
+                    modifier = Modifier.weight(1f),
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = actions,
+                )
+            }
+            if (belowTitle != null) {
+                Spacer(Modifier.height(12.dp))
+                belowTitle()
+            }
         }
     }
 }
@@ -2966,7 +3000,7 @@ private fun DashboardScreen(
                         HomeCardMeta(
                             UnifiedItemType.HABIT,
                             habit.title,
-                            "${habit.progress}/${habit.goal}",
+                            "${habitProgressCount(habit)}/${habit.goal}",
                             "${habitCategoryLabel(habit.dayPeriodCategory)} · not checked in",
                         ) to { onOpenHabit(habit) },
                     )
@@ -3652,14 +3686,8 @@ private data class CalendarEventDetail(
 )
 
 private fun readGoogleCalendarIds(context: Context): Set<Long> {
-    val googleIds = mutableSetOf<Long>()
-    val fallbackVisibleIds = mutableSetOf<Long>()
-    val projection = arrayOf(
-        CalendarContract.Calendars._ID,
-        CalendarContract.Calendars.ACCOUNT_TYPE,
-        CalendarContract.Calendars.ACCOUNT_NAME,
-        CalendarContract.Calendars.OWNER_ACCOUNT,
-    )
+    val visibleIds = mutableSetOf<Long>()
+    val projection = arrayOf(CalendarContract.Calendars._ID)
     val selection = "${CalendarContract.Calendars.VISIBLE} = 1"
     context.contentResolver.query(
         CalendarContract.Calendars.CONTENT_URI,
@@ -3669,27 +3697,11 @@ private fun readGoogleCalendarIds(context: Context): Set<Long> {
         null,
     )?.use { c ->
         val idIx = c.getColumnIndex(CalendarContract.Calendars._ID)
-        val typeIx = c.getColumnIndex(CalendarContract.Calendars.ACCOUNT_TYPE)
-        val nameIx = c.getColumnIndex(CalendarContract.Calendars.ACCOUNT_NAME)
-        val ownerIx = c.getColumnIndex(CalendarContract.Calendars.OWNER_ACCOUNT)
         while (c.moveToNext()) {
-            if (idIx < 0) continue
-            val id = c.getLong(idIx)
-            fallbackVisibleIds.add(id)
-            val type = if (typeIx >= 0) c.getString(typeIx).orEmpty() else ""
-            val accountName = if (nameIx >= 0) c.getString(nameIx).orEmpty() else ""
-            val ownerAccount = if (ownerIx >= 0) c.getString(ownerIx).orEmpty() else ""
-            val isGoogleCalendar = type.equals("com.google", ignoreCase = true) ||
-                accountName.contains("@gmail.com", ignoreCase = true) ||
-                accountName.contains("@googlemail.com", ignoreCase = true) ||
-                ownerAccount.contains("@gmail.com", ignoreCase = true) ||
-                ownerAccount.contains("@googlemail.com", ignoreCase = true)
-            if (isGoogleCalendar) {
-                googleIds.add(id)
-            }
+            if (idIx >= 0) visibleIds.add(c.getLong(idIx))
         }
     }
-    return if (googleIds.isNotEmpty()) googleIds else fallbackVisibleIds
+    return visibleIds
 }
 
 private fun readVisibleCalendars(context: Context): List<DeviceCalendarChoice> {
@@ -3768,7 +3780,7 @@ private fun readGoogleCalendarEventsInRange(
 
     val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
         .appendPath(startMillis.toString())
-        .appendPath((endMillis - 1L).toString())
+        .appendPath(endMillis.toString())
         .build()
     val projection = arrayOf(
         CalendarContract.Instances.EVENT_ID,
@@ -4217,26 +4229,32 @@ private fun CalendarScreen(
             .sortedBy { it.reminderAt }
     }
     val headerLabel = remember(selectedMillis) { SimpleDateFormat("EEE, MMM dd", Locale.US).format(selectedMillis) }
-    val syncRangeStart = remember(selectedMillis) {
+    val syncRangeStart = remember {
         Calendar.getInstance().apply {
-            timeInMillis = selectedMillis
-            add(Calendar.DAY_OF_MONTH, -120)
+            add(Calendar.DAY_OF_MONTH, -60)
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
     }
-    val syncRangeEnd = remember(selectedMillis) {
+    val syncRangeEnd = remember {
         Calendar.getInstance().apply {
-            timeInMillis = selectedMillis
-            add(Calendar.DAY_OF_MONTH, 120)
+            add(Calendar.DAY_OF_MONTH, 365)
             set(Calendar.HOUR_OF_DAY, 23)
             set(Calendar.MINUTE, 59)
             set(Calendar.SECOND, 59)
             set(Calendar.MILLISECOND, 999)
         }.timeInMillis
     }
+    val weekBasePage = 1200
+    val weekAnchorMonday = remember { mondayStartOfWeek(selectedMillis) }
+    val weekPager = rememberPagerState(initialPage = weekBasePage, pageCount = { 2400 })
+    fun weekMondayForPage(page: Int): Long =
+        Calendar.getInstance().apply {
+            timeInMillis = weekAnchorMonday
+            add(Calendar.WEEK_OF_YEAR, page - weekBasePage)
+        }.timeInMillis
     var syncSucceeded by remember { mutableStateOf(false) }
     var googleEventsCache by remember { mutableStateOf(emptyList<CalendarEventUi>()) }
     var isSyncing by remember { mutableStateOf(false) }
@@ -4295,8 +4313,8 @@ private fun CalendarScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 val wasGranted = calendarGranted
                 refreshCalendarPermission()
-                if (!wasGranted && calendarGranted) {
-                    scope.launch { refreshGoogleEvents(true) }
+                if (calendarGranted) {
+                    scope.launch { refreshGoogleEvents(!wasGranted) }
                 }
             }
         }
@@ -4339,6 +4357,22 @@ private fun CalendarScreen(
     LaunchedEffect(syncRequest) {
         if (syncRequest <= 0) return@LaunchedEffect
         triggerCalendarSync()
+    }
+    LaunchedEffect(weekPager.settledPage) {
+        val weekMonday = weekMondayForPage(weekPager.settledPage)
+        val dayOffset = Calendar.getInstance().apply { timeInMillis = selectedMillis }.let {
+            (it.get(Calendar.DAY_OF_WEEK) + 5) % 7
+        }
+        val aligned = Calendar.getInstance().apply {
+            timeInMillis = weekMonday
+            add(Calendar.DAY_OF_MONTH, dayOffset)
+            set(Calendar.HOUR_OF_DAY, 12)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        if (aligned != selectedMillis) selectedMillis = aligned
+        if (calendarGranted) refreshGoogleEvents(false)
     }
     val googleEvents = remember(googleEventsCache, selectedDay.timeInMillis, nextDay.timeInMillis) {
         googleEventsCache
@@ -4414,51 +4448,36 @@ private fun CalendarScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        PageHeaderTile(title = "Calendar") {
-            BoopHeaderIconButton(
-                onClick = triggerCalendarSync,
-                icon = if (syncSucceeded) Icons.Outlined.CheckCircle else Icons.Outlined.Sync,
-                contentDescription = if (syncSucceeded) "Calendar synced" else "Sync with Google Calendar",
-                iconTint = palette.accent,
-                loading = isSyncing,
-            )
-        }
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            BoopHeaderIconButton(
-                onClick = {
-                    selectedMillis = (Calendar.getInstance().apply {
-                        timeInMillis = selectedMillis
-                        add(Calendar.DAY_OF_MONTH, -7)
-                    }).timeInMillis
-                },
-                icon = Icons.Outlined.ChevronLeft,
-                contentDescription = "Previous week",
-                iconTint = palette.accent,
-            )
-            Text(
-                SimpleDateFormat("MMMM yyyy", Locale.US).format(selectedMillis),
-                color = palette.onBackground,
-                style = MaterialTheme.typography.labelLarge,
-            )
-            BoopHeaderIconButton(
-                onClick = {
-                    selectedMillis = (Calendar.getInstance().apply {
-                        timeInMillis = selectedMillis
-                        add(Calendar.DAY_OF_MONTH, 7)
-                    }).timeInMillis
-                },
-                icon = Icons.Outlined.ChevronRight,
-                contentDescription = "Next week",
-                iconTint = palette.accent,
-            )
-        }
-        UnifiedWeekStrip(
-            selectedMillis = selectedMillis,
-            onSelectDay = { selectedMillis = it },
+        PageHeaderTile(
+            title = "Calendar",
+            belowTitle = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        SimpleDateFormat("MMMM yyyy", Locale.US).format(selectedMillis),
+                        color = palette.onBackground,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    HorizontalPager(
+                        state = weekPager,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { page ->
+                        UnifiedWeekStrip(
+                            selectedMillis = selectedMillis,
+                            weekStartMillis = weekMondayForPage(page),
+                            onSelectDay = { selectedMillis = it },
+                        )
+                    }
+                }
+            },
+            actions = {
+                BoopHeaderIconButton(
+                    onClick = triggerCalendarSync,
+                    icon = if (syncSucceeded) Icons.Outlined.CheckCircle else Icons.Outlined.Sync,
+                    contentDescription = if (syncSucceeded) "Calendar synced" else "Sync with Google Calendar",
+                    iconTint = palette.accent,
+                    loading = isSyncing,
+                )
+            },
         )
         UnifiedSectionLabel(headerLabel)
         val dayCalendarItems = remember(allDayEvents, dayTasks, timedGoogleEvents) {
@@ -5984,6 +6003,7 @@ private fun HabitWeekStripCard(
     val dayValues = parseHabitDayValues(habit.quantityDayValues)
     val todayAmount = dayValues[todayKey] ?: 0
     val cardShape = RoundedCornerShape(16.dp)
+    val progressCount = habitProgressCount(habit)
     val weekDots = remember(habit.id, habit.dayKeys, habit.quantityDayValues) {
         List(7) { i ->
             val offset = i - 6
@@ -6033,7 +6053,7 @@ private fun HabitWeekStripCard(
                     }
                 }
                 Text(
-                    "${habit.progress}/${habit.goal}",
+                    "$progressCount/${habit.goal}",
                     style = MaterialTheme.typography.labelLarge,
                     color = habitColors.accent,
                 )
@@ -6046,7 +6066,7 @@ private fun HabitWeekStripCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            UnifiedHabitDots(dots = weekDots)
+            UnifiedHabitDots(dots = weekDots, modifier = Modifier.fillMaxWidth())
             if (habit.quantityMode) {
                 val unit = habit.quantityUnit.ifBlank { "units" }
                 Row(
@@ -6068,7 +6088,11 @@ private fun HabitWeekStripCard(
                                 modifier = Modifier.clickable {
                                     val map = dayValues.toMutableMap()
                                     map[todayKey] = todayAmount + delta
-                                    onPersist(habit.copy(quantityDayValues = serializeHabitDayValues(map)))
+                                    onPersist(
+                                        habitWithSyncedProgress(
+                                            habit.copy(quantityDayValues = serializeHabitDayValues(map)),
+                                        ),
+                                    )
                                 },
                             ) {
                                 Text(
@@ -6087,7 +6111,11 @@ private fun HabitWeekStripCard(
                     onClick = {
                         val next = parseHabitDayKeys(habit.dayKeys).toMutableSet()
                         if (todayKey in next) next.remove(todayKey) else next.add(todayKey)
-                        onPersist(habit.copy(dayKeys = serializeHabitDayKeys(next)))
+                        onPersist(
+                            habitWithSyncedProgress(
+                                habit.copy(dayKeys = serializeHabitDayKeys(next)),
+                            ),
+                        )
                     },
                     shape = RoundedCornerShape(999.dp),
                     color = if (todayDone) habitColors.accent else habitColors.bg,
