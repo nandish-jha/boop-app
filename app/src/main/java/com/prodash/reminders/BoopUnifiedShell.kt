@@ -67,14 +67,13 @@ fun UnifiedAppChrome(
     Box(
         Modifier
             .fillMaxSize()
-            .background(palette.background),
+            .background(palette.phoneBg),
     ) {
         Column(Modifier.fillMaxSize()) {
             Box(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .background(palette.phoneBg)
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp),
             ) {
