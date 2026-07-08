@@ -382,21 +382,22 @@ fun UnifiedHabitDots(
     val colors = unifiedTypeColors(UnifiedItemType.HABIT, dark, palette.monochrome)
     Row(
         modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         dots.forEach { done ->
             Box(
                 Modifier
-                    .size(13.dp)
+                    .weight(1f)
+                    .height(8.dp)
                     .background(
                         if (done) colors.accent else palette.surfaceVariant,
-                        CircleShape,
+                        RoundedCornerShape(999.dp),
                     )
                     .border(
                         1.dp,
                         if (done) colors.border else palette.muted.copy(alpha = 0.2f),
-                        CircleShape,
+                        RoundedCornerShape(999.dp),
                     ),
             )
         }
