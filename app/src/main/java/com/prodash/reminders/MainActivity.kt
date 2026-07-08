@@ -890,7 +890,6 @@ private fun BoopApp() {
         typography = boopTypography(),
     ) {
         BoopTextTheme {
-        var showLaunchSplash by remember { mutableStateOf(true) }
         val scope = rememberCoroutineScope()
         var pullRefreshing by remember { mutableStateOf(false) }
         val pullRefreshState = rememberPullRefreshState(
@@ -938,7 +937,7 @@ private fun BoopApp() {
                 pagerState.animateScrollToPage(selectedTab)
             }
         }
-        BackHandler(enabled = !showLaunchSplash) {
+        BackHandler {
             when {
                 settingsOpen -> settingsOpen = false
                 habitCheckInOpen -> habitCheckInOpen = false
@@ -952,10 +951,6 @@ private fun BoopApp() {
                 else -> launchActivity?.finish()
             }
         }
-        BoopLaunchReveal(
-            active = showLaunchSplash,
-            onFinished = { showLaunchSplash = false },
-        ) {
         UnifiedAppChrome(
             bottomNav = {
                 if (!settingsOpen) {
@@ -1296,7 +1291,6 @@ private fun BoopApp() {
             }
 
         }
-    }
     }
     }
 }
@@ -2441,6 +2435,29 @@ private fun habitProgressCount(habit: BoopHabit): Int =
 private fun habitWithSyncedProgress(habit: BoopHabit): BoopHabit =
     habit.copy(progress = habitProgressCount(habit).coerceAtMost(habit.goal.coerceAtLeast(1)))
 
+private fun habitStreakCount(habit: BoopHabit): Int {
+    fun dayMet(key: String): Boolean =
+        if (habit.quantityMode) {
+            (parseHabitDayValues(habit.quantityDayValues)[key] ?: 0) >= habit.quantityDailyTarget.coerceAtLeast(1)
+        } else {
+            key in parseHabitDayKeys(habit.dayKeys)
+        }
+
+    val cal = Calendar.getInstance()
+    val todayKey = todayHabitDayKey()
+    if (!dayMet(todayKey)) {
+        cal.add(Calendar.DAY_OF_MONTH, -1)
+    }
+    var streak = 0
+    repeat(366) {
+        val key = habitDayKeyFormat.format(cal.time)
+        if (!dayMet(key)) return streak
+        streak++
+        cal.add(Calendar.DAY_OF_MONTH, -1)
+    }
+    return streak
+}
+
 private fun parseHabitDayKeys(raw: String): Set<String> =
     raw.split(',').map { it.trim() }.filter { it.length == 8 }.toSet()
 
@@ -2802,8 +2819,8 @@ private fun DashboardCircleButton(
 private fun PageHeaderTile(
     title: String,
     modifier: Modifier = Modifier,
-    actions: @Composable RowScope.() -> Unit = {},
     belowTitle: (@Composable () -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
 ) {
     val palette = LocalBoopPalette.current
     Surface(
@@ -2819,7 +2836,7 @@ private fun PageHeaderTile(
         ) {
             Row(
                 Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
@@ -3685,6 +3702,26 @@ private data class CalendarEventDetail(
     val repeatEveryDays: Int,
 )
 
+private fun readCalendarDisplayNames(context: Context): Map<Long, String> {
+    val names = mutableMapOf<Long, String>()
+    context.contentResolver.query(
+        CalendarContract.Calendars.CONTENT_URI,
+        arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.CALENDAR_DISPLAY_NAME),
+        "${CalendarContract.Calendars.VISIBLE} = 1",
+        null,
+        null,
+    )?.use { c ->
+        val idIx = c.getColumnIndex(CalendarContract.Calendars._ID)
+        val nameIx = c.getColumnIndex(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
+        while (c.moveToNext()) {
+            if (idIx >= 0 && nameIx >= 0) {
+                names[c.getLong(idIx)] = c.getString(nameIx).orEmpty()
+            }
+        }
+    }
+    return names
+}
+
 private fun readGoogleCalendarIds(context: Context): Set<Long> {
     val visibleIds = mutableSetOf<Long>()
     val projection = arrayOf(CalendarContract.Calendars._ID)
@@ -3770,6 +3807,50 @@ private fun readCalendarEventDetail(context: Context, eventId: Long): CalendarEv
     return null
 }
 
+private fun parseEventDurationMillis(raw: String?, fallbackStart: Long, fallbackEnd: Long): Long {
+    val duration = raw?.trim().orEmpty()
+    if (duration.isEmpty()) return (fallbackEnd - fallbackStart).coerceAtLeast(60_000L)
+    if (duration.startsWith("P") && duration.contains("T")) {
+        val hours = Regex("(\\d+)H").find(duration)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0L
+        val minutes = Regex("(\\d+)M").find(duration)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0L
+        val seconds = Regex("(\\d+)S").find(duration)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0L
+        val total = (hours * 3_600_000L) + (minutes * 60_000L) + (seconds * 1_000L)
+        if (total > 0L) return total
+    }
+    return (fallbackEnd - fallbackStart).coerceAtLeast(60_000L)
+}
+
+private fun expandRecurringEventTimes(
+    dtStart: Long,
+    durationMillis: Long,
+    rrule: String,
+    rangeStart: Long,
+    rangeEnd: Long,
+): List<Pair<Long, Long>> {
+    if (rrule.isBlank()) {
+        val end = dtStart + durationMillis
+        return if (end > rangeStart && dtStart < rangeEnd) listOf(dtStart to end) else emptyList()
+    }
+    val stepMillis = when {
+        rrule.contains("FREQ=DAILY", ignoreCase = true) -> 86_400_000L
+        rrule.contains("FREQ=WEEKLY", ignoreCase = true) -> 7 * 86_400_000L
+        rrule.contains("FREQ=MONTHLY", ignoreCase = true) -> 30 * 86_400_000L
+        else -> return emptyList()
+    }
+    val out = mutableListOf<Pair<Long, Long>>()
+    var current = dtStart
+    var guard = 0
+    while (current < rangeEnd && guard < 400) {
+        val end = current + durationMillis
+        if (end > rangeStart && current < rangeEnd) {
+            out.add(current to end)
+        }
+        current += stepMillis
+        guard++
+    }
+    return out
+}
+
 private fun readGoogleCalendarEventsInRange(
     context: Context,
     startMillis: Long,
@@ -3778,6 +3859,8 @@ private fun readGoogleCalendarEventsInRange(
     val calendarIds = readGoogleCalendarIds(context)
     if (calendarIds.isEmpty()) return emptyList()
 
+    val calendarIdSet = calendarIds.toSet()
+    val calendarNames = readCalendarDisplayNames(context)
     val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
         .appendPath(startMillis.toString())
         .appendPath(endMillis.toString())
@@ -3791,16 +3874,18 @@ private fun readGoogleCalendarEventsInRange(
         CalendarContract.Instances.CALENDAR_ID,
         CalendarContract.Instances.ALL_DAY,
     )
-    val selection = "${CalendarContract.Instances.CALENDAR_ID} IN (${calendarIds.joinToString(",")})"
     val out = mutableListOf<CalendarEventUi>()
-    context.contentResolver.query(uri, projection, selection, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
+    context.contentResolver.query(uri, projection, null, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
         val idIx = c.getColumnIndex(CalendarContract.Instances.EVENT_ID)
         val titleIx = c.getColumnIndex(CalendarContract.Instances.TITLE)
         val beginIx = c.getColumnIndex(CalendarContract.Instances.BEGIN)
         val endIx = c.getColumnIndex(CalendarContract.Instances.END)
         val calIx = c.getColumnIndex(CalendarContract.Instances.CALENDAR_DISPLAY_NAME)
+        val calIdIx = c.getColumnIndex(CalendarContract.Instances.CALENDAR_ID)
         val allDayIx = c.getColumnIndex(CalendarContract.Instances.ALL_DAY)
         while (c.moveToNext()) {
+            val calendarId = if (calIdIx >= 0) c.getLong(calIdIx) else -1L
+            if (calendarId >= 0 && calendarId !in calendarIdSet) continue
             val rawBegin = if (beginIx >= 0) c.getLong(beginIx) else startMillis
             val rawEnd = if (endIx >= 0) c.getLong(endIx) else endMillis
             val isAllDay = allDayIx >= 0 && c.getInt(allDayIx) == 1
@@ -3840,12 +3925,13 @@ private fun readGoogleCalendarEventsInRange(
         CalendarContract.Events.TITLE,
         CalendarContract.Events.DTSTART,
         CalendarContract.Events.DTEND,
+        CalendarContract.Events.DURATION,
         CalendarContract.Events.RRULE,
         CalendarContract.Events.CALENDAR_ID,
         CalendarContract.Events.ALL_DAY,
     )
-    val eventSel = "(${CalendarContract.Events.DTSTART} < ?) AND (${CalendarContract.Events.DTEND} > ?) AND (${CalendarContract.Events.CALENDAR_ID} IN (${calendarIds.joinToString(",")}))"
-    val eventArgs = arrayOf(endMillis.toString(), startMillis.toString())
+    val eventSel = "(${CalendarContract.Events.DTSTART} < ?) AND (${CalendarContract.Events.CALENDAR_ID} IN (${calendarIds.joinToString(",")}))"
+    val eventArgs = arrayOf(endMillis.toString())
     context.contentResolver.query(
         CalendarContract.Events.CONTENT_URI,
         eventProjection,
@@ -3857,22 +3943,38 @@ private fun readGoogleCalendarEventsInRange(
         val titleIx = c.getColumnIndex(CalendarContract.Events.TITLE)
         val beginIx = c.getColumnIndex(CalendarContract.Events.DTSTART)
         val endIx = c.getColumnIndex(CalendarContract.Events.DTEND)
+        val durationIx = c.getColumnIndex(CalendarContract.Events.DURATION)
         val rruleIx = c.getColumnIndex(CalendarContract.Events.RRULE)
+        val calIdIx = c.getColumnIndex(CalendarContract.Events.CALENDAR_ID)
         val allDayIx = c.getColumnIndex(CalendarContract.Events.ALL_DAY)
         while (c.moveToNext()) {
             val id = if (idIx >= 0) c.getLong(idIx) else 0L
-            if (out.any { it.id == id && it.beginMillis == (if (beginIx >= 0) c.getLong(beginIx) else 0L) }) continue
-            out.add(
-                CalendarEventUi(
-                    id = id,
-                    title = if (titleIx >= 0) c.getString(titleIx).orEmpty().ifBlank { "Untitled event" } else "Untitled event",
-                    beginMillis = if (beginIx >= 0) c.getLong(beginIx) else startMillis,
-                    endMillis = if (endIx >= 0) c.getLong(endIx) else endMillis,
-                    calendarDisplayName = "",
-                    allDay = allDayIx >= 0 && c.getInt(allDayIx) == 1,
-                    repeatEveryDays = parseRepeatDaysFromRRule(if (rruleIx >= 0) c.getString(rruleIx).orEmpty() else ""),
-                ),
+            val begin = if (beginIx >= 0) c.getLong(beginIx) else startMillis
+            val rawEnd = if (endIx >= 0) c.getLong(endIx) else begin
+            val duration = parseEventDurationMillis(
+                if (durationIx >= 0) c.getString(durationIx) else null,
+                begin,
+                rawEnd,
             )
+            val rrule = if (rruleIx >= 0) c.getString(rruleIx).orEmpty() else ""
+            val calendarId = if (calIdIx >= 0) c.getLong(calIdIx) else -1L
+            val calendarName = calendarNames[calendarId].orEmpty()
+            val isAllDay = allDayIx >= 0 && c.getInt(allDayIx) == 1
+            val instances = expandRecurringEventTimes(begin, duration, rrule, startMillis, endMillis)
+            instances.forEach { (instanceStart, instanceEnd) ->
+                if (out.any { it.id == id && it.beginMillis == instanceStart }) return@forEach
+                out.add(
+                    CalendarEventUi(
+                        id = id,
+                        title = if (titleIx >= 0) c.getString(titleIx).orEmpty().ifBlank { "Untitled event" } else "Untitled event",
+                        beginMillis = instanceStart,
+                        endMillis = instanceEnd,
+                        calendarDisplayName = calendarName,
+                        allDay = isAllDay,
+                        repeatEveryDays = parseRepeatDaysFromRRule(rrule),
+                    ),
+                )
+            }
         }
     }
     return out.sortedBy { it.beginMillis }
@@ -3906,19 +4008,22 @@ private fun TaskListScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PageHeaderTile(title = title) {
-            BoopHeaderIconButton(
-                onClick = { showCompleted = true },
-                icon = Icons.Outlined.CheckCircle,
-                contentDescription = "Completed tasks",
-                iconTint = palette.accent,
-            )
-            BoopHeaderIconButton(
-                onClick = { showArchive = true },
-                icon = Icons.Outlined.Archive,
-                contentDescription = "Archived tasks",
-            )
-        }
+        PageHeaderTile(
+            title = title,
+            actions = {
+                BoopHeaderIconButton(
+                    onClick = { showCompleted = true },
+                    icon = Icons.Outlined.CheckCircle,
+                    contentDescription = "Completed tasks",
+                    iconTint = palette.accent,
+                )
+                BoopHeaderIconButton(
+                    onClick = { showArchive = true },
+                    icon = Icons.Outlined.Archive,
+                    contentDescription = "Archived tasks",
+                )
+            },
+        )
         UnifiedSectionLabel("Pending")
         if (activeTasks.isEmpty()) {
             Text("No pending reminders.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
@@ -4560,13 +4665,16 @@ private fun NotesListScreen(
             .padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PageHeaderTile(title = title) {
-            BoopHeaderIconButton(
-                onClick = { showArchive = true },
-                icon = Icons.Outlined.Archive,
-                contentDescription = "Archived notes",
-            )
-        }
+        PageHeaderTile(
+            title = title,
+            actions = {
+                BoopHeaderIconButton(
+                    onClick = { showArchive = true },
+                    icon = Icons.Outlined.Archive,
+                    contentDescription = "Archived notes",
+                )
+            },
+        )
         if (availableTags.isNotEmpty()) {
             Row(
                 Modifier
@@ -6003,7 +6111,12 @@ private fun HabitWeekStripCard(
     val dayValues = parseHabitDayValues(habit.quantityDayValues)
     val todayAmount = dayValues[todayKey] ?: 0
     val cardShape = RoundedCornerShape(16.dp)
-    val progressCount = habitProgressCount(habit)
+    val streakCount = habitStreakCount(habit)
+    val todayDone = if (habit.quantityMode) {
+        todayAmount >= habit.quantityDailyTarget.coerceAtLeast(1)
+    } else {
+        todayKey in parseHabitDayKeys(habit.dayKeys)
+    }
     val weekDots = remember(habit.id, habit.dayKeys, habit.quantityDayValues) {
         List(7) { i ->
             val offset = i - 6
@@ -6052,20 +6165,73 @@ private fun HabitWeekStripCard(
                         )
                     }
                 }
-                Text(
-                    "$progressCount/${habit.goal}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = habitColors.accent,
-                )
+                if (!habit.quantityMode) {
+                    Surface(
+                        onClick = {
+                            val next = parseHabitDayKeys(habit.dayKeys).toMutableSet()
+                            if (todayKey in next) next.remove(todayKey) else next.add(todayKey)
+                            onPersist(
+                                habitWithSyncedProgress(
+                                    habit.copy(dayKeys = serializeHabitDayKeys(next)),
+                                ),
+                            )
+                        },
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (todayDone) habitColors.accent else habitColors.bg,
+                        border = BorderStroke(1.dp, habitColors.border),
+                    ) {
+                        Text(
+                            if (todayDone) "Done today" else "Check in today",
+                            color = if (todayDone) palette.accentOn else habitColors.accent,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        )
+                    }
+                } else if (todayDone) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = habitColors.accent,
+                        border = BorderStroke(1.dp, habitColors.border),
+                    ) {
+                        Text(
+                            "Done today",
+                            color = palette.accentOn,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        )
+                    }
+                }
             }
-            Text(
-                habit.title,
-                modifier = Modifier.clickable { onOpenHabit(habit) },
-                style = MaterialTheme.typography.titleSmall.copy(fontFamily = BoopSerifFamily),
-                color = palette.onBackground,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    habit.title,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onOpenHabit(habit) },
+                    style = MaterialTheme.typography.titleSmall.copy(fontFamily = BoopSerifFamily),
+                    color = palette.onBackground,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (streakCount > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (dark) Color.Black.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.55f),
+                        border = BorderStroke(1.dp, habitColors.border.copy(alpha = 0.7f)),
+                    ) {
+                        Text(
+                            "$streakCount day streak",
+                            color = habitColors.accent,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    }
+                }
+            }
             UnifiedHabitDots(dots = weekDots, modifier = Modifier.fillMaxWidth())
             if (habit.quantityMode) {
                 val unit = habit.quantityUnit.ifBlank { "units" }
@@ -6104,29 +6270,6 @@ private fun HabitWeekStripCard(
                             }
                         }
                     }
-                }
-            } else {
-                val todayDone = todayKey in parseHabitDayKeys(habit.dayKeys)
-                Surface(
-                    onClick = {
-                        val next = parseHabitDayKeys(habit.dayKeys).toMutableSet()
-                        if (todayKey in next) next.remove(todayKey) else next.add(todayKey)
-                        onPersist(
-                            habitWithSyncedProgress(
-                                habit.copy(dayKeys = serializeHabitDayKeys(next)),
-                            ),
-                        )
-                    },
-                    shape = RoundedCornerShape(999.dp),
-                    color = if (todayDone) habitColors.accent else habitColors.bg,
-                    border = BorderStroke(1.dp, habitColors.border),
-                ) {
-                    Text(
-                        if (todayDone) "Done today" else "Check in today",
-                        color = if (todayDone) palette.accentOn else habitColors.accent,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
                 }
             }
         }

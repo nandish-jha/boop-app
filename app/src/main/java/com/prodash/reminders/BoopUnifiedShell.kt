@@ -151,7 +151,7 @@ private fun UnifiedNavIcon(
         Icon(
             tab.icon,
             contentDescription = tab.label,
-            tint = if (selected) palette.accent else palette.muted,
+            tint = if (selected) palette.accent else palette.navUnselected.copy(alpha = 0.55f),
             modifier = Modifier
                 .size(27.dp)
                 .graphicsLayer {
@@ -184,7 +184,8 @@ private fun UnifiedNavAddButton(onClick: () -> Unit) {
         Surface(
             onClick = onClick,
             shape = RoundedCornerShape(16.dp),
-            color = palette.accent,
+            color = palette.onBackground,
+            border = BorderStroke(1.5.dp, palette.accent.copy(alpha = 0.55f)),
             shadowElevation = 6.dp,
             modifier = Modifier
                 .size(50.dp)
@@ -198,7 +199,7 @@ private fun UnifiedNavAddButton(onClick: () -> Unit) {
                 Icon(
                     Icons.Outlined.Add,
                     contentDescription = "Add",
-                    tint = Color.White,
+                    tint = palette.background,
                     modifier = Modifier
                         .size(26.dp)
                         .graphicsLayer { rotationZ = rotation },
