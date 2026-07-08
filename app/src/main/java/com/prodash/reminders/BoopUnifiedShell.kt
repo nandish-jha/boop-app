@@ -97,26 +97,34 @@ fun UnifiedBottomNav(
     val half = (tabs.size + 1) / 2
     val leftTabs = tabs.subList(0, half)
     val rightTabs = tabs.subList(half, tabs.size)
-    Surface(
-        modifier = Modifier
+    Box(
+        Modifier
             .fillMaxWidth()
-            .navigationBarsPadding(),
-        color = palette.topbarBg,
-        border = BorderStroke(1.dp, palette.surfaceBorder),
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .height(66.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            color = palette.topbarBg,
+            border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.14f)),
+            shadowElevation = 6.dp,
         ) {
-            leftTabs.forEachIndexed { i, tab ->
-                UnifiedNavIcon(tab = tab, selected = i == selectedIndex, onClick = { onSelectTab(i) }, modifier = Modifier.weight(1f))
-            }
-            UnifiedNavAddButton(onClick = onAdd)
-            rightTabs.forEachIndexed { i, tab ->
-                val index = half + i
-                UnifiedNavIcon(tab = tab, selected = index == selectedIndex, onClick = { onSelectTab(index) }, modifier = Modifier.weight(1f))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .padding(horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                leftTabs.forEachIndexed { i, tab ->
+                    UnifiedNavIcon(tab = tab, selected = i == selectedIndex, onClick = { onSelectTab(i) }, modifier = Modifier.weight(1f))
+                }
+                UnifiedNavAddButton(onClick = onAdd)
+                rightTabs.forEachIndexed { i, tab ->
+                    val index = half + i
+                    UnifiedNavIcon(tab = tab, selected = index == selectedIndex, onClick = { onSelectTab(index) }, modifier = Modifier.weight(1f))
+                }
             }
         }
     }
@@ -146,7 +154,7 @@ private fun UnifiedNavIcon(
             contentDescription = tab.label,
             tint = if (selected) palette.accent else palette.muted,
             modifier = Modifier
-                .size(22.dp)
+                .size(27.dp)
                 .graphicsLayer {
                     scaleX = iconScale
                     scaleY = iconScale

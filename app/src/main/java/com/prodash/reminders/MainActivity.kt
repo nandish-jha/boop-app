@@ -1001,6 +1001,7 @@ private fun BoopApp() {
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
+                        pageSpacing = 24.dp,
                     ) { page ->
                         val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
                             .coerceIn(-1f, 1f)
