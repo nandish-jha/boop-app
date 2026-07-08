@@ -165,14 +165,12 @@ fun KeepChecklistEditor(
                             inner()
                         },
                     )
-                    if (items.size > 1) {
-                        KeepToolbarIconButton(
-                            onClick = { onChange(items.filterNot { it.id == item.id }) },
-                            icon = Icons.Outlined.Close,
-                            contentDescription = "Remove item",
-                            tint = palette.muted,
-                        )
-                    }
+                    KeepToolbarIconButton(
+                        onClick = { onChange(items.filterNot { it.id == item.id }) },
+                        icon = Icons.Outlined.Close,
+                        contentDescription = "Remove item",
+                        tint = palette.muted,
+                    )
                 }
             }
         }

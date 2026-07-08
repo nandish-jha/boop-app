@@ -102,20 +102,29 @@ fun KeepEditorTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        Surface(
+            onClick = onBack,
+            shape = RoundedCornerShape(999.dp),
+            color = palette.chipBg,
+            border = BorderStroke(1.dp, palette.surfaceBorder),
         ) {
-            KeepToolbarIconButton(
-                onClick = onBack,
-                icon = Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = "Back",
-            )
-            Text(
-                "Back",
-                color = palette.muted,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Row(
+                Modifier.padding(start = 10.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "Back",
+                    tint = palette.onBackground,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    "Back",
+                    color = palette.onBackground,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,

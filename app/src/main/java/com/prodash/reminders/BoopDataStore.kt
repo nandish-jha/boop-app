@@ -36,8 +36,10 @@ enum class ThemeMode(val storageKey: String, val label: String) {
 }
 
 fun normalizeHabitCategory(raw: String): String = when (raw.lowercase(Locale.getDefault())) {
+    "afternoon" -> "afternoon"
+    "evening" -> "evening"
     "night" -> "night"
-    else -> "day"
+    else -> "morning"
 }
 
 object AppContextHolder {
@@ -108,7 +110,7 @@ data class BoopNote(
 data class BoopHabit(
     val id: String,
     val title: String,
-    val dayPeriodCategory: String = "day",
+    val dayPeriodCategory: String = "morning",
     val goal: Int,
     val progress: Int,
     val dayKeys: String = "",
@@ -369,7 +371,7 @@ class BoopRepository(private val store: LocalStore) {
             BoopHabit(
                 item.getString("id"),
                 item.getString("title"),
-                normalizeHabitCategory(item.optString("dayPeriodCategory", "day")),
+                normalizeHabitCategory(item.optString("dayPeriodCategory", "morning")),
                 item.getInt("goal"),
                 item.getInt("progress"),
                 item.optString("dayKeys"),

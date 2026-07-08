@@ -694,7 +694,7 @@ private fun BoopApp() {
             id = habit?.id,
             sessionKey = habit?.id ?: UUID.randomUUID().toString(),
             title = habit?.title.orEmpty(),
-            dayPeriodCategory = habit?.dayPeriodCategory ?: "day",
+            dayPeriodCategory = habit?.dayPeriodCategory ?: "morning",
             goal = habit?.goal ?: 30,
             progress = habit?.progress ?: 0,
             dayKeys = habit?.dayKeys.orEmpty(),
@@ -959,7 +959,16 @@ private fun BoopApp() {
                             selectTabIndex(it)
                             createSheetOpen = false
                         },
-                        onAdd = { createSheetOpen = true },
+                        onAdd = {
+                            when (visibleTabs.getOrNull(selectedTab)) {
+                                BoopTab.NOTES -> openNoteSheet(null)
+                                BoopTab.REMINDERS -> openTaskSheet(null)
+                                BoopTab.CALENDAR -> openEventSheet(startAt = calendarCreateAtMillis)
+                                BoopTab.HABITS -> openHabitSheet(null)
+                                BoopTab.WALLET -> openFinanceEntrySheet("expense")
+                                else -> createSheetOpen = true
+                            }
+                        },
                     )
                 }
             },
@@ -1361,6 +1370,7 @@ private fun BoopPagerPage(
                 notes = notes,
                 onOpenNote = onEditNote,
                 title = "Notes",
+                tasks = tasks,
             )
             BoopTab.REMINDERS -> TaskListScreen(
                 tasks = tasks,
@@ -2735,6 +2745,13 @@ private fun DashboardHabitChip(
     }
 }
 
+private data class HomeCardMeta(
+    val type: UnifiedItemType,
+    val title: String,
+    val meta: String?,
+    val body: String?,
+)
+
 @Composable
 private fun DashboardCircleButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -2869,23 +2886,49 @@ private fun DashboardScreen(
         buildList {
             if (homeFilter == "all" || homeFilter == "reminder") {
                 tasks.filter { !it.done && !it.archived }.sortedBy { it.reminderAt }.take(6).forEach { task ->
-                    add(Triple(UnifiedItemType.REMINDER, task.title, formatTaskReminderLine(task.reminderAt)) to { onOpenTask(task) })
+                    val subtaskCount = parseSubtasksJson(task.subtasksJson).size
+                    val taskBody = task.details.trim().ifBlank {
+                        if (subtaskCount > 0) "$subtaskCount subtask${if (subtaskCount == 1) "" else "s"}" else ""
+                    }.takeIf { it.isNotBlank() }
+                    add(
+                        HomeCardMeta(
+                            UnifiedItemType.REMINDER,
+                            task.title,
+                            formatTaskReminderLine(task.reminderAt),
+                            taskBody,
+                        ) to { onOpenTask(task) },
+                    )
                 }
             }
             if (homeFilter == "all" || homeFilter == "note") {
                 notes.filter { !it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }.take(6).forEach { note ->
                     add(
-                        Triple(
+                        HomeCardMeta(
                             UnifiedItemType.NOTE,
                             note.title.ifBlank { "Untitled" },
                             formatNoteCardTime(note),
+                            plainNoteSnippet(note.body, 64).takeIf { noteBodyHasVisibleContent(note.body) },
                         ) to { onOpenNote(note) },
                     )
                 }
             }
             if (homeFilter == "all" || homeFilter == "habit") {
-                activeHabits.take(4).forEach { habit ->
-                    add(Triple(UnifiedItemType.HABIT, habit.title, "${habit.progress}/${habit.goal}") to { onOpenHabit(habit) })
+                activeHabits.filterNot { habit ->
+                    if (habit.quantityMode) {
+                        val todayAmount = parseHabitDayValues(habit.quantityDayValues)[todayKey] ?: 0
+                        todayAmount >= habit.quantityDailyTarget.coerceAtLeast(1)
+                    } else {
+                        todayKey in parseHabitDayKeys(habit.dayKeys)
+                    }
+                }.take(4).forEach { habit ->
+                    add(
+                        HomeCardMeta(
+                            UnifiedItemType.HABIT,
+                            habit.title,
+                            "${habit.progress}/${habit.goal}",
+                            "${habitCategoryLabel(habit.dayPeriodCategory)} · not checked in",
+                        ) to { onOpenHabit(habit) },
+                    )
                 }
             }
             if ((homeFilter == "all" || homeFilter == "wallet") && accounts.isNotEmpty()) {
@@ -2895,10 +2938,11 @@ private fun DashboardScreen(
                         else -> formatSignedCadDelta(entry.amount, positive = true)
                     }
                     add(
-                        Triple(
+                        HomeCardMeta(
                             UnifiedItemType.WALLET,
                             entry.title.ifBlank { ledgerTypeLabel(entry.type) },
                             amountText,
+                            ledgerTypeLabel(entry.type),
                         ) to { /* wallet entries open via tab */ },
                     )
                 }
@@ -2996,11 +3040,11 @@ private fun DashboardScreen(
                         homeGridItems.chunked(2).forEach { rowItems ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 rowItems.forEach { (meta, onClick) ->
-                                    val (type, title, detail) = meta
                                     UnifiedTintCard(
-                                        type = type,
-                                        title = title,
-                                        meta = detail,
+                                        type = meta.type,
+                                        title = meta.title,
+                                        meta = meta.meta,
+                                        body = meta.body,
                                         onClick = onClick,
                                         modifier = Modifier.weight(1f),
                                     )
@@ -4407,8 +4451,11 @@ private fun NotesListScreen(
     notes: List<BoopNote>,
     onOpenNote: (BoopNote) -> Unit,
     title: String = "Notes",
+    tasks: List<BoopTask> = emptyList(),
 ) {
     val palette = LocalBoopPalette.current
+    val context = LocalContext.current
+    val taskTitlesById = remember(tasks) { tasks.associate { it.id to it.title } }
     val activeNotes = notes.filter { !it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
     val archivedNotes = notes.filter { it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
     var showArchive by rememberSaveable { mutableStateOf(false) }
@@ -4480,10 +4527,10 @@ private fun NotesListScreen(
             }
             items(visibleNotes, key = { it.id }) { note ->
                 val images = parseNoteAttachments(note.attachmentUri)
-                val hasImage = images.isNotEmpty()
                 val tags = parseNoteTags(note.tagsCsv)
-                val attachmentHint = buildString {
-                    if (hasImage) append("Photo")
+                val linkedTaskTitle = note.linkedTaskId?.let { taskTitlesById[it] }
+                val cardHint = buildString {
+                    if (linkedTaskTitle != null) append("Linked: ${linkedTaskTitle.ifBlank { "Reminder" }}")
                     if (tags.isNotEmpty()) {
                         if (isNotEmpty()) append(" · ")
                         append(tags.take(2).joinToString(" ") { "#$it" })
@@ -4494,8 +4541,46 @@ private fun NotesListScreen(
                     title = note.title.ifBlank { "Untitled note" },
                     meta = formatNoteCardTime(note),
                     body = plainNoteSnippet(note.body, 72).takeIf { noteBodyHasVisibleContent(note.body) },
-                    linkedLabel = attachmentHint,
+                    linkedLabel = cardHint,
                     onClick = { onOpenNote(note) },
+                    imageContent = if (images.isNotEmpty()) {
+                        {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(76.dp)
+                                    .clip(RoundedCornerShape(10.dp)),
+                            ) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(storedAttachmentForCoil(images.first()))
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                                if (images.size > 1) {
+                                    Surface(
+                                        shape = RoundedCornerShape(999.dp),
+                                        color = Color.Black.copy(alpha = 0.55f),
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(6.dp),
+                                    ) {
+                                        Text(
+                                            "+${images.size - 1}",
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        null
+                    },
                 )
             }
         }
@@ -5895,7 +5980,7 @@ private fun HabitWeekStripCard(
                             modifier = Modifier.size(13.dp),
                         )
                         Text(
-                            "HABIT",
+                            habitCategoryLabel(habit.dayPeriodCategory).uppercase(Locale.getDefault()),
                             color = habitColors.accent,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, letterSpacing = 0.6.sp),
                         )
@@ -6508,34 +6593,11 @@ private fun TaskEditorSheet(
                 .verticalScroll(rememberScrollState()),
         ) {
             Spacer(Modifier.height(6.dp))
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Surface(
-                    onClick = { done = !done },
-                    shape = CircleShape,
-                    color = if (done) palette.accent else Color.Transparent,
-                    border = BorderStroke(2.dp, palette.accent),
-                    modifier = Modifier.size(24.dp),
-                ) {
-                    if (done) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.Check, contentDescription = "Mark incomplete", tint = Color.White, modifier = Modifier.size(15.dp))
-                        }
-                    }
-                }
-                KeepBorderlessTitleField(
-                    value = title,
-                    onValueChange = { title = it },
-                    placeholder = "Title",
-                    modifier = Modifier.weight(1f),
-                    titleDecoration = if (done) TextDecoration.LineThrough else TextDecoration.None,
-                )
-            }
+            KeepOutlinedTitleField(
+                value = title,
+                onValueChange = { title = it },
+                placeholder = "Title",
+            )
             Spacer(Modifier.height(10.dp))
             KeepEditorActionCard(
                 label = "Date & time",
@@ -6595,6 +6657,102 @@ private fun TaskEditorSheet(
                 placeholder = "Add details",
                 minLines = 3,
             )
+            Spacer(Modifier.height(10.dp))
+            val linkableNotes = remember(notes) {
+                notes.filter { !it.archived }
+                    .sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
+                    .take(12)
+            }
+            if (linkableNotes.isNotEmpty()) {
+                KeepSectionLabel("LINK TO NOTE")
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    KeepPaletteChip(
+                        label = "None",
+                        selected = linkedNoteId == null,
+                        onClick = { linkedNoteId = null },
+                    )
+                    linkableNotes.forEach { note ->
+                        KeepPaletteChip(
+                            label = note.title.ifBlank { "Untitled note" },
+                            selected = linkedNoteId == note.id,
+                            onClick = { linkedNoteId = note.id },
+                        )
+                    }
+                }
+                val linkedNote = linkedNoteId?.let { id -> notes.find { it.id == id } }
+                if (linkedNote != null) {
+                    Spacer(Modifier.height(8.dp))
+                    val linkedContext = LocalContext.current
+                    val linkedImages = parseNoteAttachments(linkedNote.attachmentUri)
+                    Surface(
+                        onClick = { openLinkedNote(linkedNote) },
+                        shape = RoundedCornerShape(14.dp),
+                        color = palette.surfaceVariant,
+                        border = BorderStroke(1.dp, palette.surfaceBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                    ) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            if (linkedImages.isNotEmpty()) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(linkedContext)
+                                        .data(storedAttachmentForCoil(linkedImages.first()))
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(RoundedCornerShape(10.dp)),
+                                )
+                            } else {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = palette.chipBg,
+                                    border = BorderStroke(1.dp, palette.surfaceBorder),
+                                    modifier = Modifier.size(46.dp),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Outlined.EditNote,
+                                            contentDescription = null,
+                                            tint = palette.accent,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    linkedNote.title.ifBlank { "Untitled note" },
+                                    color = palette.onBackground,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    "Linked note · tap to open",
+                                    color = palette.muted,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
         }
         KeepFormSaveButton(onClick = { commitTaskAndClose() })
@@ -6973,9 +7131,14 @@ private fun HabitEditorSheet(
         }
     }
     val goalVal = goalText.toIntOrNull() ?: 30
-    Column(Modifier.fillMaxWidth()) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(),
+    ) {
         KeepEditorTopBar(
             onBack = { saveAndDismiss() },
+            title = if (initial.id == null) "New Habit" else "Edit Habit",
             actions = {
                 if (onDelete != null) {
                     KeepToolbarIconButton(
@@ -6990,66 +7153,101 @@ private fun HabitEditorSheet(
                 }
             },
         )
-        KeepBorderlessTitleField(
-            value = label,
-            onValueChange = { label = it },
-            placeholder = "Habit name",
-        )
-        Spacer(Modifier.height(10.dp))
-        KeepSectionLabel("Time of day")
-        Row(
+        Column(
             Modifier
+                .weight(1f)
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .verticalScroll(rememberScrollState()),
         ) {
-            listOf("day", "night").forEach { cat ->
+            Spacer(Modifier.height(6.dp))
+            KeepOutlinedTitleField(
+                value = label,
+                onValueChange = { label = it },
+                placeholder = "Habit name",
+            )
+            Spacer(Modifier.height(12.dp))
+            KeepSectionLabel("Time of day")
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf("morning", "afternoon", "evening", "night").forEach { cat ->
+                    KeepPaletteChip(
+                        label = cat.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                        selected = dayPeriodCategory == cat,
+                        onClick = { dayPeriodCategory = cat },
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            KeepSectionLabel("Tracking")
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 KeepPaletteChip(
-                    label = cat.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
-                    selected = dayPeriodCategory == cat,
-                    onClick = { dayPeriodCategory = cat },
+                    label = "Track days",
+                    selected = !quantityMode,
+                    onClick = { quantityMode = false },
+                )
+                KeepPaletteChip(
+                    label = "Track quantity",
+                    selected = quantityMode,
+                    onClick = { quantityMode = true },
                 )
             }
-        }
-        Spacer(Modifier.height(10.dp))
-        KeepEditorSwitchRow(
-            label = "Track quantity (minutes / mL / etc.)",
-            checked = quantityMode,
-            onCheckedChange = { quantityMode = it },
-        )
-        Spacer(Modifier.height(8.dp))
-        BoopFilledTextField(
-            value = goalText,
-            onValueChange = { goalText = it },
-            label = { Text(if (quantityMode) "Daily target amount" else "Target days") },
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
-        if (quantityMode) {
-            Spacer(Modifier.height(8.dp))
-            BoopFilledTextField(
-                value = quantityUnit,
-                onValueChange = { quantityUnit = it },
-                label = { Text("Unit") },
-                placeholder = { Text("minutes, mL, pages...", color = palette.muted) },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Spacer(Modifier.height(8.dp))
-            BoopFilledTextField(
-                value = quantityTarget,
-                onValueChange = { quantityTarget = it },
-                label = { Text("Daily target") },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-        }
-        KeepEditorMetaLine(
+            Spacer(Modifier.height(10.dp))
             if (quantityMode) {
-                "Today is logged in week view / habits page"
+                OutlinedTextField(
+                    value = quantityUnit,
+                    onValueChange = { quantityUnit = it },
+                    label = { Text("Unit") },
+                    placeholder = { Text("minutes, mL, pages...", color = palette.muted) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = KeepOutlinedFieldColors(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = quantityTarget,
+                    onValueChange = { quantityTarget = it.filter { ch -> ch.isDigit() }.take(5) },
+                    label = { Text("Daily target") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = KeepOutlinedFieldColors(),
+                )
             } else {
-                "Progress: $progress / $goalVal"
-            },
-        )
-        Spacer(Modifier.height(16.dp).navigationBarsPadding())
+                OutlinedTextField(
+                    value = goalText,
+                    onValueChange = { goalText = it.filter { ch -> ch.isDigit() }.take(4) },
+                    label = { Text("Target days") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = KeepOutlinedFieldColors(),
+                )
+            }
+            KeepEditorMetaLine(
+                if (quantityMode) {
+                    "Today is logged in week view / habits page"
+                } else {
+                    "Progress: $progress / $goalVal"
+                },
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+        KeepFormSaveButton(onClick = { saveAndDismiss() })
+        Spacer(Modifier.height(10.dp))
     }
 }
 

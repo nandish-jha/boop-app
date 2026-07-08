@@ -49,7 +49,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -236,49 +235,65 @@ fun UnifiedCreateSheet(
                 color = palette.sheetBg,
                 shadowElevation = 12.dp,
             ) {
-                Column(Modifier.padding(horizontal = 18.dp, vertical = 18.dp)) {
-                    Box(
-                        Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .size(width = 36.dp, height = 4.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(palette.sheetHandle),
-                    )
+                Column(
+                    Modifier
+                        .padding(horizontal = 18.dp)
+                        .padding(top = 18.dp, bottom = 26.dp)
+                        .navigationBarsPadding(),
+                ) {
                     Text(
-                        "Add to Boop",
+                        "Create",
                         color = palette.onBackground,
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontFamily = FontFamily.Serif,
                             fontWeight = FontWeight.SemiBold,
                         ),
-                        modifier = Modifier.padding(top = 14.dp, bottom = 12.dp),
                     )
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        options.chunked(2).forEach { row ->
+                    Text(
+                        "What do you want to add?",
+                        color = palette.muted,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 14.dp),
+                    )
+                    val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        options.chunked(3).forEach { row ->
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 row.forEach { option ->
-                                    val colors = unifiedTypeColors(option.type, palette.background.red + palette.background.green + palette.background.blue < 0.35f)
+                                    val colors = unifiedTypeColors(option.type, dark)
                                     Surface(
                                         onClick = {
                                             option.onClick()
                                             onDismiss()
                                         },
                                         modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(14.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         color = colors.bg,
                                         border = BorderStroke(1.dp, colors.border),
                                     ) {
-                                        Row(
-                                            Modifier.padding(horizontal = 12.dp, vertical = 13.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        Column(
+                                            Modifier.padding(vertical = 16.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
                                         ) {
-                                            Icon(option.icon, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
-                                            Text(option.label, color = palette.onBackground, style = MaterialTheme.typography.bodyMedium)
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = if (dark) Color.Black.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.55f),
+                                                modifier = Modifier.size(42.dp),
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(option.icon, contentDescription = null, tint = colors.accent, modifier = Modifier.size(21.dp))
+                                                }
+                                            }
+                                            Text(
+                                                option.label,
+                                                color = palette.onBackground,
+                                                style = MaterialTheme.typography.labelMedium,
+                                            )
                                         }
                                     }
                                 }
-                                if (row.size == 1) {
+                                repeat(3 - row.size) {
                                     Spacer(Modifier.weight(1f))
                                 }
                             }

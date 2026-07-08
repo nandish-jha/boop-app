@@ -98,6 +98,7 @@ fun UnifiedTintCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     titleDecoration: TextDecoration = TextDecoration.None,
+    imageContent: (@Composable () -> Unit)? = null,
 ) {
     val palette = LocalBoopPalette.current
     val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
@@ -113,7 +114,7 @@ fun UnifiedTintCard(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 132.dp)
+            .heightIn(min = 96.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -191,6 +192,9 @@ fun UnifiedTintCard(
                         }
                     }
                 }
+            }
+            if (imageContent != null) {
+                imageContent()
             }
             Text(
                 title,
