@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "web": "npx --yes serve web -p 5173",
+    "deploy:web": "firebase deploy --only hosting --project prodash-reminders"
   },
   "keywords": [],
   "author": "",
