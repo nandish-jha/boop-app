@@ -84,6 +84,10 @@ data class BoopTask(
     val linkedNoteId: String? = null,
     /** Filed away from the main list (separate from [done]). */
     val archived: Boolean = false,
+    /** Google Tasks–style notes/details. */
+    val details: String = "",
+    /** JSON array of subtasks: [{id,text,done}, ...] */
+    val subtasksJson: String = "",
 )
 data class BoopNote(
     val id: String,
@@ -321,6 +325,8 @@ class BoopRepository(private val store: LocalStore) {
                 repeatEveryDays = item.optInt("repeatEveryDays", 0),
                 linkedNoteId = item.optString("linkedNoteId").ifBlank { null },
                 archived = archived,
+                details = item.optString("details"),
+                subtasksJson = item.optString("subtasksJson"),
             )
         }.sortedBy { it.reminderAt }
     }
@@ -639,7 +645,9 @@ class BoopRepository(private val store: LocalStore) {
                     .put("done", it.done)
                     .put("repeatEveryDays", it.repeatEveryDays)
                     .put("linkedNoteId", it.linkedNoteId ?: "")
-                    .put("archived", it.archived),
+                    .put("archived", it.archived)
+                    .put("details", it.details)
+                    .put("subtasksJson", it.subtasksJson),
             )
         }
         store.save("tasks", arr.toString())

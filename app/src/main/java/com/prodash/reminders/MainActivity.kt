@@ -20,8 +20,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.graphics.Typeface
-import android.media.MediaPlayer
-import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
 import android.provider.CalendarContract
@@ -111,6 +109,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.rounded.AttachMoney
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.StickyNote2
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.AttachMoney
 import androidx.compose.material.icons.outlined.Check
@@ -125,7 +129,10 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
+import androidx.compose.material.icons.outlined.FormatListBulleted
+import androidx.compose.material.icons.outlined.Notes
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.AutoGraph
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Mic
@@ -139,6 +146,8 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.Button
@@ -165,6 +174,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -197,6 +207,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -216,6 +227,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -290,7 +303,6 @@ class MainActivity : ComponentActivity() {
         if (!pendingOpenTaskIdAction.isNullOrBlank() || pendingOpenEventIdAction > 0L) {
             openTargetNonce++
         }
-        ingestVoiceAssistantIntent(intent)
         setContent { BoopApp() }
     }
 
@@ -303,13 +315,6 @@ class MainActivity : ComponentActivity() {
         if (!pendingOpenTaskIdAction.isNullOrBlank() || pendingOpenEventIdAction > 0L) {
             openTargetNonce++
         }
-        ingestVoiceAssistantIntent(intent)
-    }
-
-    private fun ingestVoiceAssistantIntent(intent: Intent?) {
-        if (intent?.action != VoiceAssistantBridge.ACTION_VOICE_RESULT) return
-        val json = intent.getStringExtra(VoiceAssistantBridge.EXTRA_PARSED_JSON).orEmpty()
-        VoiceAssistantBridge.parseVoiceCapture(json)?.let { BoopVoiceResultHolder.deliver(it) }
     }
 }
 
@@ -324,6 +329,8 @@ private sealed class ItemSheet {
         val repeatEveryDays: Int,
         val linkedNoteId: String? = null,
         val archived: Boolean = false,
+        val details: String = "",
+        val subtasksJson: String = "",
     ) : ItemSheet()
 
     data class NoteSheet(
@@ -395,13 +402,13 @@ private sealed class ItemSheet {
 }
 
 
-private enum class BoopTab(val label: String, val icon: ImageVector) {
-    HOME("Home", Icons.Outlined.Dashboard),
-    NOTES("Notes", Icons.Outlined.EditNote),
-    REMINDERS("Reminders", Icons.Outlined.Notifications),
-    CALENDAR("Calendar", Icons.Outlined.CalendarMonth),
-    HABITS("Habits", Icons.Outlined.Flag),
-    WALLET("Wallet", Icons.Outlined.AttachMoney),
+enum class BoopTab(val label: String, val icon: ImageVector) {
+    HOME("Home", Icons.Rounded.Home),
+    NOTES("Notes", Icons.Rounded.StickyNote2),
+    REMINDERS("Reminders", Icons.Rounded.Notifications),
+    CALENDAR("Calendar", Icons.Rounded.CalendarMonth),
+    HABITS("Habits", Icons.Rounded.Flag),
+    WALLET("Wallet", Icons.Rounded.AttachMoney),
 }
 
 private fun buildVisibleTabs(showHabitsPage: Boolean, showWalletPage: Boolean): List<BoopTab> = buildList {
@@ -415,6 +422,7 @@ private fun buildVisibleTabs(showHabitsPage: Boolean, showWalletPage: Boolean): 
 
 internal data class BoopPalette(
     val background: Color,
+    val phoneBg: Color,
     val surface: Color,
     val surfaceVariant: Color,
     val surfaceElevated: Color,
@@ -431,11 +439,18 @@ internal data class BoopPalette(
     val recording: Color,
     val quoteFill: Color,
     val quoteStroke: Color,
+    val topbarBg: Color,
+    val chipBg: Color,
+    val surfaceBorder: Color,
+    val sheetBg: Color,
+    val overlay: Color,
+    val sheetHandle: Color,
 )
 
 /** Classic terracotta + rose glow palette pair. */
 private fun boopTerracottaDarkPalette() = BoopPalette(
     background = Color(0xFF141413),
+    phoneBg = Color(0xFF1A1918),
     surface = Color(0xFF30302E),
     surfaceVariant = Color(0xFF252320),
     surfaceElevated = Color(0xFF3D3D3A),
@@ -452,10 +467,17 @@ private fun boopTerracottaDarkPalette() = BoopPalette(
     recording = Color(0xFFE88868),
     quoteFill = Color(0xFF2E2420),
     quoteStroke = Color(0xFFE88868),
+    topbarBg = Color(0xD91A1918),
+    chipBg = Color(0xFF252320),
+    surfaceBorder = Color(0x1AFAF9F5),
+    sheetBg = Color(0xFF30302E),
+    overlay = Color(0x8C000000),
+    sheetHandle = Color(0x33FAF9F5),
 )
 
 private fun boopTerracottaLightPalette() = BoopPalette(
     background = Color(0xFFFAF9F5),
+    phoneBg = Color(0xFFFFFDF8),
     surface = Color(0xFFF5F4ED),
     surfaceVariant = Color(0xFFE8E6DC),
     surfaceElevated = Color(0xFFEFE9DE),
@@ -472,48 +494,68 @@ private fun boopTerracottaLightPalette() = BoopPalette(
     recording = Color(0xFFD46E48),
     quoteFill = Color(0xFFF8ECE6),
     quoteStroke = Color(0xFFD46E48),
+    topbarBg = Color(0xEBFFFDF8),
+    chipBg = Color(0xFFE8E6DC),
+    surfaceBorder = Color(0x14141313),
+    sheetBg = Color(0xFFF5F4ED),
+    overlay = Color(0x59141313),
+    sheetHandle = Color(0x26141313),
 )
 
 /** Unified warm dark — matches Boop Unified.html */
 private fun boopDarkPalette() = BoopPalette(
     background = Color(0xFF0C0B10),
+    phoneBg = Color(0xFF141210),
     surface = Color(0xFF2E2B28),
     surfaceVariant = Color(0xFF3A3632),
     surfaceElevated = Color(0xFF2E2B28),
     onBackground = Color(0xFFFAF6F0),
     muted = Color(0xFFA8A098),
-    accent = Color(0xFFE8C49A),
-    accentGlow = Color(0xFFF0D4B0),
-    accentOn = Color(0xFF141210),
-    navPill = Color(0x33FFFFFF),
-    navSelected = Color(0xFFF0F0F0),
-    navUnselected = Color(0xFF6E6E6E),
-    inputField = Color(0xFF101010),
+    accent = Color(0xFFC08078),
+    accentGlow = Color(0xFFE8A898),
+    accentOn = Color(0xFFFFFFFF),
+    navPill = Color(0x33E8A898),
+    navSelected = Color(0xFFC08078),
+    navUnselected = Color(0xFFA8A098),
+    inputField = Color(0xFF242120),
     danger = Color(0xFFFF8A80),
-    recording = Color(0xFFF0F0F0),
-    quoteFill = Color(0xFF111111),
-    quoteStroke = Color(0xFFD8D8D8),
+    recording = Color(0xFFC08078),
+    quoteFill = Color(0xFF2E2B28),
+    quoteStroke = Color(0xFFC08078),
+    topbarBg = Color(0xD9141210),
+    chipBg = Color(0xFF3A3632),
+    surfaceBorder = Color(0x1AFAF6F0),
+    sheetBg = Color(0xFF2E2B28),
+    overlay = Color(0x8C000000),
+    sheetHandle = Color(0x33FAF6F0),
 )
 
 /** Unified warm light — matches Boop Unified.html */
 private fun boopLightPalette() = BoopPalette(
     background = Color(0xFFEFE9DF),
+    phoneBg = Color(0xFFFBF7F1),
     surface = Color(0xFFFFFCF9),
     surfaceVariant = Color(0xFFEDE6DC),
     surfaceElevated = Color(0xFFFFFCF9),
     onBackground = Color(0xFF1A1612),
     muted = Color(0xFF8A8278),
-    accent = Color(0xFF8A5A32),
-    accentGlow = Color(0xFFC49A72),
-    accentOn = Color(0xFFFFFCF9),
-    navPill = Color(0x38E8C4A8),
-    navSelected = Color(0xFF2A2420),
-    navUnselected = Color(0xFF9A8E84),
-    inputField = Color(0xFFFFF0E4),
+    accent = Color(0xFFC08078),
+    accentGlow = Color(0xFFE8A898),
+    accentOn = Color(0xFFFFFFFF),
+    navPill = Color(0x28E8A898),
+    navSelected = Color(0xFFC08078),
+    navUnselected = Color(0xFF8A8278),
+    inputField = Color(0xFFFBF7F1),
     danger = Color(0xFFC45850),
-    recording = Color(0xFF2A2420),
-    quoteFill = Color(0xFFFFF0E6),
-    quoteStroke = Color(0xFFD8B8A0),
+    recording = Color(0xFFC08078),
+    quoteFill = Color(0xFFFFFCF9),
+    quoteStroke = Color(0xFFC08078),
+    topbarBg = Color(0xEBFBF7F1),
+    chipBg = Color(0xFFEDE6DC),
+    surfaceBorder = Color(0x141A1612),
+    sheetBg = Color(0xFFFFFCF9),
+    overlay = Color(0x591A1612),
+    sheetHandle = Color(0x261A1612),
 )
 
 internal val LocalBoopPalette = staticCompositionLocalOf { boopDarkPalette() }
@@ -531,12 +573,7 @@ private fun BoopApp() {
 
     var itemSheet by remember { mutableStateOf<ItemSheet?>(null) }
     var habitCheckInOpen by remember { mutableStateOf(false) }
-    var speedDialExpanded by remember { mutableStateOf(false) }
-    var speedDialAnchor by remember { mutableStateOf(Rect.Zero) }
-    var voiceCaptureOpen by remember { mutableStateOf(false) }
-    var voiceListening by remember { mutableStateOf(false) }
-    var voiceStartSignal by remember { mutableIntStateOf(0) }
-    var voiceStopSignal by remember { mutableIntStateOf(0) }
+    var createSheetOpen by remember { mutableStateOf(false) }
     var calendarSyncRequest by rememberSaveable { mutableIntStateOf(0) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var dashboardSearchOpen by rememberSaveable { mutableStateOf(false) }
@@ -565,6 +602,15 @@ private fun BoopApp() {
     val palette = when (paletteFamily) {
         PaletteFamily.TERRACOTTA -> if (useDarkTheme) boopTerracottaDarkPalette() else boopTerracottaLightPalette()
         PaletteFamily.AMOLED -> if (useDarkTheme) boopDarkPalette() else boopLightPalette()
+    }
+    val view = LocalView.current
+    DisposableEffect(useDarkTheme) {
+        val window = (view.context as Activity).window
+        androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = !useDarkTheme
+            isAppearanceLightNavigationBars = !useDarkTheme
+        }
+        onDispose {}
     }
     var dataEpoch by remember { mutableIntStateOf(0) }
 
@@ -620,8 +666,10 @@ private fun BoopApp() {
             repeatEveryDays = task?.repeatEveryDays ?: 0,
             linkedNoteId = task?.linkedNoteId,
             archived = task?.archived ?: false,
+            details = task?.details.orEmpty(),
+            subtasksJson = task?.subtasksJson.orEmpty(),
         )
-        speedDialExpanded = false
+        createSheetOpen = false
     }
 
     fun openNoteSheet(note: BoopNote? = null) {
@@ -638,7 +686,7 @@ private fun BoopApp() {
             createdAtMillis = note?.createdAtMillis ?: 0L,
             updatedAtMillis = note?.updatedAtMillis ?: 0L,
         )
-        speedDialExpanded = false
+        createSheetOpen = false
     }
 
     fun openHabitSheet(habit: BoopHabit? = null) {
@@ -655,7 +703,7 @@ private fun BoopApp() {
             quantityDailyTarget = habit?.quantityDailyTarget ?: 30,
             quantityDayValues = habit?.quantityDayValues.orEmpty(),
         )
-        speedDialExpanded = false
+        createSheetOpen = false
     }
     fun openFinanceEntrySheet(
         type: String,
@@ -676,7 +724,7 @@ private fun BoopApp() {
             prefilledCategory = prefilledCategory,
             prefilledNote = prefilledNote,
         )
-        speedDialExpanded = false
+        createSheetOpen = false
     }
     fun openFinanceEntrySheetForEdit(entry: BoopLedgerEntry) {
         itemSheet = ItemSheet.FinanceEntrySheet(
@@ -693,7 +741,7 @@ private fun BoopApp() {
             prefilledNote = entry.note,
             prefilledDueAtMillis = entry.dueAtMillis ?: 0L,
         )
-        speedDialExpanded = false
+        createSheetOpen = false
     }
     fun openAccountSheet(account: BoopAccount? = null) {
         itemSheet = ItemSheet.AccountSheet(
@@ -701,14 +749,13 @@ private fun BoopApp() {
             sessionKey = account?.id ?: UUID.randomUUID().toString(),
             name = account?.name.orEmpty(),
         )
-        speedDialExpanded = false
+        createSheetOpen = false
     }
 
     LaunchedEffect(pendingShortcut) {
         when (pendingShortcut) {
             "voice" -> {
-                voiceCaptureOpen = true
-                voiceStartSignal++
+                openNoteSheet(null)
                 pendingShortcut = null
             }
             "new_task" -> {
@@ -757,7 +804,7 @@ private fun BoopApp() {
             notifyHoursBefore = 0,
             repeatEveryDays = existing?.repeatEveryDays ?: 0,
         )
-        speedDialExpanded = false
+        createSheetOpen = false
     }
 
     fun openEventSheetById(eventId: Long) {
@@ -766,48 +813,15 @@ private fun BoopApp() {
     }
 
 
-    fun commitVoiceCapture(parsed: ParsedVoiceCapture) {
-        when (val outcome = VoiceCaptureCommit.commit(context.applicationContext, parsed)) {
-            is VoiceCommitOutcome.Ok -> {
-                Toast.makeText(context, outcome.message, Toast.LENGTH_SHORT).show()
-                if (parsed.type == VoiceCaptureType.EVENT && outcome.message == "Event saved to Calendar") {
-                    calendarSyncRequest++
-                }
-            }
-            is VoiceCommitOutcome.FinanceNeedsEditor -> {
-                Toast.makeText(context, outcome.message, Toast.LENGTH_SHORT).show()
-                openFinanceEntrySheet(
-                    type = when (outcome.parsed.type) {
-                        VoiceCaptureType.INCOME -> "income"
-                        VoiceCaptureType.TRANSFER -> "transfer"
-                        else -> "expense"
-                    },
-                    prefilledTitle = outcome.parsed.title,
-                    prefilledAmount = outcome.parsed.amount?.let { "%.2f".format(it) }.orEmpty(),
-                    prefilledAccountId = outcome.parsed.accountId.orEmpty(),
-                    prefilledToAccountId = outcome.parsed.toAccountId.orEmpty(),
-                    prefilledCategory = outcome.parsed.category,
-                    prefilledNote = outcome.parsed.body,
-                )
-            }
+    fun toggleThemeMode() {
+        themeMode = when (themeMode) {
+            ThemeMode.DARK -> ThemeMode.LIGHT
+            ThemeMode.LIGHT -> ThemeMode.DARK
+            ThemeMode.SYSTEM -> if (useDarkTheme) ThemeMode.LIGHT else ThemeMode.DARK
         }
-        refresh()
-        speedDialExpanded = false
+        LocalStore.saveThemeMode(themeMode)
     }
 
-    fun applyVoiceCapture(parsed: ParsedVoiceCapture) {
-        voiceStopSignal++
-        voiceListening = false
-        voiceCaptureOpen = false
-        commitVoiceCapture(parsed)
-    }
-
-    val voiceAssistantNonce = BoopVoiceResultHolder.nonce.intValue
-    LaunchedEffect(voiceAssistantNonce) {
-        val parsed = BoopVoiceResultHolder.pending ?: return@LaunchedEffect
-        BoopVoiceResultHolder.pending = null
-        applyVoiceCapture(parsed)
-    }
     val openTargetNonce = MainActivity.openTargetNonce
     LaunchedEffect(openTargetNonce) {
         MainActivity.pendingOpenTaskIdAction?.let { pendingOpenTaskId = it }
@@ -832,7 +846,7 @@ private fun BoopApp() {
 
     val colorScheme = if (useDarkTheme) {
         darkColorScheme(
-            background = palette.background,
+            background = palette.phoneBg,
             surface = palette.surface,
             surfaceVariant = palette.surfaceVariant,
             onBackground = palette.onBackground,
@@ -842,11 +856,11 @@ private fun BoopApp() {
             onPrimary = palette.accentOn,
             secondary = palette.surfaceElevated,
             onSecondary = palette.onBackground,
-            outline = palette.muted,
+            outline = palette.surfaceBorder,
         )
     } else {
         lightColorScheme(
-            background = palette.background,
+            background = palette.phoneBg,
             surface = palette.surface,
             surfaceVariant = palette.surfaceVariant,
             onBackground = palette.onBackground,
@@ -856,7 +870,7 @@ private fun BoopApp() {
             onPrimary = palette.accentOn,
             secondary = palette.surfaceElevated,
             onSecondary = palette.onBackground,
-            outline = palette.muted,
+            outline = palette.surfaceBorder,
         )
     }
 
@@ -909,7 +923,7 @@ private fun BoopApp() {
                 visibleTabs.getOrNull(pagerState.currentPage)?.let { tab ->
                     if (tab.name != selectedBoopTab) selectedBoopTab = tab.name
                 }
-                speedDialExpanded = false
+                createSheetOpen = false
             }
         }
         LaunchedEffect(selectedTab) {
@@ -920,14 +934,9 @@ private fun BoopApp() {
         BackHandler(enabled = !showLaunchSplash) {
             when {
                 settingsOpen -> settingsOpen = false
-                voiceCaptureOpen -> {
-                    voiceStopSignal++
-                    voiceListening = false
-                    voiceCaptureOpen = false
-                }
                 habitCheckInOpen -> habitCheckInOpen = false
                 itemSheet != null -> itemSheet = null
-                speedDialExpanded -> speedDialExpanded = false
+                createSheetOpen -> createSheetOpen = false
                 dashboardSearchOpen -> dashboardSearchOpen = false
                 selectedTab != 0 -> {
                     selectTab(BoopTab.HOME)
@@ -940,50 +949,40 @@ private fun BoopApp() {
             active = showLaunchSplash,
             onFinished = { showLaunchSplash = false },
         ) {
-        Surface(Modifier.fillMaxSize()) {
-            Scaffold(
-                containerColor = darkBg,
-                bottomBar = {
-                    if (!settingsOpen) {
-                        BoopBottomBar(
-                            tabs = visibleTabs,
-                            pagerScrollPosition = pagerScrollPosition,
-                            currentTab = currentTab,
-                            expanded = speedDialExpanded,
-                            onExpandedChange = { speedDialExpanded = it },
-                            onAddAnchorChanged = { speedDialAnchor = it },
-                            onSelectTab = {
-                                selectTabIndex(it)
-                                speedDialExpanded = false
-                            },
-                            onOpenTask = {
-                                when (currentTab) {
-                                    BoopTab.NOTES -> openNoteSheet(null)
-                                    BoopTab.REMINDERS -> openTaskSheet(null)
-                                    else -> openTaskSheet(null)
-                                }
-                            },
-                            onOpenHabit = { openHabitSheet(null) },
-                            onOpenVoiceCapture = {
-                                speedDialExpanded = false
-                                if (voiceListening) {
-                                    voiceStopSignal++
-                                    voiceListening = false
-                                } else {
-                                    voiceListening = false
-                                    voiceCaptureOpen = true
-                                    voiceStartSignal++
-                                }
-                            },
-                            voiceListening = voiceListening,
-                        )
-                    }
-                },
-            ) { padding ->
+        UnifiedAppChrome(
+            bottomNav = {
+                if (!settingsOpen) {
+                    UnifiedBottomNav(
+                        tabs = visibleTabs,
+                        selectedIndex = selectedTab.coerceIn(0, visibleTabs.lastIndex.coerceAtLeast(0)),
+                        onSelectTab = {
+                            selectTabIndex(it)
+                            createSheetOpen = false
+                        },
+                        onAdd = { createSheetOpen = true },
+                    )
+                }
+            },
+            overlay = {
+                UnifiedCreateSheet(
+                    open = createSheetOpen && !settingsOpen,
+                    onDismiss = { createSheetOpen = false },
+                    options = defaultCreateOptions(
+                        showHabits = showHabitsPage,
+                        showWallet = showWalletPage,
+                        onNote = { openNoteSheet(null) },
+                        onReminder = { openTaskSheet(null) },
+                        onEvent = { openEventSheet(startAt = calendarCreateAtMillis) },
+                        onHabit = { openHabitSheet(null) },
+                        onWallet = { openFinanceEntrySheet("expense") },
+                        onAccount = { openAccountSheet(null) },
+                    ),
+                )
+            },
+        ) {
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .padding(padding)
                         .pullRefresh(pullRefreshState),
                 ) {
                     HorizontalPager(
@@ -1060,10 +1059,13 @@ private fun BoopApp() {
                                 refresh()
                             },
                             onEditAccount = { openAccountSheet(it) },
+                            onAddAccount = { openAccountSheet(null) },
                             onOpenSettings = {
-                                speedDialExpanded = false
+                                createSheetOpen = false
                                 settingsOpen = true
                             },
+                            onToggleTheme = { toggleThemeMode() },
+                            darkTheme = useDarkTheme,
                             dashboardSearchOpen = dashboardSearchOpen,
                             onDashboardSearchOpenChange = { dashboardSearchOpen = it },
                         )
@@ -1120,21 +1122,30 @@ private fun BoopApp() {
 
             itemSheet?.let { sheet ->
                 val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                val isKeepEditor = sheet is ItemSheet.NoteSheet ||
+                    sheet is ItemSheet.TaskSheet ||
+                    sheet is ItemSheet.EventSheet ||
+                    sheet is ItemSheet.HabitSheet ||
+                    sheet is ItemSheet.AccountSheet
                 ModalBottomSheet(
                     onDismissRequest = { itemSheet = null },
                     sheetState = sheetState,
-                    containerColor = darkSurface,
-                    dragHandle = { BottomSheetDefaults.DragHandle(color = palette.muted) },
-                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                    containerColor = palette.phoneBg,
+                    dragHandle = if (isKeepEditor) null else {
+                        { BottomSheetDefaults.DragHandle(color = palette.muted) }
+                    },
+                    shape = RoundedCornerShape(topStart = if (isKeepEditor) 0.dp else 20.dp, topEnd = if (isKeepEditor) 0.dp else 20.dp),
                 ) {
                     Column(
                         Modifier
                             .fillMaxWidth()
-                                .fillMaxHeight(0.9f)
-                            .padding(horizontal = 20.dp)
-                            .padding(bottom = 28.dp)
+                            .fillMaxHeight(if (isKeepEditor) 1f else 0.9f)
+                            .padding(horizontal = if (isKeepEditor) 0.dp else 20.dp)
+                            .padding(bottom = if (isKeepEditor) 0.dp else 28.dp)
                             .imePadding()
-                            .verticalScroll(rememberScrollState()),
+                            .then(
+                                if (isKeepEditor) Modifier else Modifier.verticalScroll(rememberScrollState()),
+                            ),
                     ) {
                         when (sheet) {
                             is ItemSheet.TaskSheet -> {
@@ -1169,6 +1180,21 @@ private fun BoopApp() {
                             is ItemSheet.NoteSheet -> NoteEditorSheet(
                                 initial = sheet,
                                 onDismiss = { itemSheet = null },
+                                tasks = tasks,
+                                onAddReminder = { note ->
+                                    repository.saveNote(note)
+                                    refresh()
+                                    itemSheet = null
+                                    openTaskSheet(
+                                        BoopTask(
+                                            id = UUID.randomUUID().toString(),
+                                            title = note.title.ifBlank { "Reminder" },
+                                            reminderAt = System.currentTimeMillis() + 30 * 60_000,
+                                            done = false,
+                                            linkedNoteId = note.id,
+                                        ),
+                                    )
+                                },
                                 onDelete = sheet.id?.let { id ->
                                     {
                                         repository.deleteNote(id)
@@ -1262,80 +1288,6 @@ private fun BoopApp() {
                 }
             }
 
-            if (voiceCaptureOpen) {
-                val voiceSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-                ModalBottomSheet(
-                    onDismissRequest = {
-                        voiceStopSignal++
-                        voiceListening = false
-                        voiceCaptureOpen = false
-                    },
-                    sheetState = voiceSheetState,
-                    containerColor = darkSurface,
-                    dragHandle = { BottomSheetDefaults.DragHandle(color = palette.muted) },
-                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                ) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
-                            .padding(bottom = 28.dp)
-                            .imePadding(),
-                    ) {
-                        VoiceCaptureSheet(
-                            accounts = accounts,
-                            autoStart = false,
-                            startSignal = voiceStartSignal,
-                            stopSignal = voiceStopSignal,
-                            onDismiss = {
-                                voiceStopSignal++
-                                voiceListening = false
-                                voiceCaptureOpen = false
-                            },
-                            onParsed = { applyVoiceCapture(it) },
-                            onListeningChanged = { voiceListening = it },
-                        )
-                    }
-                }
-            }
-
-            if (!settingsOpen) {
-                BoopSpeedDialOverlay(
-                    expanded = speedDialExpanded,
-                    anchorBounds = speedDialAnchor,
-                    currentTab = currentTab,
-                    showHabitsPage = showHabitsPage,
-                    showWalletPage = showWalletPage,
-                    onDismiss = { speedDialExpanded = false },
-                    onSyncCalendar = {
-                        visibleTabs.indexOf(BoopTab.CALENDAR).takeIf { it >= 0 }?.let { selectTabIndex(it) }
-                        calendarSyncRequest++
-                        speedDialExpanded = false
-                    },
-                    onOpenTask = {
-                        when (currentTab) {
-                            BoopTab.NOTES -> openNoteSheet(null)
-                            BoopTab.REMINDERS -> openTaskSheet(null)
-                            else -> openTaskSheet(null)
-                        }
-                    },
-                    onOpenEvent = { openEventSheet(startAt = calendarCreateAtMillis) },
-                    onOpenExternalCalendar = {
-                        selectTab(BoopTab.CALENDAR)
-                        calendarSyncRequest++
-                        Toast.makeText(context, "Syncing device calendars…", Toast.LENGTH_SHORT).show()
-                        speedDialExpanded = false
-                    },
-                    onOpenNote = { openNoteSheet(null) },
-                    onOpenHabit = { openHabitSheet(null) },
-                    onOpenIncome = { openFinanceEntrySheet("income") },
-                    onOpenExpense = { openFinanceEntrySheet("expense") },
-                    onOpenTransfer = { openFinanceEntrySheet("transfer") },
-                    onOpenAccount = { openAccountSheet(null) },
-                    onExpandedChange = { speedDialExpanded = it },
-                )
-            }
-        }
         }
     }
     }
@@ -1369,14 +1321,16 @@ private fun BoopPagerPage(
     onEditLedgerEntry: (BoopLedgerEntry) -> Unit,
     onDeleteLedgerEntry: (String) -> Unit,
     onEditAccount: (BoopAccount) -> Unit,
+    onAddAccount: () -> Unit,
     onOpenSettings: () -> Unit,
+    onToggleTheme: () -> Unit,
+    darkTheme: Boolean,
     dashboardSearchOpen: Boolean,
     onDashboardSearchOpenChange: (Boolean) -> Unit,
 ) {
     Column(
         Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .fillMaxSize(),
     ) {
         when (tab) {
             BoopTab.HOME -> DashboardScreen(
@@ -1398,6 +1352,8 @@ private fun BoopPagerPage(
                     onEditHabit(it)
                 },
                 onOpenSettings = onOpenSettings,
+                onToggleTheme = onToggleTheme,
+                darkTheme = darkTheme,
                 searchExpanded = dashboardSearchOpen,
                 onSearchExpandedChange = onDashboardSearchOpenChange,
             )
@@ -1435,6 +1391,7 @@ private fun BoopPagerPage(
                 onEditEntry = onEditLedgerEntry,
                 onDeleteEntry = onDeleteLedgerEntry,
                 onEditAccount = onEditAccount,
+                onAddAccount = onAddAccount,
             )
         }
     }
@@ -2537,31 +2494,19 @@ private suspend fun fetchWebTitle(url: String): String? = withContext(Dispatcher
 private fun NoteLinkPreviewCard(link: String) {
     val context = LocalContext.current
     var title by remember(link) { mutableStateOf<String?>(null) }
-    val host = remember(link) { runCatching { Uri.parse(link).host.orEmpty() }.getOrDefault("") }
     LaunchedEffect(link) {
         title = fetchWebTitle(link)
     }
-    val interaction = remember(link) { MutableInteractionSource() }
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = Color(0xFF202024),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(interactionSource = interaction, indication = null) {
-                try {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
-                } catch (_: Throwable) {
-                }
-            },
-    ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title ?: "Loading preview...", color = Color(0xFFE2E2E2), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (host.isNotBlank()) {
-                Text(host, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    KeepLinkPreviewCard(
+        link = link,
+        title = title,
+        onOpen = {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
+            } catch (_: Throwable) {
             }
-            Text(link, color = Color(0xFF9EC2FF), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
+        },
+    )
 }
 
 private fun parseNoteTags(raw: String): List<String> =
@@ -2708,25 +2653,32 @@ private fun DashboardStatCard(
     val palette = LocalBoopPalette.current
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = palette.surface,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, palette.muted.copy(alpha = 0.14f)),
+        border = BorderStroke(1.dp, palette.surfaceBorder),
     ) {
         Column(
-            Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = palette.muted)
+            Text(
+                label.uppercase(),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 0.5.sp),
+                color = palette.muted,
+            )
             Text(
                 value,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontFamily = BoopSerifFamily,
+                    fontSize = 20.sp,
+                ),
                 color = palette.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             if (caption.isNotBlank()) {
-                Text(caption, style = MaterialTheme.typography.labelSmall, color = palette.muted)
+                Text(caption, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = palette.muted)
             }
         }
     }
@@ -2784,6 +2736,26 @@ private fun DashboardHabitChip(
 }
 
 @Composable
+private fun DashboardCircleButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    val palette = LocalBoopPalette.current
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = palette.chipBg,
+        border = BorderStroke(1.dp, palette.surfaceBorder),
+        modifier = Modifier.size(38.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = contentDescription, tint = palette.onBackground, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+@Composable
 private fun DashboardScreen(
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
@@ -2798,6 +2770,8 @@ private fun DashboardScreen(
     onSearchPickNote: (BoopNote) -> Unit,
     onSearchPickHabit: (BoopHabit) -> Unit,
     onOpenSettings: () -> Unit,
+    onToggleTheme: () -> Unit,
+    darkTheme: Boolean,
     searchExpanded: Boolean,
     onSearchExpandedChange: (Boolean) -> Unit,
 ) {
@@ -2882,7 +2856,55 @@ private fun DashboardScreen(
             "Success is the sum of small efforts, repeated day in and day out." to "Robert Collier",
         )
     }
-    val quoteOfLaunch = remember { quotes.random() }
+    var homeFilter by rememberSaveable { mutableStateOf("all") }
+    val homeFilterChips = listOf(
+        "all" to "All",
+        "note" to "Notes",
+        "reminder" to "Reminders",
+        "calendar" to "Calendar",
+        "habit" to "Habits",
+        "wallet" to "Wallet",
+    )
+    val homeGridItems = remember(homeFilter, tasks, notes, habits, ledgerEntries, epoch) {
+        buildList {
+            if (homeFilter == "all" || homeFilter == "reminder") {
+                tasks.filter { !it.done && !it.archived }.sortedBy { it.reminderAt }.take(6).forEach { task ->
+                    add(Triple(UnifiedItemType.REMINDER, task.title, formatTaskReminderLine(task.reminderAt)) to { onOpenTask(task) })
+                }
+            }
+            if (homeFilter == "all" || homeFilter == "note") {
+                notes.filter { !it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }.take(6).forEach { note ->
+                    add(
+                        Triple(
+                            UnifiedItemType.NOTE,
+                            note.title.ifBlank { "Untitled" },
+                            formatNoteCardTime(note),
+                        ) to { onOpenNote(note) },
+                    )
+                }
+            }
+            if (homeFilter == "all" || homeFilter == "habit") {
+                activeHabits.take(4).forEach { habit ->
+                    add(Triple(UnifiedItemType.HABIT, habit.title, "${habit.progress}/${habit.goal}") to { onOpenHabit(habit) })
+                }
+            }
+            if ((homeFilter == "all" || homeFilter == "wallet") && accounts.isNotEmpty()) {
+                ledgerEntries.sortedByDescending { it.createdAtMillis }.take(4).forEach { entry ->
+                    val amountText = when (entry.type) {
+                        "expense" -> formatSignedCadDelta(entry.amount, positive = false)
+                        else -> formatSignedCadDelta(entry.amount, positive = true)
+                    }
+                    add(
+                        Triple(
+                            UnifiedItemType.WALLET,
+                            entry.title.ifBlank { ledgerTypeLabel(entry.type) },
+                            amountText,
+                        ) to { /* wallet entries open via tab */ },
+                    )
+                }
+            }
+        }.take(12)
+    }
     Box(
         Modifier
             .fillMaxSize()
@@ -2897,196 +2919,93 @@ private fun DashboardScreen(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(scroll),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Row(
                     Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top,
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        AnimatedVisibility(
-                            visible = greetingVisible,
-                            enter = fadeIn(tween(420, easing = FastOutSlowInEasing)) +
-                                slideInVertically(
-                                    initialOffsetY = { it / 5 },
-                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                ),
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(
-                                    text = greetingLine,
-                                    style = MaterialTheme.typography.displaySmall,
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = dateLine,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = palette.muted,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = greetingLine,
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontFamily = BoopSerifFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 26.sp,
+                            ),
+                            color = palette.onBackground,
+                        )
+                        Text(
+                            text = dateLine,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                            color = palette.muted,
+                        )
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        BoopHeaderIconButton(
-                            onClick = { onSearchExpandedChange(true) },
-                            icon = Icons.Outlined.Search,
-                            contentDescription = "Search",
-                            filled = true,
+                        DashboardCircleButton(
+                            icon = if (darkTheme) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
+                            contentDescription = "Toggle theme",
+                            onClick = onToggleTheme,
                         )
-                        BoopHeaderIconButton(
-                            onClick = onOpenSettings,
+                        DashboardCircleButton(
                             icon = Icons.Outlined.Settings,
                             contentDescription = "Settings",
+                            onClick = onOpenSettings,
                         )
                     }
                 }
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = palette.quoteFill,
-                    shadowElevation = 0.dp,
-                    border = BorderStroke(1.5.dp, palette.quoteStroke),
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                ) {
-                    BoopAnimatedEnter {
-                        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                            Text(
-                                text = "\"${quoteOfLaunch.first}\"",
-                                color = palette.muted,
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontFamily = BoopSerifFamily,
-                                    fontStyle = FontStyle.Italic,
-                                ),
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                text = "— ${quoteOfLaunch.second ?: "Unknown"}",
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.End,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        }
-                    }
-                }
-                BoopAnimatedEnter {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        DashboardStatCard(
-                            label = "Today",
-                            value = tasksDueToday.size.toString(),
-                            caption = if (tasksDueToday.size == 1) "task due" else "tasks due",
-                            modifier = Modifier.weight(1f),
-                        )
-                        DashboardStatCard(
-                            label = "Habits",
-                            value = if (activeHabits.isEmpty()) "—" else "$habitsDoneToday/${activeHabits.size}",
-                            caption = "checked in",
-                            modifier = Modifier.weight(1f),
-                        )
-                        DashboardStatCard(
-                            label = if (accounts.isNotEmpty()) "Balance" else "Notes",
-                            value = if (accounts.isNotEmpty()) {
-                                formatCadAmountNumber(netBalance, decimals = 0)
-                            } else {
-                                notes.count { !it.archived }.toString()
-                            },
-                            caption = if (accounts.isNotEmpty()) "CAD" else "active",
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-                DashboardSectionLabel("Up next")
-                if (upcomingTasks.isEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = palette.surfaceVariant,
-                            shadowElevation = 2.dp,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                "Nothing scheduled in the next 24 hours.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
-                            )
-                        }
-                    } else {
-                        upcomingTasks.take(3).forEach { task ->
-                            UnifiedTintCard(
-                                type = UnifiedItemType.REMINDER,
-                                title = task.title,
-                                meta = formatTaskReminderLine(task.reminderAt),
-                                onClick = { onOpenTask(task) },
-                            )
-                        }
-                    }
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    DashboardSectionLabel("Today's habits", modifier = Modifier.weight(1f))
-                    BoopAccentTextButton(label = "Week view", onClick = onOpenHabitCheckIn)
-                }
-                if (activeHabits.isEmpty()) {
-                    Text(
-                        "No habits yet — add one from the + menu.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyMedium,
+                    DashboardStatCard(
+                        label = "Today",
+                        value = tasksDueToday.size.toString(),
+                        caption = "due",
+                        modifier = Modifier.weight(1f),
                     )
-                } else {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        activeHabits.forEach { habit ->
-                            DashboardHabitChip(habit = habit, onOpenHabit = onOpenHabit)
-                        }
-                    }
-                }
-                DashboardSectionLabel("Recent notes")
-                if (recentNotes.isEmpty()) {
-                    Text(
-                        "No notes yet.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyMedium,
+                    DashboardStatCard(
+                        label = "Habits",
+                        value = if (activeHabits.isEmpty()) "—" else "$habitsDoneToday/${activeHabits.size}",
+                        caption = "checked in",
+                        modifier = Modifier.weight(1f),
                     )
+                    DashboardStatCard(
+                        label = "Balance",
+                        value = if (accounts.isNotEmpty()) formatCadAmountNumber(netBalance, decimals = 0) else notes.count { !it.archived }.toString(),
+                        caption = if (accounts.isNotEmpty()) "all accounts" else "notes",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                UnifiedFilterChips(
+                    chips = homeFilterChips,
+                    selected = homeFilter,
+                    onSelect = { homeFilter = it },
+                )
+                if (homeGridItems.isEmpty()) {
+                    Text("Nothing here yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
                 } else {
-                    Column(
-                        Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        recentNotes.chunked(2).forEach { rowNotes ->
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                rowNotes.forEach { note ->
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        homeGridItems.chunked(2).forEach { rowItems ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                rowItems.forEach { (meta, onClick) ->
+                                    val (type, title, detail) = meta
                                     UnifiedTintCard(
-                                        type = UnifiedItemType.NOTE,
-                                        title = note.title.ifBlank { "Untitled" },
-                                        meta = formatNoteCardTime(note),
-                                        body = plainNoteSnippet(note.body, 72).takeIf { noteBodyHasVisibleContent(note.body) },
-                                        onClick = { onOpenNote(note) },
+                                        type = type,
+                                        title = title,
+                                        meta = detail,
+                                        onClick = onClick,
                                         modifier = Modifier.weight(1f),
                                     )
                                 }
-                                if (rowNotes.size == 1) {
-                                    Spacer(Modifier.weight(1f))
-                                }
+                                if (rowItems.size == 1) Spacer(Modifier.weight(1f))
                             }
                         }
                     }
@@ -3615,51 +3534,6 @@ private fun extractTextFromAttachment(context: Context, stored: String?): String
     }
 }
 
-private fun createNoteAudioFile(context: Context, baseName: String): File {
-    val dir = File(context.filesDir, "note_audio").apply { mkdirs() }
-    return File(dir, "$baseName.m4a")
-}
-
-private fun startNoteAudioRecording(
-    context: Context,
-    onStarted: (MediaRecorder, String, Long) -> Unit,
-    onFailed: (String) -> Unit,
-) {
-    val out = createNoteAudioFile(context, UUID.randomUUID().toString())
-    var recorder: MediaRecorder? = null
-    try {
-        val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(context)
-        } else {
-            @Suppress("DEPRECATION")
-            MediaRecorder()
-        }
-        recorder = r
-        r.setAudioSource(MediaRecorder.AudioSource.MIC)
-        r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-        r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-        r.setAudioSamplingRate(44_100)
-        r.setAudioEncodingBitRate(128_000)
-        r.setOutputFile(out.absolutePath)
-        r.prepare()
-        r.start()
-        onStarted(r, out.absolutePath, System.currentTimeMillis())
-    } catch (t: Throwable) {
-        try {
-            recorder?.reset()
-        } catch (_: Throwable) {
-        }
-        try {
-            recorder?.release()
-        } catch (_: Throwable) {
-        }
-        if (out.exists() && out.length() == 0L) {
-            out.delete()
-        }
-        onFailed(t.message ?: "recording unavailable")
-    }
-}
-
 data class CalendarEventUi(
     val id: Long,
     val title: String,
@@ -3926,7 +3800,8 @@ private fun TaskListScreen(
     Column(
         Modifier
             .fillMaxSize()
-            .padding(top = 8.dp),
+            .padding(top = 8.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
@@ -3935,7 +3810,7 @@ private fun TaskListScreen(
             verticalAlignment = Alignment.Top,
         ) {
             BoopPageTitle(title)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 BoopHeaderIconButton(
                     onClick = { showCompleted = true },
                     icon = Icons.Outlined.CheckCircle,
@@ -3949,84 +3824,69 @@ private fun TaskListScreen(
                 )
             }
         }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                top = 4.dp,
-                bottom = 72.dp,
-            ),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            if (activeTasks.isEmpty()) {
-                item(span = { GridItemSpan(2) }) {
-                    Text("No active reminders.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            items(activeTasks, key = { it.id }) { task ->
-                val isCompleting = pendingArchiveTaskId == task.id
-                val cardScale by animateFloatAsState(
-                    targetValue = if (isCompleting) 0.9f else 1f,
-                    animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
-                    label = "task_complete_scale",
-                )
-                val cardAlpha by animateFloatAsState(
-                    targetValue = if (isCompleting) 0f else 1f,
-                    animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
-                    label = "task_complete_alpha",
-                )
-                val cardOffsetX by animateFloatAsState(
-                    targetValue = if (isCompleting) 72f else 0f,
-                    animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
-                    label = "task_complete_offset",
-                )
-                val linkedPreview = linkedNotePreviewForTask(task)
-                val linkedLabel = buildString {
-                    if (task.repeatEveryDays > 0) append("Every ${task.repeatEveryDays}d")
-                    if (!task.linkedNoteId.isNullOrBlank()) {
-                        if (isNotEmpty()) append(" · ")
-                        append("Linked note")
-                    }
-                }.takeIf { it.isNotBlank() }
-                Box(
-                    Modifier.graphicsLayer {
-                        scaleX = cardScale
-                        scaleY = cardScale
-                        alpha = cardAlpha
-                        translationX = cardOffsetX
-                    },
-                ) {
-                    UnifiedTintCard(
-                        type = UnifiedItemType.REMINDER,
-                        title = task.title,
-                        meta = formatTaskReminderLine(task.reminderAt),
-                        body = linkedPreview.takeIf { it.isNotBlank() },
-                        linkedLabel = linkedLabel,
-                        onClick = { onOpenTask(task) },
-                    )
-                    BoopTaskCompleteToggle(
-                        enabled = !isCompleting,
-                        active = isCompleting,
-                        onComplete = {
-                            if (pendingArchiveTaskId == null) {
-                                pendingArchiveTaskId = task.id
-                                scope.launch {
-                                    delay(460)
-                                    onCompleteTask(task)
-                                    pendingArchiveTaskId = null
-                                }
+        UnifiedSectionLabel("Pending")
+        if (activeTasks.isEmpty()) {
+            Text("No pending reminders.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                activeTasks.chunked(2).forEach { rowTasks ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        rowTasks.forEach { task ->
+                            val isCompleting = pendingArchiveTaskId == task.id
+                            Box(Modifier.weight(1f)) {
+                                UnifiedTintCard(
+                                    type = UnifiedItemType.REMINDER,
+                                    title = task.title,
+                                    meta = formatTaskReminderLine(task.reminderAt),
+                                    linkedLabel = linkedNoteLabelForTask(task),
+                                    checked = false,
+                                    onCheckedChange = {
+                                        if (pendingArchiveTaskId != null) return@UnifiedTintCard
+                                        pendingArchiveTaskId = task.id
+                                        scope.launch {
+                                            delay(180)
+                                            onCompleteTask(task)
+                                            pendingArchiveTaskId = null
+                                        }
+                                    },
+                                    onDelete = {
+                                        onArchiveTask(task)
+                                    },
+                                    onClick = { onOpenTask(task) },
+                                    titleDecoration = if (isCompleting) TextDecoration.LineThrough else TextDecoration.None,
+                                )
                             }
-                        },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 6.dp, end = 6.dp),
-                    )
+                        }
+                        if (rowTasks.size == 1) Spacer(Modifier.weight(1f))
+                    }
                 }
             }
         }
+        if (completedTasks.isNotEmpty()) {
+            UnifiedSectionLabel("Completed", modifier = Modifier.padding(top = 8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                completedTasks.take(6).chunked(2).forEach { rowTasks ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        rowTasks.forEach { task ->
+                            UnifiedTintCard(
+                                type = UnifiedItemType.REMINDER,
+                                title = task.title,
+                                meta = formatTaskReminderLine(task.reminderAt),
+                                linkedLabel = linkedNoteLabelForTask(task),
+                                checked = true,
+                                onCheckedChange = { onRestoreCompletedTask(task) },
+                                onDelete = { onArchiveTask(task) },
+                                onClick = { onOpenTask(task) },
+                                titleDecoration = TextDecoration.LineThrough,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (rowTasks.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(72.dp))
     }
     if (showArchive) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -4458,8 +4318,9 @@ private fun CalendarScreen(
     Column(
         Modifier
             .fillMaxSize()
-            .padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(top = 8.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -4479,82 +4340,7 @@ private fun CalendarScreen(
             selectedMillis = selectedMillis,
             onSelectDay = { selectedMillis = it },
         )
-        val calendarTint = unifiedTypeColors(
-            UnifiedItemType.CALENDAR,
-            palette.background.red + palette.background.green + palette.background.blue < 0.35f,
-        )
-        HorizontalPager(
-            state = monthPager,
-            modifier = Modifier.fillMaxWidth(),
-            pageSpacing = 20.dp,
-        ) { page ->
-            val cal = Calendar.getInstance().apply {
-                set(Calendar.DAY_OF_MONTH, 1)
-                add(Calendar.MONTH, page - basePage)
-            }
-            val firstDayOffset = (cal.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY + 7) % 7
-            val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-            val cells = mutableListOf<Int>().apply {
-                repeat(firstDayOffset) { add(0) }
-                addAll(1..daysInMonth)
-            }
-            while (cells.size % 7 != 0) cells.add(0)
-            val todayKey = todayHabitDayKey()
-            val selectedKey = SimpleDateFormat("yyyyMMdd", Locale.US).format(selectedMillis)
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .border(1.dp, calendarTint.border, RoundedCornerShape(18.dp))
-                    .background(calendarTint.bg.copy(alpha = 0.55f))
-                    .padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    SimpleDateFormat("MMMM yyyy", Locale.US).format(cal.time),
-                    style = MaterialTheme.typography.titleMedium.copy(fontFamily = BoopSerifFamily),
-                    color = calendarTint.accent,
-                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
-                )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("S", "M", "T", "W", "T", "F", "S").forEach { label ->
-                        Text(
-                            label,
-                            modifier = Modifier.weight(1f),
-                            color = palette.muted,
-                            style = MaterialTheme.typography.labelSmall,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
-                cells.chunked(7).forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        row.forEach { day ->
-                            if (day == 0) {
-                                Spacer(Modifier.weight(1f).height(36.dp))
-                            } else {
-                                val dayCal = (cal.clone() as Calendar).apply {
-                                    set(Calendar.DAY_OF_MONTH, day)
-                                    set(Calendar.HOUR_OF_DAY, 12)
-                                    set(Calendar.MINUTE, 0)
-                                    set(Calendar.SECOND, 0)
-                                    set(Calendar.MILLISECOND, 0)
-                                }
-                                val dayKey = habitDayKeyFormat.format(dayCal.time)
-                                BoopCalendarDayCell(
-                                    label = day.toString().padStart(2, '0'),
-                                    isSelected = dayKey == selectedKey,
-                                    isToday = dayKey == todayKey,
-                                    onSelect = { selectedMillis = dayCal.timeInMillis },
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        DashboardSectionLabel(headerLabel)
+        UnifiedSectionLabel(headerLabel)
         val dayCalendarItems = remember(allDayEvents, dayTasks, timedGoogleEvents) {
             buildList {
                 allDayEvents.forEach { event ->
@@ -4588,39 +4374,30 @@ private fun CalendarScreen(
                 }
             }
         }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                top = 4.dp,
-                bottom = 24.dp,
-            ),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            if (!calendarGranted) {
-                item(span = { GridItemSpan(2) }) {
-                    Text("Tap sync to allow Calendar access.", color = palette.muted, style = MaterialTheme.typography.bodySmall)
-                }
-            } else if (dayCalendarItems.isEmpty()) {
-                item(span = { GridItemSpan(2) }) {
-                    Text("No events scheduled.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
-                }
-            } else {
-                items(dayCalendarItems.size) { index ->
-                    val (meta, onClick) = dayCalendarItems[index]
-                    val (type, title, detail) = meta
-                    UnifiedTintCard(
-                        type = type,
-                        title = title,
-                        meta = detail,
-                        onClick = onClick,
-                    )
+        if (!calendarGranted) {
+            Text("Tap sync to allow Calendar access.", color = palette.muted, style = MaterialTheme.typography.bodySmall)
+        } else if (dayCalendarItems.isEmpty()) {
+            Text("No events scheduled.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                dayCalendarItems.chunked(2).forEach { rowItems ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        rowItems.forEach { (meta, onClick) ->
+                            val (type, title, detail) = meta
+                            UnifiedTintCard(
+                                type = type,
+                                title = title,
+                                meta = detail,
+                                onClick = onClick,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (rowItems.size == 1) Spacer(Modifier.weight(1f))
+                    }
                 }
             }
         }
+        Spacer(Modifier.height(72.dp))
     }
 }
 
@@ -4704,14 +4481,9 @@ private fun NotesListScreen(
             items(visibleNotes, key = { it.id }) { note ->
                 val images = parseNoteAttachments(note.attachmentUri)
                 val hasImage = images.isNotEmpty()
-                val hasAudio = !note.audioUri.isNullOrBlank()
                 val tags = parseNoteTags(note.tagsCsv)
                 val attachmentHint = buildString {
                     if (hasImage) append("Photo")
-                    if (hasAudio) {
-                        if (isNotEmpty()) append(" · ")
-                        append("Audio")
-                    }
                     if (tags.isNotEmpty()) {
                         if (isNotEmpty()) append(" · ")
                         append(tags.take(2).joinToString(" ") { "#$it" })
@@ -5050,6 +4822,7 @@ private fun FinanceScreen(
     onEditEntry: (BoopLedgerEntry) -> Unit,
     onDeleteEntry: (String) -> Unit,
     onEditAccount: (BoopAccount) -> Unit,
+    onAddAccount: () -> Unit,
 ) {
     val palette = LocalBoopPalette.current
     var viewMode by rememberSaveable { mutableStateOf("overview") }
@@ -5104,9 +4877,14 @@ private fun FinanceScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BoopPageTitle("Wallet", modifier = Modifier.weight(1f, fill = false))
-            when (viewMode) {
-                "overview" -> BoopAccentTextButton(label = "Manage", onClick = { viewMode = "accounts" })
-                else -> BoopAccentTextButton(label = "Overview", onClick = { viewMode = "overview" })
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (viewMode == "accounts") {
+                    BoopAccentTextButton(label = "Add account", onClick = onAddAccount)
+                }
+                when (viewMode) {
+                    "overview" -> BoopAccentTextButton(label = "Manage", onClick = { viewMode = "accounts" })
+                    else -> BoopAccentTextButton(label = "Overview", onClick = { viewMode = "overview" })
+                }
             }
         }
         if (viewMode == "overview") {
@@ -5191,7 +4969,28 @@ private fun FinanceScreen(
         } else when (viewMode) {
             "accounts" -> {
                 if (accounts.isEmpty()) {
-                    Text("No accounts yet. Use + menu on Accounts tab.", color = palette.muted, style = MaterialTheme.typography.bodySmall)
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text("No accounts yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(12.dp))
+                        Surface(
+                            onClick = onAddAccount,
+                            shape = RoundedCornerShape(999.dp),
+                            color = palette.accent,
+                        ) {
+                            Text(
+                                "Add your first account",
+                                color = palette.accentOn,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                            )
+                        }
+                    }
                 } else {
                     LazyColumn(
                         Modifier.weight(1f).fillMaxWidth(),
@@ -5386,28 +5185,43 @@ private fun AccountEditorSheet(
     onDismiss: () -> Unit,
     onSave: (BoopAccount) -> Unit,
 ) {
-    var name by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.name) }
-    BoopSheetHeaderTitle(if (initial.id == null) "Add account" else "Edit account")
-    Spacer(Modifier.height(12.dp))
-    BoopFilledTextField(
-        value = name,
-        onValueChange = { name = it },
-        label = { Text("Account name") },
-        placeholder = { Text("Cash, Bank, Card...", color = Color(0xFF8A8A8A)) },
-    )
-    Spacer(Modifier.height(16.dp))
-    BoopWhiteButton(if (initial.id == null) "Save account" else "Save changes") {
+    val sheetKey = initial.sessionKey
+    var name by rememberSaveable(sheetKey) { mutableStateOf(initial.name) }
+    var hasExplicitSave by remember(sheetKey) { mutableStateOf(false) }
+    fun buildAccountOrNull(): BoopAccount? {
         val trimmed = name.trim()
-        if (trimmed.isBlank()) return@BoopWhiteButton
-        onSave(
-            BoopAccount(
-                id = initial.id ?: UUID.randomUUID().toString(),
-                name = trimmed,
-            ),
+        if (trimmed.isBlank()) return null
+        return BoopAccount(
+            id = initial.id ?: UUID.randomUUID().toString(),
+            name = trimmed,
         )
     }
-    Spacer(Modifier.height(8.dp))
-    TextButton(onClick = onDismiss) { Text("Cancel", color = Color(0xFFBFBFBF)) }
+    DisposableEffect(sheetKey) {
+        onDispose {
+            if (!hasExplicitSave) {
+                buildAccountOrNull()?.let(onSave)
+            }
+        }
+    }
+    fun saveAndDismiss() {
+        hasExplicitSave = true
+        val account = buildAccountOrNull()
+        if (account != null) {
+            onSave(account)
+        } else {
+            onDismiss()
+        }
+    }
+    Column(Modifier.fillMaxWidth()) {
+        KeepEditorTopBar(onBack = { saveAndDismiss() })
+        KeepBorderlessTitleField(
+            value = name,
+            onValueChange = { name = it },
+            placeholder = "Account name",
+        )
+        KeepEditorMetaLine("Cash, bank, card, savings…")
+        Spacer(Modifier.height(16.dp).navigationBarsPadding())
+    }
 }
 
 @Composable
@@ -6317,25 +6131,28 @@ private fun EventEditorSheet(
     onSave: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
-    var title by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.title) }
-    var description by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.description) }
-    var location by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.location) }
-    var allDay by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.allDay) }
-    var startAt by rememberSaveable(initial.sessionKey) { mutableLongStateOf(initial.startAt) }
-    var endAt by rememberSaveable(initial.sessionKey) { mutableLongStateOf(initial.endAt) }
-    var notifyWeeksBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyWeeksBefore.toString()) }
-    var notifyDaysBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyDaysBefore.toString()) }
-    var notifyHoursBefore by rememberSaveable(initial.sessionKey) { mutableStateOf(initial.notifyHoursBefore.toString()) }
-    var repeatEveryDays by rememberSaveable(initial.sessionKey) { mutableIntStateOf(initial.repeatEveryDays.coerceAtLeast(0)) }
-    var customRepeatDays by rememberSaveable(initial.sessionKey) {
+    val sheetKey = initial.sessionKey
+    var title by rememberSaveable(sheetKey) { mutableStateOf(initial.title) }
+    var description by rememberSaveable(sheetKey) { mutableStateOf(initial.description) }
+    var location by rememberSaveable(sheetKey) { mutableStateOf(initial.location) }
+    var allDay by rememberSaveable(sheetKey) { mutableStateOf(initial.allDay) }
+    var startAt by rememberSaveable(sheetKey) { mutableLongStateOf(initial.startAt) }
+    var endAt by rememberSaveable(sheetKey) { mutableLongStateOf(initial.endAt) }
+    var notifyWeeksBefore by rememberSaveable(sheetKey) { mutableStateOf(initial.notifyWeeksBefore.toString()) }
+    var notifyDaysBefore by rememberSaveable(sheetKey) { mutableStateOf(initial.notifyDaysBefore.toString()) }
+    var notifyHoursBefore by rememberSaveable(sheetKey) { mutableStateOf(initial.notifyHoursBefore.toString()) }
+    var repeatEveryDays by rememberSaveable(sheetKey) { mutableIntStateOf(initial.repeatEveryDays.coerceAtLeast(0)) }
+    var customRepeatDays by rememberSaveable(sheetKey) {
         mutableStateOf(
             initial.repeatEveryDays.takeIf { it !in setOf(0, 1, 7, 30, 365) }?.toString().orEmpty(),
         )
     }
-    var pickStart by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
-    var pickEnd by rememberSaveable(initial.sessionKey) { mutableStateOf(false) }
-    var selectedCalId by rememberSaveable(initial.sessionKey) { mutableLongStateOf(initial.calendarId ?: -1L) }
+    var pickStart by rememberSaveable(sheetKey) { mutableStateOf(false) }
+    var pickEnd by rememberSaveable(sheetKey) { mutableStateOf(false) }
+    var selectedCalId by rememberSaveable(sheetKey) { mutableLongStateOf(initial.calendarId ?: -1L) }
     var calendars by remember { mutableStateOf(emptyList<DeviceCalendarChoice>()) }
+    var hasExplicitSave by remember(sheetKey) { mutableStateOf(false) }
+    var pendingPermissionSave by remember(sheetKey) { mutableStateOf(false) }
     var writeGranted by remember {
         mutableStateOf(
             androidx.core.content.ContextCompat.checkSelfPermission(
@@ -6346,7 +6163,10 @@ private fun EventEditorSheet(
     }
     val writePermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         writeGranted = granted
-        if (!granted) Toast.makeText(context, "Calendar write permission denied.", Toast.LENGTH_SHORT).show()
+        if (!granted) {
+            Toast.makeText(context, "Calendar write permission denied.", Toast.LENGTH_SHORT).show()
+            pendingPermissionSave = false
+        }
     }
     LaunchedEffect(writeGranted) {
         if (writeGranted) {
@@ -6354,242 +6174,20 @@ private fun EventEditorSheet(
             if (selectedCalId < 0 && calendars.isNotEmpty()) selectedCalId = calendars.first().id
         }
     }
-
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(Modifier.weight(1f)) {
-            BoopSheetHeaderTitle(if (initial.eventId == null) "New event" else "Edit event")
-        }
+    val dateFmt = remember(allDay) {
+        if (allDay) SimpleDateFormat("EEE, MMM dd", Locale.US) else SimpleDateFormat("EEE, MMM dd · HH:mm", Locale.US)
     }
-    Spacer(Modifier.height(12.dp))
-    BoopFilledTextField(value = title, onValueChange = { title = it }, label = { Text("Title") })
-    Spacer(Modifier.height(8.dp))
-    BoopFilledTextField(value = location, onValueChange = { location = it }, label = { Text("Location") })
-    Spacer(Modifier.height(8.dp))
-    BoopFilledTextField(value = description, onValueChange = { description = it }, label = { Text("Description") })
-    Spacer(Modifier.height(8.dp))
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text("All day", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
-        Switch(checked = allDay, onCheckedChange = { allDay = it })
-    }
-    Spacer(Modifier.height(8.dp))
-    Surface(
-        onClick = { pickStart = true },
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Text("Starts", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-            Text(SimpleDateFormat("EEE, MMM dd · HH:mm", Locale.US).format(startAt), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyMedium)
-            Text("Tap to edit", color = Color(0xFF6E6E70), style = MaterialTheme.typography.labelSmall)
-        }
-    }
-    Spacer(Modifier.height(6.dp))
-    val todayRef = remember {
-        Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 12)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-    }
-    val todayDateLabel = remember { SimpleDateFormat("EEE, MMM dd", Locale.US).format(todayRef) }
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFBFBF)),
-        modifier = Modifier.clickable {
-            val current = Calendar.getInstance().apply { timeInMillis = startAt }
-            val today = Calendar.getInstance().apply { timeInMillis = todayRef }
-            current.set(Calendar.YEAR, today.get(Calendar.YEAR))
-            current.set(Calendar.MONTH, today.get(Calendar.MONTH))
-            current.set(Calendar.DAY_OF_MONTH, today.get(Calendar.DAY_OF_MONTH))
-            startAt = current.timeInMillis
-            if (endAt <= startAt) endAt = startAt + 60 * 60_000L
-        },
-    ) {
-        Text(
-            "Today: $todayDateLabel",
-            color = MaterialTheme.colorScheme.onBackground,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-        )
-    }
-    Spacer(Modifier.height(8.dp))
-    Surface(
-        onClick = { pickEnd = true },
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Text("Ends", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-            Text(SimpleDateFormat("EEE, MMM dd · HH:mm", Locale.US).format(endAt), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-    ReminderPickerDialog(
-        visible = pickStart,
-        initialMillis = startAt,
-        title = "Start date & time",
-        showTime = !allDay,
-        onDismiss = { pickStart = false },
-        onConfirm = { picked ->
-            startAt = picked
-            if (endAt <= startAt) endAt = startAt + 60 * 60_000L
-            pickStart = false
-        },
-    )
-    ReminderPickerDialog(
-        visible = pickEnd,
-        initialMillis = endAt,
-        title = "End date & time",
-        showTime = !allDay,
-        onDismiss = { pickEnd = false },
-        onConfirm = { picked ->
-            endAt = maxOf(picked, startAt + 60_000L)
-            pickEnd = false
-        },
-    )
-    Spacer(Modifier.height(8.dp))
-    if (writeGranted && calendars.isNotEmpty()) {
-        val selectedName = calendars.firstOrNull { it.id == selectedCalId }?.displayName ?: calendars.first().displayName
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            calendars.forEach { cal ->
-                val active = cal.id == selectedCalId
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.clickable { selectedCalId = cal.id },
-                ) {
-                    Text(
-                        cal.displayName,
-                        color = if (active) Color.Black else Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Text("Calendar: $selectedName", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-    }
-    Spacer(Modifier.height(8.dp))
-    Text("Notifications before start", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelMedium)
-    Spacer(Modifier.height(6.dp))
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        BoopFilledTextField(
-            value = notifyWeeksBefore,
-            onValueChange = { notifyWeeksBefore = it.filter { ch -> ch.isDigit() }.take(2) },
-            label = { Text("Weeks") },
-            modifier = Modifier.weight(1f),
-            singleLine = true,
-        )
-        BoopFilledTextField(
-            value = notifyDaysBefore,
-            onValueChange = { notifyDaysBefore = it.filter { ch -> ch.isDigit() }.take(3) },
-            label = { Text("Days") },
-            modifier = Modifier.weight(1f),
-            singleLine = true,
-        )
-        BoopFilledTextField(
-            value = notifyHoursBefore,
-            onValueChange = { notifyHoursBefore = it.filter { ch -> ch.isDigit() }.take(3) },
-            label = { Text("Hours") },
-            modifier = Modifier.weight(1f),
-            singleLine = true,
-        )
-    }
-    Spacer(Modifier.height(8.dp))
-    Text(
-        text = "Repeat",
-        color = Color(0xFF8E8E90),
-        style = MaterialTheme.typography.labelSmall,
-    )
-    Spacer(Modifier.height(6.dp))
-    val repeatOptions = listOf(
-        0 to "None",
-        1 to "Daily",
-        7 to "Weekly",
-        30 to "Monthly",
-        365 to "Yearly",
-    )
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        repeatOptions.forEach { (days, label) ->
-            val active = repeatEveryDays == days
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.clickable {
-                    repeatEveryDays = days
-                    if (days in setOf(0, 1, 7, 30, 365)) customRepeatDays = ""
-                },
-            ) {
-                Text(
-                    label,
-                    color = if (active) Color.Black else Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                )
-            }
-        }
-        val customActive = repeatEveryDays !in setOf(0, 1, 7, 30, 365)
-        Surface(
-            shape = RoundedCornerShape(999.dp),
-            color = if (customActive) Color.White else MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.clickable { if (repeatEveryDays in setOf(0, 1, 7, 30, 365)) repeatEveryDays = 2 },
-        ) {
-            Text(
-                "Custom",
-                color = if (customActive) Color.Black else Color.White,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            )
-        }
-    }
-    if (repeatEveryDays !in setOf(0, 1, 7, 30, 365)) {
-        Spacer(Modifier.height(6.dp))
-        BoopFilledTextField(
-            value = customRepeatDays,
-            onValueChange = {
-                val filtered = it.filter { ch -> ch.isDigit() }.take(3)
-                customRepeatDays = filtered
-                repeatEveryDays = filtered.toIntOrNull()?.coerceAtLeast(1) ?: repeatEveryDays
-            },
-            label = { Text("Every N days") },
-            singleLine = true,
-        )
-    }
-    Spacer(Modifier.height(4.dp))
-    Text(
-        text = repeatFrequencyLabel(repeatEveryDays),
-        color = Color(0xFF8E8E90),
-        style = MaterialTheme.typography.labelSmall,
-    )
-    Spacer(Modifier.height(20.dp))
-    BoopWhiteButton("Save event") {
+    fun persistEvent(): Boolean {
+        if (title.isBlank()) return false
         if (!writeGranted) {
+            pendingPermissionSave = true
             writePermLauncher.launch(Manifest.permission.WRITE_CALENDAR)
-            return@BoopWhiteButton
+            return false
         }
-        if (title.isBlank()) return@BoopWhiteButton
         val calendarId = selectedCalId.takeIf { it >= 0 } ?: calendars.firstOrNull()?.id
         if (calendarId == null) {
             Toast.makeText(context, "No writable calendar found.", Toast.LENGTH_SHORT).show()
-            return@BoopWhiteButton
+            return false
         }
         val eventId = if (initial.eventId == null) {
             insertDeviceCalendarEvent(
@@ -6629,9 +6227,170 @@ private fun EventEditorSheet(
                 daysBefore = notifyDaysBefore.toIntOrNull() ?: 0,
                 hoursBefore = notifyHoursBefore.toIntOrNull() ?: 0,
             )
+            Toast.makeText(context, "Event saved to Calendar", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Failed to save event", Toast.LENGTH_SHORT).show()
         }
-        Toast.makeText(context, if (ok) "Event saved to Calendar" else "Failed to save event", Toast.LENGTH_SHORT).show()
-        onSave(ok)
+        return ok
+    }
+    LaunchedEffect(writeGranted, pendingPermissionSave) {
+        if (writeGranted && pendingPermissionSave && title.isNotBlank()) {
+            pendingPermissionSave = false
+            val ok = persistEvent()
+            if (ok) {
+                hasExplicitSave = true
+                onSave(true)
+            }
+        }
+    }
+    fun commitEventAndClose() {
+        if (title.isBlank()) {
+            onDismiss()
+            return
+        }
+        val ok = persistEvent()
+        if (ok) {
+            hasExplicitSave = true
+            onSave(true)
+        }
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(),
+    ) {
+        KeepEditorTopBar(
+            onBack = { commitEventAndClose() },
+            title = if (initial.eventId == null) "New Event" else "Edit Event",
+        )
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Spacer(Modifier.height(6.dp))
+            KeepOutlinedTitleField(
+                value = title,
+                onValueChange = { title = it },
+                placeholder = "Title",
+            )
+            Spacer(Modifier.height(10.dp))
+            KeepEditorSwitchRow(label = "All day", checked = allDay, onCheckedChange = { allDay = it })
+            Spacer(Modifier.height(6.dp))
+            KeepEditorActionCard(
+                label = "Starts",
+                value = dateFmt.format(startAt),
+                onClick = { pickStart = true },
+            )
+            Spacer(Modifier.height(8.dp))
+            KeepEditorActionCard(
+                label = "Ends",
+                value = dateFmt.format(endAt),
+                onClick = { pickEnd = true },
+            )
+            ReminderPickerDialog(
+                visible = pickStart,
+                initialMillis = startAt,
+                title = "Start date & time",
+                showTime = !allDay,
+                onDismiss = { pickStart = false },
+                onConfirm = { picked ->
+                    startAt = picked
+                    if (endAt <= startAt) endAt = startAt + 60 * 60_000L
+                    pickStart = false
+                },
+            )
+            ReminderPickerDialog(
+                visible = pickEnd,
+                initialMillis = endAt,
+                title = "End date & time",
+                showTime = !allDay,
+                onDismiss = { pickEnd = false },
+                onConfirm = { picked ->
+                    endAt = maxOf(picked, startAt + 60_000L)
+                    pickEnd = false
+                },
+            )
+            if (writeGranted && calendars.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                KeepSectionLabel("Calendar")
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    calendars.forEach { cal ->
+                        KeepPaletteChip(
+                            label = cal.displayName,
+                            selected = cal.id == selectedCalId,
+                            onClick = { selectedCalId = cal.id },
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            KeepEditorRepeatSection(
+                repeatEveryDays = repeatEveryDays,
+                customRepeatDays = customRepeatDays,
+                onRepeatEveryDaysChange = { repeatEveryDays = it },
+                onCustomRepeatDaysChange = { customRepeatDays = it },
+                frequencyLabel = repeatFrequencyLabel(repeatEveryDays),
+            )
+            Spacer(Modifier.height(10.dp))
+            KeepSectionLabel("Notify before start")
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = notifyWeeksBefore,
+                    onValueChange = { notifyWeeksBefore = it.filter { ch -> ch.isDigit() }.take(2) },
+                    label = { Text("Weeks") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    colors = KeepOutlinedFieldColors(),
+                )
+                OutlinedTextField(
+                    value = notifyDaysBefore,
+                    onValueChange = { notifyDaysBefore = it.filter { ch -> ch.isDigit() }.take(3) },
+                    label = { Text("Days") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    colors = KeepOutlinedFieldColors(),
+                )
+                OutlinedTextField(
+                    value = notifyHoursBefore,
+                    onValueChange = { notifyHoursBefore = it.filter { ch -> ch.isDigit() }.take(3) },
+                    label = { Text("Hours") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    colors = KeepOutlinedFieldColors(),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            KeepSectionLabel("Location")
+            KeepBorderlessBodyField(
+                value = location,
+                onValueChange = { location = it },
+                placeholder = "Add location",
+                minLines = 1,
+            )
+            KeepSectionLabel("Description")
+            KeepBorderlessBodyField(
+                value = description,
+                onValueChange = { description = it },
+                placeholder = "Add description",
+                minLines = 3,
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+        KeepFormSaveButton(onClick = { commitEventAndClose() })
+        Spacer(Modifier.height(10.dp))
     }
 }
 
@@ -6652,8 +6411,6 @@ private fun TaskEditorSheet(
     var done by remember(sheetKey) { mutableStateOf(initial.done) }
     var repeatEveryDays by rememberSaveable(sheetKey) { mutableIntStateOf(initial.repeatEveryDays.coerceAtLeast(0)) }
     var linkedNoteId by rememberSaveable(sheetKey) { mutableStateOf(initial.linkedNoteId) }
-    var newNoteTitle by rememberSaveable(sheetKey) { mutableStateOf("") }
-    var newNoteBody by rememberSaveable(sheetKey) { mutableStateOf("") }
     var customRepeatDays by rememberSaveable(sheetKey) {
         mutableStateOf(
             initial.repeatEveryDays.takeIf { it !in setOf(0, 1, 7, 30, 365) }?.toString().orEmpty(),
@@ -6662,6 +6419,13 @@ private fun TaskEditorSheet(
     var showReminderPicker by remember(sheetKey) { mutableStateOf(false) }
     var hasExplicitSave by remember(sheetKey) { mutableStateOf(false) }
     var skipAutoSaveOnDispose by remember(sheetKey) { mutableStateOf(false) }
+    var details by rememberSaveable(sheetKey) { mutableStateOf(initial.details) }
+    var subtasks by remember(sheetKey) {
+        mutableStateOf(
+            parseSubtasksJson(initial.subtasksJson).ifEmpty { emptyList() },
+        )
+    }
+    var subtasksExpanded by rememberSaveable(sheetKey) { mutableStateOf(initial.subtasksJson.isNotBlank()) }
     fun buildTaskForSaveOrNull(): BoopTask? {
         if (title.isBlank()) return null
         val rep = repeatEveryDays.coerceAtLeast(0)
@@ -6679,6 +6443,8 @@ private fun TaskEditorSheet(
             repeatEveryDays = rep,
             linkedNoteId = linkedNoteId,
             archived = initial.archived,
+            details = details.trim(),
+            subtasksJson = serializeSubtasksJson(subtasks),
         )
     }
     DisposableEffect(sheetKey) {
@@ -6693,283 +6459,146 @@ private fun TaskEditorSheet(
         buildTaskForSaveOrNull()?.let(onPersist)
         onOpenLinkedNote(note)
     }
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(Modifier.weight(1f)) {
-            BoopSheetHeaderTitle(if (initial.id == null) "New task" else "Edit task")
+    fun commitTaskAndClose() {
+        hasExplicitSave = true
+        val taskCandidate = buildTaskForSaveOrNull() ?: run {
+            onDismiss()
+            return
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (initial.id != null) {
-                IconButton(
-                    onClick = {
-                        hasExplicitSave = true
-                        buildTaskForSaveOrNull()?.let { onSave(it.copy(archived = !initial.archived)) }
-                    },
-                ) {
-                    if (initial.archived) {
-                        Icon(Icons.Outlined.Unarchive, contentDescription = "Restore task", tint = Color(0xFF9AE6B4))
-                    } else {
-                        Icon(Icons.Outlined.Archive, contentDescription = "Archive task", tint = Color(0xFFFFD98A))
-                    }
-                }
-            }
-            if (onDelete != null) {
-                IconButton(
-                    onClick = {
-                        skipAutoSaveOnDispose = true
-                        onDelete()
-                    },
-                ) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFF8A8A))
-                }
-            }
-        }
+        onSave(taskCandidate)
     }
-    Spacer(Modifier.height(12.dp))
-    BoopFilledTextField(
-        value = title,
-        onValueChange = { title = it },
-        label = { Text("Task") },
-    )
-    Spacer(Modifier.height(8.dp))
-    Text("Repeat", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-    Spacer(Modifier.height(6.dp))
-    val repeatOptions = listOf(
-        0 to "None",
-        1 to "Daily",
-        7 to "Weekly",
-        30 to "Monthly",
-        365 to "Yearly",
-    )
-    Row(
+    val palette = LocalBoopPalette.current
+    Column(
         Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .fillMaxHeight(),
     ) {
-        repeatOptions.forEach { (days, label) ->
-            val active = repeatEveryDays == days
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.clickable {
-                    repeatEveryDays = days
-                    if (days in setOf(0, 1, 7, 30, 365)) customRepeatDays = ""
-                },
-            ) {
-                Text(
-                    label,
-                    color = if (active) Color.Black else Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                )
-            }
-        }
-        val customActive = repeatEveryDays !in setOf(0, 1, 7, 30, 365)
-        Surface(
-            shape = RoundedCornerShape(999.dp),
-            color = if (customActive) Color.White else MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.clickable { if (repeatEveryDays in setOf(0, 1, 7, 30, 365)) repeatEveryDays = 2 },
-        ) {
-            Text(
-                "Custom",
-                color = if (customActive) Color.Black else Color.White,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            )
-        }
-    }
-    if (repeatEveryDays !in setOf(0, 1, 7, 30, 365)) {
-        Spacer(Modifier.height(6.dp))
-        BoopFilledTextField(
-            value = customRepeatDays,
-            onValueChange = {
-                val filtered = it.filter { ch -> ch.isDigit() }.take(3)
-                customRepeatDays = filtered
-                repeatEveryDays = filtered.toIntOrNull()?.coerceAtLeast(1) ?: repeatEveryDays
+        KeepEditorTopBar(
+            onBack = { commitTaskAndClose() },
+            title = if (initial.id == null) "New Task" else "Edit Task",
+            actions = {
+                if (initial.id != null) {
+                    KeepToolbarIconButton(
+                        onClick = {
+                            hasExplicitSave = true
+                            buildTaskForSaveOrNull()?.let { onSave(it.copy(archived = !initial.archived)) }
+                        },
+                        icon = if (initial.archived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
+                        contentDescription = if (initial.archived) "Restore task" else "Archive task",
+                        tint = if (initial.archived) palette.accent else palette.muted,
+                    )
+                }
+                if (onDelete != null) {
+                    KeepToolbarIconButton(
+                        onClick = {
+                            skipAutoSaveOnDispose = true
+                            onDelete()
+                        },
+                        icon = Icons.Outlined.Delete,
+                        contentDescription = "Delete",
+                        tint = palette.danger,
+                    )
+                }
             },
-            label = { Text("Every N days") },
-            singleLine = true,
         )
-    }
-    Spacer(Modifier.height(4.dp))
-    Text(repeatFrequencyLabel(repeatEveryDays), color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-    Spacer(Modifier.height(12.dp))
-    Text("Linked note", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-    Spacer(Modifier.height(6.dp))
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        val noneActive = linkedNoteId == null
-        Surface(
-            shape = RoundedCornerShape(999.dp),
-            color = if (noneActive) Color.White else MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.clickable { linkedNoteId = null },
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
         ) {
-            Text(
-                "None",
-                color = if (noneActive) Color.Black else Color.White,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            )
-        }
-        notes.take(20).forEach { note ->
-            val active = linkedNoteId == note.id
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.clickable {
-                    if (active) {
-                        openLinkedNote(note)
-                    } else {
-                        linkedNoteId = note.id
-                    }
-                },
-            ) {
-                Text(
-                    note.title.ifBlank { "Untitled note" },
-                    color = if (active) Color.Black else Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                )
-            }
-        }
-    }
-    val linkedNote = linkedNoteId?.let { id -> notes.firstOrNull { it.id == id } }
-    if (linkedNote != null) {
-        Spacer(Modifier.height(8.dp))
-        Surface(
-            onClick = { openLinkedNote(linkedNote) },
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            tonalElevation = 2.dp,
-            shadowElevation = 2.dp,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
+            Spacer(Modifier.height(6.dp))
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Icon(
-                    Icons.Outlined.EditNote,
-                    contentDescription = null,
-                    tint = Color(0xFFB3D5FF),
-                    modifier = Modifier.size(22.dp),
-                )
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        linkedNote.title.ifBlank { "Untitled note" },
-                        color = MaterialTheme.colorScheme.onBackground,
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    val preview = plainNoteSnippet(linkedNote.body, 96)
-                    if (preview.isNotBlank()) {
-                        Text(
-                            preview,
-                            color = Color(0xFFBFBFBF),
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                Surface(
+                    onClick = { done = !done },
+                    shape = CircleShape,
+                    color = if (done) palette.accent else Color.Transparent,
+                    border = BorderStroke(2.dp, palette.accent),
+                    modifier = Modifier.size(24.dp),
+                ) {
+                    if (done) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Outlined.Check, contentDescription = "Mark incomplete", tint = Color.White, modifier = Modifier.size(15.dp))
+                        }
                     }
                 }
-                Icon(
-                    Icons.Outlined.ChevronRight,
-                    contentDescription = "Open linked note",
-                    tint = Color(0xFFB3D5FF),
-                    modifier = Modifier.size(20.dp),
+                KeepBorderlessTitleField(
+                    value = title,
+                    onValueChange = { title = it },
+                    placeholder = "Title",
+                    modifier = Modifier.weight(1f),
+                    titleDecoration = if (done) TextDecoration.LineThrough else TextDecoration.None,
                 )
             }
-        }
-    }
-    Spacer(Modifier.height(8.dp))
-    Text("Or create a note now", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-    Spacer(Modifier.height(6.dp))
-    BoopFilledTextField(
-        value = newNoteTitle,
-        onValueChange = { newNoteTitle = it },
-        label = { Text("New note title") },
-    )
-    Spacer(Modifier.height(6.dp))
-    BoopFilledTextField(
-        value = newNoteBody,
-        onValueChange = { newNoteBody = it },
-        label = { Text("New note body") },
-        minLines = 2,
-    )
-    Spacer(Modifier.height(12.dp))
-    Surface(
-        onClick = { showReminderPicker = true },
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 2.dp,
-        shadowElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column {
-                Text("Set a reminder", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.labelMedium)
-                Text(formatTaskReminderLine(reminderAt), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge)
-            }
-            Icon(Icons.Outlined.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.onBackground)
-        }
-    }
-    ReminderPickerDialog(
-        visible = showReminderPicker,
-        initialMillis = reminderAt,
-        title = "Reminder",
-        onDismiss = { showReminderPicker = false },
-        onConfirm = {
-            reminderAt = it
-            showReminderPicker = false
-        },
-    )
-    Spacer(Modifier.height(20.dp))
-    BoopWhiteButton("Save") {
-        hasExplicitSave = true
-        val taskCandidate = buildTaskForSaveOrNull() ?: return@BoopWhiteButton
-        val createFreshNote = newNoteTitle.isNotBlank() || newNoteBody.isNotBlank()
-        val resolvedTask = if (createFreshNote) {
-            val noteId = UUID.randomUUID().toString()
-            onSaveNote(
-                BoopNote(
-                    id = noteId,
-                    title = newNoteTitle.trim(),
-                    body = newNoteBody.trim(),
-                    attachmentUri = null,
-                    audioUri = null,
-                    tagsCsv = "",
-                    ocrText = "",
-                    linkedTaskId = taskCandidate.id,
-                    archived = false,
-                    createdAtMillis = System.currentTimeMillis(),
-                    updatedAtMillis = System.currentTimeMillis(),
-                ),
+            Spacer(Modifier.height(10.dp))
+            KeepEditorActionCard(
+                label = "Date & time",
+                value = formatTaskReminderLine(reminderAt),
+                onClick = { showReminderPicker = true },
             )
-            taskCandidate.copy(linkedNoteId = noteId)
-        } else {
-            taskCandidate
+            ReminderPickerDialog(
+                visible = showReminderPicker,
+                initialMillis = reminderAt,
+                title = "Reminder",
+                onDismiss = { showReminderPicker = false },
+                onConfirm = {
+                    reminderAt = it
+                    showReminderPicker = false
+                },
+            )
+            Spacer(Modifier.height(10.dp))
+            KeepEditorRepeatSection(
+                repeatEveryDays = repeatEveryDays,
+                customRepeatDays = customRepeatDays,
+                onRepeatEveryDaysChange = { repeatEveryDays = it },
+                onCustomRepeatDaysChange = { customRepeatDays = it },
+                frequencyLabel = repeatFrequencyLabel(repeatEveryDays),
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                KeepSectionLabel("Subtasks", modifier = Modifier.padding(0.dp))
+                KeepToolbarIconButton(
+                    onClick = {
+                        subtasksExpanded = true
+                        if (subtasks.isEmpty()) subtasks = listOf(ChecklistItem(text = ""))
+                    },
+                    icon = Icons.Outlined.Add,
+                    contentDescription = "Add subtask",
+                    tint = palette.muted,
+                )
+            }
+            if (subtasksExpanded || subtasks.isNotEmpty()) {
+                KeepChecklistEditor(
+                    items = subtasks.ifEmpty { listOf(ChecklistItem(text = "")) },
+                    onChange = {
+                        subtasks = it
+                        subtasksExpanded = true
+                    },
+                )
+            }
+            KeepSectionLabel("Details")
+            KeepBorderlessBodyField(
+                value = details,
+                onValueChange = { details = it },
+                placeholder = "Add details",
+                minLines = 3,
+            )
+            Spacer(Modifier.height(16.dp))
         }
-        onSave(resolvedTask)
+        KeepFormSaveButton(onClick = { commitTaskAndClose() })
+        Spacer(Modifier.height(10.dp))
     }
 }
 
@@ -6979,41 +6608,53 @@ private fun NoteEditorSheet(
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
     onSave: (BoopNote) -> Unit,
+    tasks: List<BoopTask> = emptyList(),
+    onAddReminder: ((BoopNote) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val palette = LocalBoopPalette.current
     val session = initial.sessionKey
     var title by rememberSaveable(session) { mutableStateOf(initial.title) }
+    var body by rememberSaveable(session) { mutableStateOf(htmlNoteBodyToPlain(initial.body)) }
+    var linkedTaskId by rememberSaveable(session) { mutableStateOf(initial.linkedTaskId) }
     var tagsCsv by rememberSaveable(session) { mutableStateOf(initial.tagsCsv) }
+    val reminderOptions = remember(tasks) {
+        buildList {
+            add(null to "None")
+            tasks.filter { !it.done && !it.archived }
+                .sortedBy { it.reminderAt }
+                .take(12)
+                .forEach { add(it.id to it.title.ifBlank { "Reminder" }) }
+        }
+    }
     var attachmentStored by remember(session) { mutableStateOf(parseNoteAttachments(initial.attachmentUri)) }
-    var audioStored by remember(session) { mutableStateOf(initial.audioUri) }
-    var bodyEdit by remember(session) { mutableStateOf<EditText?>(null) }
-    var editorFocused by remember(session) { mutableStateOf(false) }
-    var recording by remember(session) { mutableStateOf(false) }
-    var recordingStartedAt by remember(session) { mutableLongStateOf(0L) }
-    var recorder by remember(session) { mutableStateOf<MediaRecorder?>(null) }
     var hasExplicitSave by remember(session) { mutableStateOf(false) }
     var skipAutoSaveOnDispose by remember(session) { mutableStateOf(false) }
+    var isChecklistMode by rememberSaveable(session) { mutableStateOf(isChecklistBody(initial.body)) }
+    var checklistItems by remember(session) {
+        mutableStateOf(
+            parseChecklistBody(initial.body).ifEmpty { listOf(ChecklistItem(text = "")) },
+        )
+    }
+    fun resolveBodyForSave(): String {
+        if (isChecklistMode) return serializeChecklistBody(checklistItems)
+        return body.trim()
+    }
     fun buildNoteForSaveOrNull(): BoopNote? {
         val noteId = initial.id ?: UUID.randomUUID().toString()
         val resolvedAttachment = serializeNoteAttachments(attachmentStored)
-        val editable = bodyEdit?.text
-        val bodyHtml = if (editable is Spanned) {
-            Html.toHtml(editable, 0x1 /* Html.TO_HTML_PARCEL_OUTPUT_MODE */).trim()
-        } else {
-            editable?.toString()?.trim().orEmpty()
-        }
-        if (title.isBlank() && bodyHtml.isBlank()) return null
+        val bodyContent = resolveBodyForSave()
+        if (title.isBlank() && bodyContent.isBlank()) return null
         val ocrText = extractTextFromAttachment(context, resolvedAttachment)
         return BoopNote(
             id = noteId,
             title = title.trim(),
-            body = bodyHtml,
+            body = bodyContent,
             attachmentUri = resolvedAttachment,
-            audioUri = audioStored,
+            audioUri = null,
             tagsCsv = normalizeNoteTags(tagsCsv),
             ocrText = ocrText,
-            linkedTaskId = initial.linkedTaskId,
+            linkedTaskId = linkedTaskId,
             archived = initial.archived,
             createdAtMillis = initial.createdAtMillis,
             updatedAtMillis = System.currentTimeMillis(),
@@ -7028,354 +6669,256 @@ private fun NoteEditorSheet(
         }
         attachmentStored = existing.distinct().take(25)
     }
-    var micGranted by remember(session) {
-        mutableStateOf(
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.RECORD_AUDIO,
-            ) == PackageManager.PERMISSION_GRANTED,
-        )
-    }
-    fun beginAudioRecording() {
-        if (recording) return
-        startNoteAudioRecording(
-            context = context,
-            onStarted = { r, path, startedAt ->
-                recorder = r
-                recording = true
-                recordingStartedAt = startedAt
-                audioStored = path
-                Toast.makeText(context, "Recording… tap stop when done", Toast.LENGTH_SHORT).show()
-            },
-            onFailed = { reason ->
-                recorder = null
-                recording = false
-                recordingStartedAt = 0L
-                Toast.makeText(context, "Could not start recording: $reason", Toast.LENGTH_LONG).show()
-            },
-        )
-    }
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        micGranted = granted
-        if (granted) {
-            beginAudioRecording()
-        } else {
-            Toast.makeText(context, "Microphone permission is required to record audio.", Toast.LENGTH_LONG).show()
-        }
-    }
     DisposableEffect(session) {
         onDispose {
             if (!hasExplicitSave && !skipAutoSaveOnDispose) {
                 buildNoteForSaveOrNull()?.let(onSave)
             }
-            try {
-                recorder?.stop()
-            } catch (_: Throwable) {
-            }
-            try {
-                recorder?.release()
-            } catch (_: Throwable) {
-            }
-            recorder = null
-            recordingStartedAt = 0L
-            bodyEdit = null
         }
     }
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(Modifier.weight(1f)) {
-            BoopSheetHeaderTitle(if (initial.id == null) "New note" else "Edit note")
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (initial.id != null) {
-                IconButton(
-                    onClick = {
-                        val editable = bodyEdit?.text
-                        val bodyHtml = if (editable is Spanned) {
-                            Html.toHtml(editable, 0x1).trim()
-                        } else {
-                            editable?.toString()?.trim().orEmpty()
-                        }
-                        val serializedAttachments = serializeNoteAttachments(attachmentStored)
-                        hasExplicitSave = true
-                        onSave(
-                            BoopNote(
-                                id = initial.id,
-                                title = title.trim(),
-                                body = bodyHtml,
-                                attachmentUri = serializedAttachments,
-                                audioUri = audioStored,
-                                tagsCsv = normalizeNoteTags(tagsCsv),
-                                ocrText = extractTextFromAttachment(context, serializedAttachments),
-                                linkedTaskId = initial.linkedTaskId,
-                                archived = !initial.archived,
-                                createdAtMillis = initial.createdAtMillis,
-                                updatedAtMillis = System.currentTimeMillis(),
-                            ),
-                        )
-                    },
-                ) {
-                    if (initial.archived) {
-                        Icon(Icons.Outlined.Unarchive, contentDescription = "Restore note", tint = Color(0xFF9AE6B4))
-                    } else {
-                        Icon(Icons.Outlined.Archive, contentDescription = "Archive note", tint = Color(0xFFFFD98A))
-                    }
-                }
-            }
-            if (onDelete != null) {
-                IconButton(
-                    onClick = {
-                        skipAutoSaveOnDispose = true
-                        onDelete()
-                    },
-                ) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFF8A8A))
-                }
-            }
-        }
-    }
-    Spacer(Modifier.height(12.dp))
-    BoopFilledTextField(
-        value = title,
-        onValueChange = { title = it },
-        label = { Text("Title") },
-    )
-    if (initial.id != null) {
-        Spacer(Modifier.height(4.dp))
-        Text(
-            formatNoteCardTime(
-                BoopNote(
-                    id = initial.id,
-                    title = "",
-                    body = "",
-                    attachmentUri = null,
-                    tagsCsv = "",
-                    ocrText = "",
-                    archived = false,
-                    createdAtMillis = initial.createdAtMillis,
-                    updatedAtMillis = initial.updatedAtMillis,
-                ),
-            ),
-            color = Color(0xFF8E8E90),
-            style = MaterialTheme.typography.labelSmall,
-        )
-    }
-    Spacer(Modifier.height(8.dp))
-    BoopFilledTextField(
-        value = tagsCsv,
-        onValueChange = { tagsCsv = it },
-        label = { Text("Tags") },
-        placeholder = { Text("work, urgent, ideas", color = Color(0xFF8A8A8A)) },
-    )
-    Spacer(Modifier.height(8.dp))
-    if (attachmentStored.isNotEmpty()) {
-        attachmentStored.chunked(3).forEach { row ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(120.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                row.forEach { stored ->
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(storedAttachmentForCoil(stored))
-                            .crossfade(false)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(12.dp)),
-                    )
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-        }
-        Spacer(Modifier.height(4.dp))
-    }
-    Text("Note", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
-    Spacer(Modifier.height(4.dp))
-    AndroidView(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 140.dp)
-            .shadow(
-                elevation = 3.dp,
-                shape = RoundedCornerShape(14.dp),
-                ambientColor = Color.Black.copy(alpha = 0.35f),
-                spotColor = Color.Black.copy(alpha = 0.45f),
-            )
-            .clip(RoundedCornerShape(14.dp)),
-        factory = { ctx ->
-            val fieldBg = palette.inputField
-            val fieldFg = palette.onBackground
-            val fieldHint = palette.muted
-            EditText(ctx).apply {
-                applyBoopSans()
-                setBackgroundColor(fieldBg.toArgb())
-                setTextColor(fieldFg.toArgb())
-                setHintTextColor(fieldHint.toArgb())
-                hint = "Write your note…"
-                minLines = 4
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                gravity = Gravity.TOP or Gravity.START
-                setPadding(16, 16, 16, 16)
-                onFocusChangeListener = android.view.View.OnFocusChangeListener { _, hasFocus ->
-                    editorFocused = hasFocus
-                }
-                setText(
-                    HtmlCompat.fromHtml(
-                        initial.body.ifBlank { "" },
-                        HtmlCompat.FROM_HTML_MODE_COMPACT,
-                    ),
-                    android.widget.TextView.BufferType.EDITABLE,
-                )
-                bodyEdit = this
-            }
-        },
-        update = { et ->
-            bodyEdit = et
-            editorFocused = et.hasFocus()
-        },
-    )
-    if (editorFocused) {
-        Spacer(Modifier.height(6.dp))
-        NoteRichTextToolbar(bodyEdit, context)
-    }
-    val currentBodyText = remember(bodyEdit?.text?.toString()) { bodyEdit?.text?.toString().orEmpty() }
+    var tagsExpanded by rememberSaveable(session) { mutableStateOf(initial.tagsCsv.isNotBlank()) }
+    var showLinkSheet by remember(session) { mutableStateOf(false) }
     val linkRegex = remember { Regex("""https?://[^\s<>()]+""") }
-    val typedLinks = remember(currentBodyText) { linkRegex.findAll(currentBodyText).map { it.value }.distinct().toList() }
-    val spannedLinks = remember(bodyEdit?.text) {
-        val et = bodyEdit
-        val editable = et?.text as? Editable
-        editable?.getSpans(0, editable.length, URLSpan::class.java)?.map { it.url }?.distinct().orEmpty()
-    }
-    val previewLinks = remember(typedLinks, spannedLinks) { (typedLinks + spannedLinks).distinct() }
-    Spacer(Modifier.height(8.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { picker.launch("image/*") }) {
-            Icon(Icons.Outlined.Image, contentDescription = "Attach image", tint = MaterialTheme.colorScheme.onBackground)
-        }
-        IconButton(
-            onClick = {
-                val urlInput = EditText(context).apply {
-                    applyBoopSans()
-                    hint = "https://example.com"
-                    setTextColor(android.graphics.Color.WHITE)
-                    setHintTextColor(android.graphics.Color.parseColor("#8A8A8A"))
-                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    setText("https://")
-                    setSelection(text.length)
-                }
-                if (previewLinks.size >= 25) {
-                    Toast.makeText(context, "Maximum 25 links per note.", Toast.LENGTH_SHORT).show()
-                    return@IconButton
-                }
-                AlertDialog.Builder(context)
-                    .setTitle("Add link preview")
-                    .setMessage("Link will be added to the note and shown as a preview card.")
-                    .setView(urlInput)
-                    .setPositiveButton("Add link") { _, _ ->
-                        noteEditInsertLink(bodyEdit, urlInput.text?.toString().orEmpty())
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
-            },
-        ) {
-            Icon(Icons.Outlined.Link, contentDescription = "Insert link", tint = MaterialTheme.colorScheme.onBackground)
-        }
-        IconButton(
-            onClick = {
-                if (recording) {
-                    try {
-                        recorder?.stop()
-                    } catch (_: Throwable) {
-                    }
-                    try {
-                        recorder?.release()
-                    } catch (_: Throwable) {
-                    }
-                    recorder = null
-                    recording = false
-                    val secs = ((System.currentTimeMillis() - recordingStartedAt) / 1000L).coerceAtLeast(1L)
-                    recordingStartedAt = 0L
-                    val fileOk = !audioStored.isNullOrBlank() && File(audioStored!!).let { it.exists() && it.length() > 0L }
-                    if (fileOk) {
-                        Toast.makeText(context, "Recording saved (${secs}s)", Toast.LENGTH_SHORT).show()
-                    } else {
-                        audioStored = null
-                        Toast.makeText(context, "Recording failed — try again", Toast.LENGTH_SHORT).show()
-                    }
-                } else if (micGranted) {
-                    beginAudioRecording()
-                } else {
-                    micPermission.launch(Manifest.permission.RECORD_AUDIO)
-                }
-            },
-        ) {
-            Icon(
-                if (recording) Icons.Outlined.Stop else Icons.Outlined.Mic,
-                contentDescription = if (recording) "Stop recording" else "Record audio",
-                tint = if (recording) palette.recording else MaterialTheme.colorScheme.onBackground,
-            )
-        }
-        if (!audioStored.isNullOrBlank()) {
-            IconButton(
-                onClick = {
-                    val path = audioStored ?: return@IconButton
-                    try {
-                        MediaPlayer().apply {
-                            setDataSource(path)
-                            prepare()
-                            start()
-                            setOnCompletionListener { mp -> mp.release() }
-                        }
-                    } catch (_: Throwable) {
-                        Toast.makeText(context, "Could not play recording", Toast.LENGTH_SHORT).show()
-                    }
-                },
-            ) {
-                Icon(Icons.Outlined.PlayArrow, contentDescription = "Play audio", tint = palette.accent)
-            }
-        }
-    }
-    if (recording) {
-        Spacer(Modifier.height(6.dp))
-        Surface(shape = RoundedCornerShape(10.dp), color = palette.surfaceVariant) {
-            Text(
-                "Recording… tap stop when done",
-                color = palette.recording,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            )
-        }
-    } else if (!audioStored.isNullOrBlank()) {
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Audio attached — tap play to listen",
-            color = palette.muted,
-            style = MaterialTheme.typography.labelSmall,
-        )
-    }
-    if (previewLinks.isNotEmpty()) {
-        Spacer(Modifier.height(8.dp))
-        Text("Links", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
-        Spacer(Modifier.height(6.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            previewLinks.forEach { link ->
-                NoteLinkPreviewCard(link)
-            }
-        }
-    }
-    Spacer(Modifier.height(20.dp))
-    BoopWhiteButton("Save") {
+    val previewLinks = remember(body) { linkRegex.findAll(body).map { it.value }.distinct().toList() }
+    fun saveAndDismiss() {
         hasExplicitSave = true
         buildNoteForSaveOrNull()?.let(onSave)
+        onDismiss()
+    }
+    fun appendLinkToBody(url: String) {
+        val cleaned = url.trim()
+        if (cleaned.isBlank()) return
+        val normalized = if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) cleaned else "https://$cleaned"
+        body = if (body.isBlank()) normalized else "${body.trimEnd()}\n$normalized"
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(),
+    ) {
+        KeepEditorTopBar(
+            onBack = { saveAndDismiss() },
+            title = if (initial.id == null) "New Note" else "Edit Note",
+            actions = {
+                if (initial.id != null) {
+                    KeepToolbarIconButton(
+                        onClick = {
+                            hasExplicitSave = true
+                            val serializedAttachments = serializeNoteAttachments(attachmentStored)
+                            onSave(
+                                BoopNote(
+                                    id = initial.id,
+                                    title = title.trim(),
+                                    body = resolveBodyForSave(),
+                                    attachmentUri = serializedAttachments,
+                                    audioUri = null,
+                                    tagsCsv = normalizeNoteTags(tagsCsv),
+                                    ocrText = extractTextFromAttachment(context, serializedAttachments),
+                                    linkedTaskId = linkedTaskId,
+                                    archived = !initial.archived,
+                                    createdAtMillis = initial.createdAtMillis,
+                                    updatedAtMillis = System.currentTimeMillis(),
+                                ),
+                            )
+                        },
+                        icon = if (initial.archived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
+                        contentDescription = if (initial.archived) "Restore note" else "Archive note",
+                        tint = if (initial.archived) palette.accent else palette.muted,
+                    )
+                }
+                if (onDelete != null) {
+                    KeepToolbarIconButton(
+                        onClick = {
+                            skipAutoSaveOnDispose = true
+                            onDelete()
+                        },
+                        icon = Icons.Outlined.Delete,
+                        contentDescription = "Delete",
+                        tint = palette.danger,
+                    )
+                }
+            },
+        )
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            if (initial.id != null) {
+                KeepEditorMetaLine(
+                    formatNoteCardTime(
+                        BoopNote(
+                            id = initial.id,
+                            title = "",
+                            body = "",
+                            attachmentUri = null,
+                            tagsCsv = "",
+                            ocrText = "",
+                            archived = false,
+                            createdAtMillis = initial.createdAtMillis,
+                            updatedAtMillis = initial.updatedAtMillis,
+                        ),
+                    ),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            KeepOutlinedTitleField(
+                value = title,
+                onValueChange = { title = it },
+                placeholder = "Title",
+            )
+            Spacer(Modifier.height(12.dp))
+            if (tagsCsv.isNotBlank()) {
+                KeepNoteLabelChips(tagsCsv = tagsCsv)
+                Spacer(Modifier.height(8.dp))
+            }
+            if (isChecklistMode) {
+                KeepChecklistEditor(
+                    items = checklistItems,
+                    onChange = { checklistItems = it.ifEmpty { listOf(ChecklistItem(text = "")) } },
+                )
+            } else {
+                KeepOutlinedBodyField(
+                    value = body,
+                    onValueChange = { body = it },
+                    placeholder = "Write something...",
+                    minLines = 6,
+                )
+            }
+            if (reminderOptions.size > 1) {
+                Spacer(Modifier.height(14.dp))
+                KeepReminderLinkSection(
+                    options = reminderOptions,
+                    selectedId = linkedTaskId,
+                    onSelect = { linkedTaskId = it },
+                )
+            }
+            if (attachmentStored.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                attachmentStored.chunked(3).forEach { row ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(108.dp)
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        row.forEach { stored ->
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(storedAttachmentForCoil(stored))
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(12.dp)),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+            }
+            if (tagsExpanded) {
+                TextField(
+                    value = tagsCsv,
+                    onValueChange = { tagsCsv = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    placeholder = { Text("Add labels, comma separated", color = palette.muted) },
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = palette.onBackground),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = palette.accent,
+                    ),
+                    singleLine = true,
+                )
+            }
+            if (previewLinks.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                KeepSectionLabel("Links")
+                Column(
+                    Modifier.padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    previewLinks.forEach { link -> NoteLinkPreviewCard(link) }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+        Column(Modifier.fillMaxWidth()) {
+            KeepEditorBottomBar {
+                KeepToolbarIconButton(
+                    onClick = {
+                        isChecklistMode = !isChecklistMode
+                        if (isChecklistMode) {
+                            checklistItems = listOf(ChecklistItem(text = ""))
+                        } else {
+                            body = ""
+                        }
+                    },
+                    icon = if (isChecklistMode) Icons.Outlined.Notes else Icons.Outlined.FormatListBulleted,
+                    contentDescription = if (isChecklistMode) "Show note" else "Show checklist",
+                    tint = if (isChecklistMode) palette.accent else palette.muted,
+                )
+                KeepToolbarIconButton(
+                    onClick = { picker.launch("image/*") },
+                    icon = Icons.Outlined.Image,
+                    contentDescription = "Add image",
+                    tint = if (attachmentStored.isNotEmpty()) palette.accent else palette.muted,
+                )
+                KeepToolbarIconButton(
+                    onClick = { tagsExpanded = !tagsExpanded },
+                    icon = Icons.Outlined.Label,
+                    contentDescription = "Add labels",
+                    tint = if (tagsCsv.isNotBlank()) palette.accent else palette.muted,
+                )
+                if (onAddReminder != null) {
+                    KeepToolbarIconButton(
+                        onClick = {
+                            val note = buildNoteForSaveOrNull()
+                            if (note == null) {
+                                Toast.makeText(context, "Add a title or note first", Toast.LENGTH_SHORT).show()
+                                return@KeepToolbarIconButton
+                            }
+                            skipAutoSaveOnDispose = true
+                            hasExplicitSave = true
+                            onAddReminder(note)
+                        },
+                        icon = Icons.Rounded.Notifications,
+                        contentDescription = "Add reminder",
+                        tint = if (linkedTaskId != null) palette.accent else palette.muted,
+                    )
+                }
+                KeepToolbarIconButton(
+                    onClick = {
+                        if (previewLinks.size >= 25) {
+                            Toast.makeText(context, "Maximum 25 links per note.", Toast.LENGTH_SHORT).show()
+                            return@KeepToolbarIconButton
+                        }
+                        showLinkSheet = true
+                    },
+                    icon = Icons.Outlined.Link,
+                    contentDescription = "Add link",
+                    tint = if (previewLinks.isNotEmpty()) palette.accent else palette.muted,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            KeepFormSaveButton(onClick = { saveAndDismiss() })
+            Spacer(Modifier.height(10.dp))
+        }
+        KeepLinkInputSheet(
+            open = showLinkSheet,
+            onDismiss = { showLinkSheet = false },
+            onAdd = { url -> appendLinkToBody(url) },
+        )
     }
 }
 
@@ -7387,6 +6930,7 @@ private fun HabitEditorSheet(
     onSave: (BoopHabit) -> Unit,
 ) {
     val sheetKey = initial.sessionKey
+    val palette = LocalBoopPalette.current
     var label by rememberSaveable(sheetKey) { mutableStateOf(initial.title) }
     var dayPeriodCategory by rememberSaveable(sheetKey) { mutableStateOf(normalizeHabitCategory(initial.dayPeriodCategory)) }
     var goalText by rememberSaveable(sheetKey) { mutableStateOf(initial.goal.toString()) }
@@ -7394,115 +6938,118 @@ private fun HabitEditorSheet(
     var quantityMode by rememberSaveable(sheetKey) { mutableStateOf(initial.quantityMode) }
     var quantityUnit by rememberSaveable(sheetKey) { mutableStateOf(initial.quantityUnit) }
     var quantityTarget by rememberSaveable(sheetKey) { mutableStateOf(initial.quantityDailyTarget.toString()) }
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(Modifier.weight(1f)) {
-            BoopSheetHeaderTitle(if (initial.id == null) "New habit" else "Edit habit")
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (onDelete != null) {
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = Color(0xFFFF8A8A))
-                }
+    var hasExplicitSave by remember(sheetKey) { mutableStateOf(false) }
+    var skipAutoSaveOnDispose by remember(sheetKey) { mutableStateOf(false) }
+    fun buildHabitOrNull(): BoopHabit? {
+        val g = goalText.toIntOrNull() ?: 30
+        if (label.isBlank()) return null
+        return BoopHabit(
+            id = initial.id ?: UUID.randomUUID().toString(),
+            title = label.trim(),
+            dayPeriodCategory = normalizeHabitCategory(dayPeriodCategory),
+            goal = g,
+            progress = progress.coerceIn(0, g),
+            dayKeys = initial.dayKeys,
+            quantityMode = quantityMode,
+            quantityUnit = quantityUnit.trim(),
+            quantityDailyTarget = (quantityTarget.toIntOrNull() ?: initial.quantityDailyTarget).coerceAtLeast(1),
+            quantityDayValues = initial.quantityDayValues,
+        )
+    }
+    DisposableEffect(sheetKey) {
+        onDispose {
+            if (!hasExplicitSave && !skipAutoSaveOnDispose) {
+                buildHabitOrNull()?.let(onSave)
             }
         }
     }
-    Spacer(Modifier.height(12.dp))
-    BoopFilledTextField(
-        value = label,
-        onValueChange = { label = it },
-        label = { Text("Habit / goal") },
-    )
-    Spacer(Modifier.height(8.dp))
-    Text("Time category", color = Color(0xFF8E8E90), style = MaterialTheme.typography.labelSmall)
-    Spacer(Modifier.height(6.dp))
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        listOf("day", "night").forEach { cat ->
-            val active = dayPeriodCategory == cat
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = if (active) Color.White else MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.clickable { dayPeriodCategory = cat },
-            ) {
-                Text(
-                    cat.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
-                    color = if (active) Color.Black else Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+    fun saveAndDismiss() {
+        hasExplicitSave = true
+        val habit = buildHabitOrNull()
+        if (habit != null) {
+            onSave(habit)
+        } else {
+            onDismiss()
+        }
+    }
+    val goalVal = goalText.toIntOrNull() ?: 30
+    Column(Modifier.fillMaxWidth()) {
+        KeepEditorTopBar(
+            onBack = { saveAndDismiss() },
+            actions = {
+                if (onDelete != null) {
+                    KeepToolbarIconButton(
+                        onClick = {
+                            skipAutoSaveOnDispose = true
+                            onDelete()
+                        },
+                        icon = Icons.Outlined.Delete,
+                        contentDescription = "Delete",
+                        tint = palette.danger,
+                    )
+                }
+            },
+        )
+        KeepBorderlessTitleField(
+            value = label,
+            onValueChange = { label = it },
+            placeholder = "Habit name",
+        )
+        Spacer(Modifier.height(10.dp))
+        KeepSectionLabel("Time of day")
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf("day", "night").forEach { cat ->
+                KeepPaletteChip(
+                    label = cat.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                    selected = dayPeriodCategory == cat,
+                    onClick = { dayPeriodCategory = cat },
                 )
             }
         }
-    }
-    Spacer(Modifier.height(8.dp))
-    BoopFilledTextField(
-        value = goalText,
-        onValueChange = { goalText = it },
-        label = { Text(if (quantityMode) "Daily target amount" else "Target days") },
-    )
-    Spacer(Modifier.height(8.dp))
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("Track quantity (minutes / mL / etc.)", color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
-        Switch(checked = quantityMode, onCheckedChange = { quantityMode = it })
-    }
-    if (quantityMode) {
-        Spacer(Modifier.height(8.dp))
-        BoopFilledTextField(
-            value = quantityUnit,
-            onValueChange = { quantityUnit = it },
-            label = { Text("Unit") },
-            placeholder = { Text("minutes, mL, pages...", color = Color(0xFF8A8A8A)) },
+        Spacer(Modifier.height(10.dp))
+        KeepEditorSwitchRow(
+            label = "Track quantity (minutes / mL / etc.)",
+            checked = quantityMode,
+            onCheckedChange = { quantityMode = it },
         )
         Spacer(Modifier.height(8.dp))
         BoopFilledTextField(
-            value = quantityTarget,
-            onValueChange = { quantityTarget = it },
-            label = { Text("Daily target") },
+            value = goalText,
+            onValueChange = { goalText = it },
+            label = { Text(if (quantityMode) "Daily target amount" else "Target days") },
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
-    }
-    val goalVal = goalText.toIntOrNull() ?: 30
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Start,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            if (quantityMode) "Today is logged in week view / habits page"
-            else "Progress: $progress / $goalVal",
-            color = Color(0xFFBFBFBF),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-    }
-    Spacer(Modifier.height(20.dp))
-    BoopWhiteButton("Save") {
-        val g = goalText.toIntOrNull() ?: 30
-        if (label.isNotBlank()) {
-            onSave(
-                BoopHabit(
-                    id = initial.id ?: UUID.randomUUID().toString(),
-                    title = label.trim(),
-                    dayPeriodCategory = normalizeHabitCategory(dayPeriodCategory),
-                    goal = g,
-                    progress = progress.coerceIn(0, g),
-                    dayKeys = initial.dayKeys,
-                    quantityMode = quantityMode,
-                    quantityUnit = quantityUnit.trim(),
-                    quantityDailyTarget = (quantityTarget.toIntOrNull() ?: initial.quantityDailyTarget).coerceAtLeast(1),
-                    quantityDayValues = initial.quantityDayValues,
-                ),
+        if (quantityMode) {
+            Spacer(Modifier.height(8.dp))
+            BoopFilledTextField(
+                value = quantityUnit,
+                onValueChange = { quantityUnit = it },
+                label = { Text("Unit") },
+                placeholder = { Text("minutes, mL, pages...", color = palette.muted) },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            BoopFilledTextField(
+                value = quantityTarget,
+                onValueChange = { quantityTarget = it },
+                label = { Text("Daily target") },
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
+        KeepEditorMetaLine(
+            if (quantityMode) {
+                "Today is logged in week view / habits page"
+            } else {
+                "Progress: $progress / $goalVal"
+            },
+        )
+        Spacer(Modifier.height(16.dp).navigationBarsPadding())
     }
 }
 
@@ -7584,20 +7131,20 @@ private fun BoopHeaderIconButton(
     val palette = LocalBoopPalette.current
     Surface(
         modifier = modifier
-            .size(54.dp)
+            .size(34.dp)
             .clickable(onClick = onClick),
         shape = CircleShape,
-        color = if (filled) palette.accent else palette.surfaceElevated,
+        color = if (filled) palette.accent else palette.chipBg,
         shadowElevation = 0.dp,
         border = when {
             filled -> BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.45f))
-            else -> BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.2f))
+            else -> BorderStroke(1.dp, palette.surfaceBorder)
         },
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (loading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(16.dp),
                     color = if (filled) palette.accentOn else palette.accent,
                     strokeWidth = 2.dp,
                 )
@@ -7608,9 +7155,9 @@ private fun BoopHeaderIconButton(
                     tint = when {
                         filled -> palette.accentOn
                         iconTint != null -> iconTint
-                        else -> palette.muted
+                        else -> palette.onBackground
                     },
-                    modifier = Modifier.size(26.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -7722,6 +7269,23 @@ private fun formatNoteCardTime(note: BoopNote): String {
         "Modified ${fmt.format(modified)}"
     } else {
         "Created ${fmt.format(modified)}"
+    }
+}
+
+private fun linkedNoteLabelForTask(task: BoopTask): String? {
+    val noteId = task.linkedNoteId ?: return null
+    return try {
+        val notes = JSONArray(LocalStore.read("notes"))
+        for (i in 0 until notes.length()) {
+            val item = notes.getJSONObject(i)
+            if (item.optString("id") != noteId) continue
+            if (item.optBoolean("archived", false)) return null
+            val title = item.optString("title").trim().ifBlank { "Untitled" }
+            return "Note · $title"
+        }
+        null
+    } catch (_: Throwable) {
+        null
     }
 }
 

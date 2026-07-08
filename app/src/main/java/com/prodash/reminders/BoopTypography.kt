@@ -224,11 +224,17 @@ fun BoopAnimatedEnter(
 
 @Composable
 fun BoopPageTitle(text: String, modifier: Modifier = Modifier, animated: Boolean = true) {
+    val palette = LocalBoopPalette.current
     BoopAnimatedEnter(key = text, animated = animated, modifier = modifier) {
         Text(
             text = text,
-            style = MaterialTheme.typography.displayLarge,
-            color = MaterialTheme.colorScheme.onBackground,
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontFamily = BoopSerifFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 26.sp,
+                letterSpacing = (-0.2).sp,
+            ),
+            color = palette.onBackground,
         )
     }
 }
