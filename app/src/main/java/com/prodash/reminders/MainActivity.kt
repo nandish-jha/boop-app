@@ -89,6 +89,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -3033,7 +3034,12 @@ private fun DashboardScreen(
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         homeGridItems.chunked(2).forEach { rowItems ->
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
                                 rowItems.forEach { (meta, onClick) ->
                                     UnifiedTintCard(
                                         type = meta.type,
@@ -3041,7 +3047,9 @@ private fun DashboardScreen(
                                         meta = meta.meta,
                                         body = meta.body,
                                         onClick = onClick,
-                                        modifier = Modifier.weight(1f),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight(),
                                     )
                                 }
                                 if (rowItems.size == 1) Spacer(Modifier.weight(1f))
@@ -4453,6 +4461,8 @@ private fun NotesListScreen(
     val archivedNotes = notes.filter { it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
     var showArchive by rememberSaveable { mutableStateOf(false) }
     var selectedTag by rememberSaveable { mutableStateOf("All") }
+    var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
+    var previewImageIndex by remember { mutableStateOf(-1) }
     val availableTags = activeNotes.flatMap { parseNoteTags(it.tagsCsv) }.distinctBy { it.lowercase(Locale.getDefault()) }
     val visibleNotes = if (selectedTag == "All") activeNotes else activeNotes.filter { n ->
         parseNoteTags(n.tagsCsv).any { it.equals(selectedTag, ignoreCase = true) }
@@ -4539,7 +4549,11 @@ private fun NotesListScreen(
                                 Modifier
                                     .fillMaxWidth()
                                     .height(76.dp)
-                                    .clip(RoundedCornerShape(10.dp)),
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        previewImages = images
+                                        previewImageIndex = 0
+                                    },
                             ) {
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
@@ -4622,6 +4636,13 @@ private fun NotesListScreen(
                 }
             }
         }
+    }
+    if (previewImageIndex in previewImages.indices) {
+        ImagePreviewOverlay(
+            images = previewImages,
+            startIndex = previewImageIndex,
+            onDismiss = { previewImageIndex = -1 },
+        )
     }
 }
 
@@ -7071,15 +7092,19 @@ private fun ImagePreviewOverlay(
                     Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
                 }
             }
-            if (images.size > 1) {
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = Color.Black.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp),
+            ) {
                 Text(
-                    "${pagerState.currentPage + 1} / ${images.size}",
+                    "${pagerState.currentPage + 1} of ${images.size}",
                     color = Color.White,
                     style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(bottom = 24.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                 )
             }
         }
