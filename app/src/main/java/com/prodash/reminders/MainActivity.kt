@@ -82,6 +82,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -2769,6 +2770,45 @@ private fun DashboardCircleButton(
 }
 
 @Composable
+private fun PageHeaderTile(
+    title: String,
+    modifier: Modifier = Modifier,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    val palette = LocalBoopPalette.current
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = palette.surfaceVariant,
+        border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.14f)),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontFamily = BoopSerifFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 27.sp,
+                ),
+                color = palette.onBackground,
+                modifier = Modifier.weight(1f),
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                content = actions,
+            )
+        }
+    }
+}
+
+@Composable
 private fun DashboardScreen(
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
@@ -3851,25 +3891,18 @@ private fun TaskListScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
-        ) {
-            BoopPageTitle(title)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                BoopHeaderIconButton(
-                    onClick = { showCompleted = true },
-                    icon = Icons.Outlined.CheckCircle,
-                    contentDescription = "Completed tasks",
-                    iconTint = palette.accent,
-                )
-                BoopHeaderIconButton(
-                    onClick = { showArchive = true },
-                    icon = Icons.Outlined.Archive,
-                    contentDescription = "Archived tasks",
-                )
-            }
+        PageHeaderTile(title = title) {
+            BoopHeaderIconButton(
+                onClick = { showCompleted = true },
+                icon = Icons.Outlined.CheckCircle,
+                contentDescription = "Completed tasks",
+                iconTint = palette.accent,
+            )
+            BoopHeaderIconButton(
+                onClick = { showArchive = true },
+                icon = Icons.Outlined.Archive,
+                contentDescription = "Archived tasks",
+            )
         }
         UnifiedSectionLabel("Pending")
         if (activeTasks.isEmpty()) {
@@ -4369,12 +4402,7 @@ private fun CalendarScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
-        ) {
-            BoopPageTitle("Calendar")
+        PageHeaderTile(title = "Calendar") {
             BoopHeaderIconButton(
                 onClick = triggerCalendarSync,
                 icon = if (syncSucceeded) Icons.Outlined.CheckCircle else Icons.Outlined.Sync,
@@ -4473,12 +4501,7 @@ private fun NotesListScreen(
             .padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
-        ) {
-            BoopPageTitle(title)
+        PageHeaderTile(title = title) {
             BoopHeaderIconButton(
                 onClick = { showArchive = true },
                 icon = Icons.Outlined.Archive,
@@ -4668,7 +4691,7 @@ private fun HabitsListScreen(
             .padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        BoopPageTitle("Habits")
+        PageHeaderTile(title = "Habits")
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             Modifier
@@ -5031,7 +5054,7 @@ private fun FinanceScreen(
             .padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        BoopPageTitle("Wallet")
+        PageHeaderTile(title = "Wallet")
         LazyColumn(
             Modifier
                 .weight(1f)
