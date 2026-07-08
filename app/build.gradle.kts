@@ -15,8 +15,8 @@ android {
         applicationId = "com.prodash.reminders"
         minSdk = 26
         targetSdk = 35
-        versionCode = 66
-        versionName = "5.5.5"
+        versionCode = 68
+        versionName = "5.5.7"
     }
 
     signingConfigs {
@@ -66,6 +66,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
 }
 
 dependencies {
