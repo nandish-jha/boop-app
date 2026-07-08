@@ -6137,18 +6137,23 @@ private fun HabitWeekStripCard(
         border = BorderStroke(1.dp, habitColors.border),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Surface(
-                    shape = CircleShape,
+                    shape = RoundedCornerShape(999.dp),
                     color = if (dark) Color.Black.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.5f),
                 ) {
                     Row(
-                        Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
@@ -6156,12 +6161,15 @@ private fun HabitWeekStripCard(
                             UnifiedItemType.HABIT.icon,
                             contentDescription = null,
                             tint = habitColors.accent,
-                            modifier = Modifier.size(13.dp),
+                            modifier = Modifier.size(12.dp),
                         )
                         Text(
                             habitCategoryLabel(habit.dayPeriodCategory).uppercase(Locale.getDefault()),
                             color = habitColors.accent,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, letterSpacing = 0.6.sp),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.sp,
+                                letterSpacing = 0.5.sp,
+                            ),
                         )
                     }
                 }
@@ -6181,10 +6189,10 @@ private fun HabitWeekStripCard(
                         border = BorderStroke(1.dp, habitColors.border),
                     ) {
                         Text(
-                            if (todayDone) "Done today" else "Check in today",
+                            if (todayDone) "Done" else "Check in",
                             color = if (todayDone) palette.accentOn else habitColors.accent,
                             style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
                         )
                     }
                 } else if (todayDone) {
@@ -6194,10 +6202,10 @@ private fun HabitWeekStripCard(
                         border = BorderStroke(1.dp, habitColors.border),
                     ) {
                         Text(
-                            "Done today",
+                            "Done",
                             color = palette.accentOn,
                             style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
                         )
                     }
                 }
@@ -6212,7 +6220,10 @@ private fun HabitWeekStripCard(
                     modifier = Modifier
                         .weight(1f)
                         .clickable { onOpenHabit(habit) },
-                    style = MaterialTheme.typography.titleSmall.copy(fontFamily = BoopSerifFamily),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontFamily = BoopSerifFamily,
+                        lineHeight = 18.sp,
+                    ),
                     color = palette.onBackground,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -6226,13 +6237,19 @@ private fun HabitWeekStripCard(
                         Text(
                             "$streakCount day streak",
                             color = habitColors.accent,
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 10.sp,
+                            ),
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                         )
                     }
                 }
             }
-            UnifiedHabitDots(dots = weekDots, modifier = Modifier.fillMaxWidth())
+            UnifiedHabitDots(
+                dots = weekDots,
+                modifier = Modifier.fillMaxWidth(),
+            )
             if (habit.quantityMode) {
                 val unit = habit.quantityUnit.ifBlank { "units" }
                 Row(
@@ -6243,9 +6260,9 @@ private fun HabitWeekStripCard(
                     Text(
                         "${todayAmount}/${habit.quantityDailyTarget} $unit today",
                         color = palette.muted,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(1, maxOf(5, habit.quantityDailyTarget / 4)).distinct().forEach { delta ->
                             Surface(
                                 shape = RoundedCornerShape(999.dp),

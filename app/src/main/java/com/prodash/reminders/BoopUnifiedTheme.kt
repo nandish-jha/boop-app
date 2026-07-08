@@ -380,12 +380,15 @@ fun UnifiedHabitDots(
     val palette = LocalBoopPalette.current
     val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
     val colors = unifiedTypeColors(UnifiedItemType.HABIT, dark, palette.monochrome)
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(
+        modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         dots.forEach { done ->
             Box(
                 Modifier
-                    .weight(1f)
-                    .height(16.dp)
+                    .size(13.dp)
                     .background(
                         if (done) colors.accent else palette.surfaceVariant,
                         CircleShape,
