@@ -122,6 +122,7 @@ data class BoopHabit(
 data class BoopAccount(
     val id: String,
     val name: String,
+    val openingBalance: Double = 0.0,
     val createdAtMillis: Long = System.currentTimeMillis(),
 )
 data class BoopLedgerEntry(
@@ -388,6 +389,7 @@ class BoopRepository(private val store: LocalStore) {
             BoopAccount(
                 id = item.getString("id"),
                 name = item.optString("name"),
+                openingBalance = item.optDouble("openingBalance", 0.0),
                 createdAtMillis = item.optLong("createdAt", System.currentTimeMillis()),
             )
         }.sortedBy { it.name.lowercase(Locale.getDefault()) }
@@ -535,6 +537,7 @@ class BoopRepository(private val store: LocalStore) {
                 JSONObject()
                     .put("id", it.id)
                     .put("name", it.name)
+                    .put("openingBalance", it.openingBalance)
                     .put("createdAt", it.createdAtMillis),
             )
         }
@@ -550,6 +553,7 @@ class BoopRepository(private val store: LocalStore) {
                 JSONObject()
                     .put("id", it.id)
                     .put("name", it.name)
+                    .put("openingBalance", it.openingBalance)
                     .put("createdAt", it.createdAtMillis),
             )
         }

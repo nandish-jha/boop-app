@@ -16,6 +16,7 @@ object BoopStoreAccess {
                 BoopAccount(
                     id = item.getString("id"),
                     name = item.optString("name"),
+                    openingBalance = item.optDouble("openingBalance", 0.0),
                 ),
             )
         }

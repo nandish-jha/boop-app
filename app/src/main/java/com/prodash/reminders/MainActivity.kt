@@ -91,6 +91,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -126,6 +127,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
@@ -146,8 +148,6 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.Button
@@ -383,6 +383,7 @@ private sealed class ItemSheet {
         val id: String?,
         val sessionKey: String,
         val name: String,
+        val openingBalance: Double = 0.0,
     ) : ItemSheet()
 
     data class FinanceEntrySheet(
@@ -413,8 +414,8 @@ enum class BoopTab(val label: String, val icon: ImageVector) {
 
 private fun buildVisibleTabs(showHabitsPage: Boolean, showWalletPage: Boolean): List<BoopTab> = buildList {
     add(BoopTab.HOME)
-    add(BoopTab.NOTES)
     add(BoopTab.REMINDERS)
+    add(BoopTab.NOTES)
     add(BoopTab.CALENDAR)
     if (showHabitsPage) add(BoopTab.HABITS)
     if (showWalletPage) add(BoopTab.WALLET)
@@ -681,7 +682,7 @@ private fun BoopApp() {
             attachmentUri = note?.attachmentUri,
             audioUri = note?.audioUri,
             tagsCsv = note?.tagsCsv.orEmpty(),
-            linkedTaskId = note?.linkedTaskId,
+            linkedTaskId = null,
             archived = note?.archived ?: false,
             createdAtMillis = note?.createdAtMillis ?: 0L,
             updatedAtMillis = note?.updatedAtMillis ?: 0L,
@@ -748,6 +749,7 @@ private fun BoopApp() {
             id = account?.id,
             sessionKey = account?.id ?: UUID.randomUUID().toString(),
             name = account?.name.orEmpty(),
+            openingBalance = account?.openingBalance ?: 0.0,
         )
         createSheetOpen = false
     }
@@ -1068,7 +1070,12 @@ private fun BoopApp() {
                                 refresh()
                             },
                             onEditAccount = { openAccountSheet(it) },
+                            onEditAccountBalance = { account ->
+                                repository.saveAccount(account)
+                                refresh()
+                            },
                             onAddAccount = { openAccountSheet(null) },
+                            onAddTransaction = { openFinanceEntrySheet("expense") },
                             onOpenSettings = {
                                 createSheetOpen = false
                                 settingsOpen = true
@@ -1189,21 +1196,6 @@ private fun BoopApp() {
                             is ItemSheet.NoteSheet -> NoteEditorSheet(
                                 initial = sheet,
                                 onDismiss = { itemSheet = null },
-                                tasks = tasks,
-                                onAddReminder = { note ->
-                                    repository.saveNote(note)
-                                    refresh()
-                                    itemSheet = null
-                                    openTaskSheet(
-                                        BoopTask(
-                                            id = UUID.randomUUID().toString(),
-                                            title = note.title.ifBlank { "Reminder" },
-                                            reminderAt = System.currentTimeMillis() + 30 * 60_000,
-                                            done = false,
-                                            linkedNoteId = note.id,
-                                        ),
-                                    )
-                                },
                                 onDelete = sheet.id?.let { id ->
                                     {
                                         repository.deleteNote(id)
@@ -1330,7 +1322,9 @@ private fun BoopPagerPage(
     onEditLedgerEntry: (BoopLedgerEntry) -> Unit,
     onDeleteLedgerEntry: (String) -> Unit,
     onEditAccount: (BoopAccount) -> Unit,
+    onEditAccountBalance: (BoopAccount) -> Unit,
     onAddAccount: () -> Unit,
+    onAddTransaction: () -> Unit,
     onOpenSettings: () -> Unit,
     onToggleTheme: () -> Unit,
     darkTheme: Boolean,
@@ -1370,7 +1364,6 @@ private fun BoopPagerPage(
                 notes = notes,
                 onOpenNote = onEditNote,
                 title = "Notes",
-                tasks = tasks,
             )
             BoopTab.REMINDERS -> TaskListScreen(
                 tasks = tasks,
@@ -1401,7 +1394,9 @@ private fun BoopPagerPage(
                 onEditEntry = onEditLedgerEntry,
                 onDeleteEntry = onDeleteLedgerEntry,
                 onEditAccount = onEditAccount,
+                onEditAccountBalance = onEditAccountBalance,
                 onAddAccount = onAddAccount,
+                onAddTransaction = onAddTransaction,
             )
         }
     }
@@ -2681,9 +2676,9 @@ private fun DashboardStatCard(
                 value,
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontFamily = BoopSerifFamily,
-                    fontSize = 20.sp,
+                    fontSize = 22.sp,
                 ),
-                color = palette.onBackground,
+                color = palette.accent,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -2826,7 +2821,7 @@ private fun DashboardScreen(
         .take(6)
     val epoch = LocalBoopDataEpoch.current
     val accountBalances = remember(epoch) {
-        accounts.associate { it.id to 0.0 }.toMutableMap().apply {
+        accounts.associate { it.id to it.openingBalance }.toMutableMap().apply {
             ledgerEntries.forEach { entry ->
                 when (entry.type) {
                     "income" -> this[entry.accountId] = (this[entry.accountId] ?: 0.0) + entry.amount
@@ -2887,9 +2882,10 @@ private fun DashboardScreen(
             if (homeFilter == "all" || homeFilter == "reminder") {
                 tasks.filter { !it.done && !it.archived }.sortedBy { it.reminderAt }.take(6).forEach { task ->
                     val subtaskCount = parseSubtasksJson(task.subtasksJson).size
-                    val taskBody = task.details.trim().ifBlank {
-                        if (subtaskCount > 0) "$subtaskCount subtask${if (subtaskCount == 1) "" else "s"}" else ""
-                    }.takeIf { it.isNotBlank() }
+                    val taskBody = linkedNoteLabelForTask(task)
+                        ?: task.details.trim().ifBlank {
+                            if (subtaskCount > 0) "$subtaskCount subtask${if (subtaskCount == 1) "" else "s"}" else ""
+                        }.takeIf { it.isNotBlank() }
                     add(
                         HomeCardMeta(
                             UnifiedItemType.REMINDER,
@@ -2965,68 +2961,67 @@ private fun DashboardScreen(
                     .verticalScroll(scroll),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                Surface(
+                    shape = RoundedCornerShape(22.dp),
+                    color = palette.surfaceVariant,
+                    border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.14f)),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(
-                        Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = greetingLine,
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontFamily = BoopSerifFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 26.sp,
-                            ),
-                            color = palette.onBackground,
-                        )
-                        Text(
-                            text = dateLine,
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
-                            color = palette.muted,
-                        )
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(
+                                Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = greetingLine,
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontFamily = BoopSerifFamily,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 27.sp,
+                                    ),
+                                    color = palette.onBackground,
+                                )
+                                Text(
+                                    text = dateLine,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                                    color = palette.muted,
+                                )
+                            }
+                            DashboardCircleButton(
+                                icon = Icons.Outlined.Settings,
+                                contentDescription = "Settings",
+                                onClick = onOpenSettings,
+                            )
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            DashboardStatCard(
+                                label = "Today",
+                                value = tasksDueToday.size.toString(),
+                                caption = "due",
+                                modifier = Modifier.weight(1f),
+                            )
+                            DashboardStatCard(
+                                label = "Habits",
+                                value = if (activeHabits.isEmpty()) "—" else "$habitsDoneToday/${activeHabits.size}",
+                                caption = "done",
+                                modifier = Modifier.weight(1f),
+                            )
+                            DashboardStatCard(
+                                label = "Balance",
+                                value = if (accounts.isNotEmpty()) formatCadAmountNumber(netBalance, decimals = 0) else notes.count { !it.archived }.toString(),
+                                caption = if (accounts.isNotEmpty()) "net" else "notes",
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                     }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        DashboardCircleButton(
-                            icon = if (darkTheme) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
-                            contentDescription = "Toggle theme",
-                            onClick = onToggleTheme,
-                        )
-                        DashboardCircleButton(
-                            icon = Icons.Outlined.Settings,
-                            contentDescription = "Settings",
-                            onClick = onOpenSettings,
-                        )
-                    }
-                }
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    DashboardStatCard(
-                        label = "Today",
-                        value = tasksDueToday.size.toString(),
-                        caption = "due",
-                        modifier = Modifier.weight(1f),
-                    )
-                    DashboardStatCard(
-                        label = "Habits",
-                        value = if (activeHabits.isEmpty()) "—" else "$habitsDoneToday/${activeHabits.size}",
-                        caption = "checked in",
-                        modifier = Modifier.weight(1f),
-                    )
-                    DashboardStatCard(
-                        label = "Balance",
-                        value = if (accounts.isNotEmpty()) formatCadAmountNumber(netBalance, decimals = 0) else notes.count { !it.archived }.toString(),
-                        caption = if (accounts.isNotEmpty()) "all accounts" else "notes",
-                        modifier = Modifier.weight(1f),
-                    )
                 }
                 UnifiedFilterChips(
                     chips = homeFilterChips,
@@ -4451,11 +4446,9 @@ private fun NotesListScreen(
     notes: List<BoopNote>,
     onOpenNote: (BoopNote) -> Unit,
     title: String = "Notes",
-    tasks: List<BoopTask> = emptyList(),
 ) {
     val palette = LocalBoopPalette.current
     val context = LocalContext.current
-    val taskTitlesById = remember(tasks) { tasks.associate { it.id to it.title } }
     val activeNotes = notes.filter { !it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
     val archivedNotes = notes.filter { it.archived }.sortedByDescending { it.createdAtMillis + it.updatedAtMillis }
     var showArchive by rememberSaveable { mutableStateOf(false) }
@@ -4528,11 +4521,8 @@ private fun NotesListScreen(
             items(visibleNotes, key = { it.id }) { note ->
                 val images = parseNoteAttachments(note.attachmentUri)
                 val tags = parseNoteTags(note.tagsCsv)
-                val linkedTaskTitle = note.linkedTaskId?.let { taskTitlesById[it] }
                 val cardHint = buildString {
-                    if (linkedTaskTitle != null) append("Linked: ${linkedTaskTitle.ifBlank { "Reminder" }}")
                     if (tags.isNotEmpty()) {
-                        if (isNotEmpty()) append(" · ")
                         append(tags.take(2).joinToString(" ") { "#$it" })
                     }
                 }.takeIf { it.isNotBlank() }
@@ -4643,7 +4633,14 @@ private fun HabitsListScreen(
 ) {
     val palette = LocalBoopPalette.current
     val epoch = LocalBoopDataEpoch.current
-    val sortedHabits = remember(epoch) { habits.sortedBy { it.title.lowercase(Locale.getDefault()) } }
+    val sortedHabits = remember(epoch, habits) {
+        habits.sortedWith(
+            compareBy(
+                { habitCategoryOrder(it.dayPeriodCategory) },
+                { it.title.lowercase(Locale.getDefault()) },
+            ),
+        )
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -4899,6 +4896,79 @@ private fun FinanceTransactionRow(
 }
 
 @Composable
+private fun WalletAccountRow(
+    name: String,
+    balance: Double,
+    onCorrectBalance: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val palette = LocalBoopPalette.current
+    val dark = palette.background.red + palette.background.green + palette.background.blue < 0.35f
+    val colors = unifiedTypeColors(UnifiedItemType.WALLET, dark)
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = colors.bg,
+        border = BorderStroke(1.dp, colors.border),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(name, color = palette.onBackground, style = MaterialTheme.typography.titleSmall.copy(fontFamily = BoopSerifFamily), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    formatCadAmount(balance),
+                    color = if (balance >= 0) colors.accent else palette.danger,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            KeepToolbarIconButton(onClick = onCorrectBalance, icon = Icons.Outlined.Tune, contentDescription = "Correct balance", tint = palette.muted)
+            KeepToolbarIconButton(onClick = onEdit, icon = Icons.Outlined.Edit, contentDescription = "Edit account", tint = palette.muted)
+            KeepToolbarIconButton(onClick = onDelete, icon = Icons.Outlined.Delete, contentDescription = "Delete account", tint = palette.danger)
+        }
+    }
+}
+
+@Composable
+private fun WalletTransactionRow(
+    title: String,
+    meta: String,
+    amount: String,
+    amountColor: Color,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val palette = LocalBoopPalette.current
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = palette.surface,
+        border = BorderStroke(1.dp, palette.surfaceBorder),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, color = palette.onBackground, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(meta, color = palette.muted, style = MaterialTheme.typography.labelSmall)
+            }
+            Text(amount, color = amountColor, style = MaterialTheme.typography.titleSmall.copy(fontFamily = BoopSerifFamily))
+            KeepToolbarIconButton(onClick = onDelete, icon = Icons.Outlined.Delete, contentDescription = "Delete transaction", tint = palette.danger)
+        }
+    }
+}
+
+@Composable
 private fun FinanceScreen(
     accounts: List<BoopAccount>,
     entries: List<BoopLedgerEntry>,
@@ -4907,20 +4977,19 @@ private fun FinanceScreen(
     onEditEntry: (BoopLedgerEntry) -> Unit,
     onDeleteEntry: (String) -> Unit,
     onEditAccount: (BoopAccount) -> Unit,
+    onEditAccountBalance: (BoopAccount) -> Unit,
     onAddAccount: () -> Unit,
+    onAddTransaction: () -> Unit,
 ) {
     val palette = LocalBoopPalette.current
-    var viewMode by rememberSaveable { mutableStateOf("overview") }
     var reconcileAccountId by rememberSaveable { mutableStateOf("") }
     var reconcileBalanceText by rememberSaveable { mutableStateOf("") }
-    var expandedAccountId by rememberSaveable { mutableStateOf("") }
-    var balanceAdjustText by rememberSaveable { mutableStateOf("") }
     var pendingDeleteAccountId by rememberSaveable { mutableStateOf("") }
     var pendingDeleteEntryId by rememberSaveable { mutableStateOf("") }
     val epoch = LocalBoopDataEpoch.current
     val accountNames = remember(epoch) { accounts.associate { it.id to it.name } }
     val balances = remember(epoch) {
-        accounts.associate { it.id to 0.0 }.toMutableMap().apply {
+        accounts.associate { it.id to it.openingBalance }.toMutableMap().apply {
             entries.forEach { entry ->
                 when (entry.type) {
                     "income" -> this[entry.accountId] = (this[entry.accountId] ?: 0.0) + entry.amount
@@ -4935,246 +5004,98 @@ private fun FinanceScreen(
     }
     val sortedEntries = remember(epoch) { entries.sortedByDescending { it.createdAtMillis } }
     val netTotal = balances.values.sum()
-    var walletAccountFilter by rememberSaveable { mutableStateOf("all") }
-    val filteredEntries = remember(epoch, walletAccountFilter) {
-        if (walletAccountFilter == "all") sortedEntries else {
-            sortedEntries.filter { it.accountId == walletAccountFilter || it.toAccountId == walletAccountFilter }
-        }
-    }
-    val filteredBalance = if (walletAccountFilter == "all") netTotal else (balances[walletAccountFilter] ?: 0.0)
-    val incomeTotal = remember(epoch, walletAccountFilter) {
-        filteredEntries.filter { it.type == "income" || it.type == "transfer" && it.toAccountId == walletAccountFilter }
-            .sumOf { it.amount }
-    }
-    val expenseTotal = remember(epoch, walletAccountFilter) {
-        filteredEntries.filter { it.type == "expense" || it.type == "transfer" && it.accountId == walletAccountFilter }
-            .sumOf { it.amount }
-    }
     Column(
         Modifier
             .fillMaxSize()
             .padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+        BoopPageTitle("Wallet")
+        LazyColumn(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 4.dp, bottom = 84.dp),
         ) {
-            BoopPageTitle("Wallet", modifier = Modifier.weight(1f, fill = false))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (viewMode == "accounts") {
+            item(key = "hero") {
+                UnifiedWalletHero(
+                    label = "Total balance",
+                    balance = formatCadAmount(netTotal),
+                    incomeLabel = "${accounts.size} account${if (accounts.size == 1) "" else "s"}",
+                    spentLabel = "${entries.size} transaction${if (entries.size == 1) "" else "s"}",
+                )
+            }
+            item(key = "accounts-header") {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    UnifiedSectionLabel("Accounts")
                     BoopAccentTextButton(label = "Add account", onClick = onAddAccount)
                 }
-                when (viewMode) {
-                    "overview" -> BoopAccentTextButton(label = "Manage", onClick = { viewMode = "accounts" })
-                    else -> BoopAccentTextButton(label = "Overview", onClick = { viewMode = "overview" })
-                }
             }
-        }
-        if (viewMode == "overview") {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                listOf("all" to "All").plus(accounts.map { it.id to it.name }).forEach { (id, name) ->
-                    val active = walletAccountFilter == id
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = if (active) palette.accent else palette.surfaceVariant,
-                        border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = if (active) 0.22f else 0.1f)),
-                        modifier = Modifier.clickable { walletAccountFilter = id },
-                    ) {
-                        Text(
-                            name,
-                            color = if (active) palette.accentOn else palette.muted,
-                            style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        )
-                    }
+            if (accounts.isEmpty()) {
+                item(key = "accounts-empty") {
+                    Text("No accounts yet. Add one to start tracking balances.", color = palette.muted, style = MaterialTheme.typography.bodySmall)
                 }
-            }
-            val heroLabel = if (walletAccountFilter == "all") {
-                "Total balance"
             } else {
-                "${accountNames[walletAccountFilter] ?: "Account"} balance"
+                items(accounts, key = { "acct-${it.id}" }) { account ->
+                    WalletAccountRow(
+                        name = account.name,
+                        balance = balances[account.id] ?: 0.0,
+                        onCorrectBalance = {
+                            reconcileAccountId = account.id
+                            reconcileBalanceText = formatLedgerAmountForEdit(balances[account.id] ?: 0.0)
+                        },
+                        onEdit = { onEditAccount(account) },
+                        onDelete = { pendingDeleteAccountId = account.id },
+                    )
+                }
             }
-            UnifiedWalletHero(
-                label = heroLabel,
-                balance = formatCadAmount(filteredBalance),
-                incomeLabel = "Income ${formatCadAmountNumber(incomeTotal, decimals = 0)}",
-                spentLabel = "Spent ${formatCadAmountNumber(expenseTotal, decimals = 0)}",
-            )
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    top = 4.dp,
-                    bottom = 72.dp,
-                ),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (filteredEntries.isEmpty()) {
-                    item(span = { GridItemSpan(2) }) {
-                        Text("No transactions yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
+            item(key = "tx-header") {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    UnifiedSectionLabel("Transactions")
+                    BoopAccentTextButton(label = "Add transaction", onClick = onAddTransaction)
+                }
+            }
+            if (sortedEntries.isEmpty()) {
+                item(key = "tx-empty") {
+                    Text("No transactions yet.", color = palette.muted, style = MaterialTheme.typography.bodySmall)
+                }
+            } else {
+                items(sortedEntries, key = { "tx-${it.id}" }) { entry ->
+                    val typeColor = ledgerTypeColor(entry.type, palette)
+                    val amountText = when (entry.type) {
+                        "expense" -> formatSignedCadDelta(entry.amount, positive = false)
+                        else -> formatSignedCadDelta(entry.amount, positive = true)
                     }
-                } else {
-                    items(filteredEntries, key = { it.id }) { entry ->
-                        val typeColor = ledgerTypeColor(entry.type, palette)
-                        val amountText = when (entry.type) {
-                            "expense" -> formatSignedCadDelta(entry.amount, positive = false)
-                            else -> formatSignedCadDelta(entry.amount, positive = true)
-                        }
-                        val meta = buildString {
-                            append(
-                                when (entry.type) {
-                                    "transfer" -> "${accountNames[entry.accountId] ?: "From"} → ${accountNames[entry.toAccountId] ?: "To"}"
-                                    else -> accountNames[entry.accountId] ?: "Account"
-                                },
-                            )
-                            append(" · ")
-                            append(SimpleDateFormat("MMM d", Locale.US).format(entry.createdAtMillis))
-                        }
-                        UnifiedTintCard(
-                            type = UnifiedItemType.WALLET,
-                            title = entry.title.ifBlank { ledgerTypeLabel(entry.type) },
-                            meta = meta,
-                            amount = amountText,
-                            amountColor = typeColor,
-                            onClick = { onEditEntry(entry) },
+                    val meta = buildString {
+                        append(
+                            when (entry.type) {
+                                "transfer" -> "${accountNames[entry.accountId] ?: "From"} → ${accountNames[entry.toAccountId] ?: "To"}"
+                                else -> accountNames[entry.accountId] ?: "Account"
+                            },
                         )
+                        append(" · ")
+                        append(SimpleDateFormat("MMM d", Locale.US).format(entry.createdAtMillis))
                     }
+                    WalletTransactionRow(
+                        title = entry.title.ifBlank { ledgerTypeLabel(entry.type) },
+                        meta = meta,
+                        amount = amountText,
+                        amountColor = typeColor,
+                        onClick = { onEditEntry(entry) },
+                        onDelete = { pendingDeleteEntryId = entry.id },
+                    )
                 }
-            }
-        } else when (viewMode) {
-            "accounts" -> {
-                if (accounts.isEmpty()) {
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text("No accounts yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(12.dp))
-                        Surface(
-                            onClick = onAddAccount,
-                            shape = RoundedCornerShape(999.dp),
-                            color = palette.accent,
-                        ) {
-                            Text(
-                                "Add your first account",
-                                color = palette.accentOn,
-                                style = MaterialTheme.typography.labelLarge,
-                                modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
-                            )
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        Modifier.weight(1f).fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            top = 4.dp,
-                            bottom = 72.dp,
-                        ),
-                    ) {
-                        items(accounts.chunked(2), key = { row -> row.joinToString { it.id } }) { rowAccounts ->
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    rowAccounts.forEach { account ->
-                                        val balance = balances[account.id] ?: 0.0
-                                        val selected = expandedAccountId == account.id
-                                        FinanceAccountBalanceCard(
-                                            name = account.name,
-                                            balance = balance,
-                                            selected = selected,
-                                            onClick = {
-                                                expandedAccountId = if (selected) "" else account.id
-                                                balanceAdjustText = ""
-                                            },
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                    }
-                                    if (rowAccounts.size == 1) {
-                                        Spacer(Modifier.weight(1f))
-                                    }
-                                }
-                                val expandedAccount = rowAccounts.firstOrNull { it.id == expandedAccountId }
-                                if (expandedAccount != null) {
-                                    FinanceAccountExpandedPanel(
-                                        account = expandedAccount,
-                                        balance = balances[expandedAccount.id] ?: 0.0,
-                                        adjustText = balanceAdjustText,
-                                        onAdjustTextChange = { balanceAdjustText = it },
-                                        onEdit = { onEditAccount(expandedAccount) },
-                                        onDelete = {
-                                            pendingDeleteAccountId = expandedAccount.id
-                                            expandedAccountId = ""
-                                        },
-                                        onApplyDelta = { amount, add ->
-                                            onSaveEntry(
-                                                BoopLedgerEntry(
-                                                    id = UUID.randomUUID().toString(),
-                                                    type = if (add) "income" else "expense",
-                                                    accountId = expandedAccount.id,
-                                                    amount = amount,
-                                                    title = if (add) "Balance increase" else "Balance decrease",
-                                                    note = "Adjusted from accounts list",
-                                                ),
-                                            )
-                                            balanceAdjustText = ""
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            "transactions" -> {
-                if (sortedEntries.isEmpty()) {
-                    Text("No transactions yet. Use + menu to add income, expense or transfer.", color = palette.muted, style = MaterialTheme.typography.bodySmall)
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        Modifier.weight(1f).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            top = 4.dp,
-                            bottom = 72.dp,
-                        ),
-                    ) {
-                        items(sortedEntries, key = { it.id }) { entry ->
-                            val typeColor = ledgerTypeColor(entry.type, palette)
-                            val amountText = when (entry.type) {
-                                "expense" -> formatSignedCadDelta(entry.amount, positive = false)
-                                else -> formatSignedCadDelta(entry.amount, positive = true)
-                            }
-                            UnifiedTintCard(
-                                type = UnifiedItemType.WALLET,
-                                title = entry.title.ifBlank { ledgerTypeLabel(entry.type) },
-                                meta = SimpleDateFormat("MMM d, HH:mm", Locale.US).format(entry.createdAtMillis),
-                                amount = amountText,
-                                amountColor = typeColor,
-                                onClick = { onEditEntry(entry) },
-                            )
-                        }
-                    }
-                }
-            }
-            else -> {
-                Text("Use Manage to edit accounts.", color = palette.muted, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -5182,38 +5103,26 @@ private fun FinanceScreen(
     if (reconcileAccount != null) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { reconcileAccountId = "" },
-            title = { Text("Set real balance", color = MaterialTheme.colorScheme.onBackground) },
+            title = { Text("Correct balance", color = MaterialTheme.colorScheme.onBackground) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(reconcileAccount.name, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodyMedium)
+                    Text("${reconcileAccount.name} · no transaction is created", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
                     BoopFilledTextField(
                         value = reconcileBalanceText,
-                        onValueChange = { reconcileBalanceText = it.filter { ch -> ch.isDigit() || ch == '.' }.take(12) },
-                        label = { Text("Current CAD balance") },
+                        onValueChange = { reconcileBalanceText = it.filter { ch -> ch.isDigit() || ch == '.' || ch == '-' }.take(12) },
+                        label = { Text("Actual CAD balance") },
                     )
                 }
             },
             dismissButton = {
-                TextButton(onClick = { reconcileAccountId = "" }) { Text("Cancel", color = Color(0xFFBFBFBF)) }
+                TextButton(onClick = { reconcileAccountId = "" }) { Text("Cancel", color = palette.muted) }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         val target = reconcileBalanceText.toDoubleOrNull() ?: return@TextButton
-                        val current = balances[reconcileAccount.id] ?: 0.0
-                        val delta = target - current
-                        if (kotlin.math.abs(delta) >= 0.005) {
-                            onSaveEntry(
-                                BoopLedgerEntry(
-                                    id = UUID.randomUUID().toString(),
-                                    type = if (delta >= 0) "income" else "expense",
-                                    accountId = reconcileAccount.id,
-                                    amount = kotlin.math.abs(delta),
-                                    title = "Balance adjustment",
-                                    note = "Reconciled to CAD ${String.format(Locale.US, "%.2f", target)}",
-                                ),
-                            )
-                        }
+                        val computedFromEntries = (balances[reconcileAccount.id] ?: 0.0) - reconcileAccount.openingBalance
+                        onEditAccountBalance(reconcileAccount.copy(openingBalance = target - computedFromEntries))
                         reconcileAccountId = ""
                     },
                 ) { Text("Apply", color = MaterialTheme.colorScheme.onBackground) }
@@ -5271,7 +5180,11 @@ private fun AccountEditorSheet(
     onSave: (BoopAccount) -> Unit,
 ) {
     val sheetKey = initial.sessionKey
+    val palette = LocalBoopPalette.current
     var name by rememberSaveable(sheetKey) { mutableStateOf(initial.name) }
+    var openingText by rememberSaveable(sheetKey) {
+        mutableStateOf(if (initial.openingBalance == 0.0) "" else formatLedgerAmountForEdit(initial.openingBalance))
+    }
     var hasExplicitSave by remember(sheetKey) { mutableStateOf(false) }
     fun buildAccountOrNull(): BoopAccount? {
         val trimmed = name.trim()
@@ -5279,6 +5192,7 @@ private fun AccountEditorSheet(
         return BoopAccount(
             id = initial.id ?: UUID.randomUUID().toString(),
             name = trimmed,
+            openingBalance = openingText.toDoubleOrNull() ?: 0.0,
         )
     }
     DisposableEffect(sheetKey) {
@@ -5297,15 +5211,45 @@ private fun AccountEditorSheet(
             onDismiss()
         }
     }
-    Column(Modifier.fillMaxWidth()) {
-        KeepEditorTopBar(onBack = { saveAndDismiss() })
-        KeepBorderlessTitleField(
-            value = name,
-            onValueChange = { name = it },
-            placeholder = "Account name",
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(),
+    ) {
+        KeepEditorTopBar(
+            onBack = { saveAndDismiss() },
+            title = if (initial.id == null) "New Account" else "Edit Account",
         )
-        KeepEditorMetaLine("Cash, bank, card, savings…")
-        Spacer(Modifier.height(16.dp).navigationBarsPadding())
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Spacer(Modifier.height(6.dp))
+            KeepOutlinedTitleField(
+                value = name,
+                onValueChange = { name = it },
+                placeholder = "Account name",
+            )
+            KeepEditorMetaLine("Cash, bank, card, savings…")
+            Spacer(Modifier.height(12.dp))
+            KeepSectionLabel("Starting balance")
+            OutlinedTextField(
+                value = openingText,
+                onValueChange = { openingText = it.filter { ch -> ch.isDigit() || ch == '.' || ch == '-' }.take(12) },
+                label = { Text("CAD balance") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                colors = KeepOutlinedFieldColors(),
+            )
+            KeepEditorMetaLine("Adjust anytime with the correct-balance button.")
+            Spacer(Modifier.height(16.dp))
+        }
+        KeepFormSaveButton(onClick = { saveAndDismiss() })
+        Spacer(Modifier.height(10.dp))
     }
 }
 
@@ -5823,6 +5767,14 @@ private fun habitSearchHaystack(habit: BoopHabit): String {
 private fun habitCategoryLabel(raw: String): String =
     normalizeHabitCategory(raw).replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
 
+private fun habitCategoryOrder(raw: String): Int = when (normalizeHabitCategory(raw)) {
+    "morning" -> 0
+    "afternoon" -> 1
+    "evening" -> 2
+    "night" -> 3
+    else -> 4
+}
+
 @Composable
 private fun GlobalSearchResultsInline(
     query: String,
@@ -5952,6 +5904,7 @@ private fun HabitWeekStripCard(
         }
     }
     Surface(
+        onClick = { onOpenHabit(habit) },
         shape = cardShape,
         color = habitColors.bg,
         shadowElevation = 0.dp,
@@ -6643,11 +6596,8 @@ private fun TaskEditorSheet(
             }
             if (subtasksExpanded || subtasks.isNotEmpty()) {
                 KeepChecklistEditor(
-                    items = subtasks.ifEmpty { listOf(ChecklistItem(text = "")) },
-                    onChange = {
-                        subtasks = it
-                        subtasksExpanded = true
-                    },
+                    items = subtasks,
+                    onChange = { subtasks = it },
                 )
             }
             KeepSectionLabel("Details")
@@ -6766,26 +6716,15 @@ private fun NoteEditorSheet(
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
     onSave: (BoopNote) -> Unit,
-    tasks: List<BoopTask> = emptyList(),
-    onAddReminder: ((BoopNote) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val palette = LocalBoopPalette.current
     val session = initial.sessionKey
     var title by rememberSaveable(session) { mutableStateOf(initial.title) }
     var body by rememberSaveable(session) { mutableStateOf(htmlNoteBodyToPlain(initial.body)) }
-    var linkedTaskId by rememberSaveable(session) { mutableStateOf(initial.linkedTaskId) }
     var tagsCsv by rememberSaveable(session) { mutableStateOf(initial.tagsCsv) }
-    val reminderOptions = remember(tasks) {
-        buildList {
-            add(null to "None")
-            tasks.filter { !it.done && !it.archived }
-                .sortedBy { it.reminderAt }
-                .take(12)
-                .forEach { add(it.id to it.title.ifBlank { "Reminder" }) }
-        }
-    }
     var attachmentStored by remember(session) { mutableStateOf(parseNoteAttachments(initial.attachmentUri)) }
+    var previewImageIndex by remember(session) { mutableStateOf(-1) }
     var hasExplicitSave by remember(session) { mutableStateOf(false) }
     var skipAutoSaveOnDispose by remember(session) { mutableStateOf(false) }
     var isChecklistMode by rememberSaveable(session) { mutableStateOf(isChecklistBody(initial.body)) }
@@ -6812,7 +6751,7 @@ private fun NoteEditorSheet(
             audioUri = null,
             tagsCsv = normalizeNoteTags(tagsCsv),
             ocrText = ocrText,
-            linkedTaskId = linkedTaskId,
+            linkedTaskId = null,
             archived = initial.archived,
             createdAtMillis = initial.createdAtMillis,
             updatedAtMillis = System.currentTimeMillis(),
@@ -6872,7 +6811,7 @@ private fun NoteEditorSheet(
                                     audioUri = null,
                                     tagsCsv = normalizeNoteTags(tagsCsv),
                                     ocrText = extractTextFromAttachment(context, serializedAttachments),
-                                    linkedTaskId = linkedTaskId,
+                                    linkedTaskId = null,
                                     archived = !initial.archived,
                                     createdAtMillis = initial.createdAtMillis,
                                     updatedAtMillis = System.currentTimeMillis(),
@@ -6944,14 +6883,6 @@ private fun NoteEditorSheet(
                     minLines = 6,
                 )
             }
-            if (reminderOptions.size > 1) {
-                Spacer(Modifier.height(14.dp))
-                KeepReminderLinkSection(
-                    options = reminderOptions,
-                    selectedId = linkedTaskId,
-                    onSelect = { linkedTaskId = it },
-                )
-            }
             if (attachmentStored.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
                 attachmentStored.chunked(3).forEach { row ->
@@ -6963,19 +6894,44 @@ private fun NoteEditorSheet(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         row.forEach { stored ->
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(storedAttachmentForCoil(stored))
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
+                            val imageIndex = attachmentStored.indexOf(stored)
+                            Box(
+                                Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .clip(RoundedCornerShape(12.dp)),
-                            )
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { if (imageIndex >= 0) previewImageIndex = imageIndex },
+                            ) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(storedAttachmentForCoil(stored))
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                                Surface(
+                                    onClick = { attachmentStored = attachmentStored.filterNot { it == stored } },
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.55f),
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(4.dp)
+                                        .size(24.dp),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Outlined.Close,
+                                            contentDescription = "Remove image",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(15.dp),
+                                        )
+                                    }
+                                }
+                            }
                         }
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                     Spacer(Modifier.height(6.dp))
                 }
@@ -7038,23 +6994,6 @@ private fun NoteEditorSheet(
                     contentDescription = "Add labels",
                     tint = if (tagsCsv.isNotBlank()) palette.accent else palette.muted,
                 )
-                if (onAddReminder != null) {
-                    KeepToolbarIconButton(
-                        onClick = {
-                            val note = buildNoteForSaveOrNull()
-                            if (note == null) {
-                                Toast.makeText(context, "Add a title or note first", Toast.LENGTH_SHORT).show()
-                                return@KeepToolbarIconButton
-                            }
-                            skipAutoSaveOnDispose = true
-                            hasExplicitSave = true
-                            onAddReminder(note)
-                        },
-                        icon = Icons.Rounded.Notifications,
-                        contentDescription = "Add reminder",
-                        tint = if (linkedTaskId != null) palette.accent else palette.muted,
-                    )
-                }
                 KeepToolbarIconButton(
                     onClick = {
                         if (previewLinks.size >= 25) {
@@ -7077,6 +7016,73 @@ private fun NoteEditorSheet(
             onDismiss = { showLinkSheet = false },
             onAdd = { url -> appendLinkToBody(url) },
         )
+        if (previewImageIndex in attachmentStored.indices) {
+            ImagePreviewOverlay(
+                images = attachmentStored,
+                startIndex = previewImageIndex,
+                onDismiss = { previewImageIndex = -1 },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ImagePreviewOverlay(
+    images: List<String>,
+    startIndex: Int,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        val pagerState = rememberPagerState(
+            initialPage = startIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0)),
+            pageCount = { images.size },
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.96f)),
+        ) {
+            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(storedAttachmentForCoil(images[page]))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Surface(
+                onClick = onDismiss,
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.18f),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(16.dp)
+                    .size(38.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+            }
+            if (images.size > 1) {
+                Text(
+                    "${pagerState.currentPage + 1} / ${images.size}",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 24.dp),
+                )
+            }
+        }
     }
 }
 
