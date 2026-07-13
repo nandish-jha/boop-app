@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -89,6 +90,7 @@ fun UnifiedTintCard(
     title: String,
     meta: String? = null,
     body: String? = null,
+    bodyAnnotated: AnnotatedString? = null,
     amount: String? = null,
     amountColor: Color? = null,
     linkedLabel: String? = null,
@@ -211,7 +213,15 @@ fun UnifiedTintCard(
             if (!meta.isNullOrBlank()) {
                 Text(meta, color = palette.muted, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp))
             }
-            if (!body.isNullOrBlank()) {
+            if (bodyAnnotated != null && bodyAnnotated.isNotEmpty()) {
+                Text(
+                    bodyAnnotated,
+                    color = palette.muted,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp, lineHeight = 15.sp),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else if (!body.isNullOrBlank()) {
                 Text(
                     body,
                     color = palette.muted,

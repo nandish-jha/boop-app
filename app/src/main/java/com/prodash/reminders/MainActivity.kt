@@ -135,6 +135,10 @@ import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
 import androidx.compose.material.icons.outlined.FormatListBulleted
+import androidx.compose.material.icons.outlined.FormatListNumbered
+import androidx.compose.material.icons.outlined.FormatStrikethrough
+import androidx.compose.material.icons.outlined.FormatUnderlined
+import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material.icons.outlined.Notes
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Label
@@ -209,6 +213,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -231,6 +236,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -2791,15 +2798,13 @@ private fun serializeHabitDayValues(values: Map<String, Int>): String =
         .joinToString(",") { "${it.key}:${it.value}" }
 
 private fun plainNoteSnippet(html: String, maxLen: Int): String {
-    val plain = HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT).toString()
-        .replace('\n', ' ')
-        .trim()
+    val plain = stripNoteMarkup(html)
     if (plain.length <= maxLen) return plain
     return plain.take(maxLen - 1).trimEnd() + "…"
 }
 
 private fun noteBodyHasVisibleContent(html: String): Boolean =
-    plainNoteSnippet(html, 1).isNotBlank()
+    stripNoteMarkup(html).isNotBlank()
 
 private fun extractLinksFromBody(htmlOrText: String): List<String> {
     val plain = HtmlCompat.fromHtml(htmlOrText, HtmlCompat.FROM_HTML_MODE_COMPACT).toString()
@@ -3100,6 +3105,7 @@ private data class HomeCardMeta(
     val title: String,
     val meta: String?,
     val body: String?,
+    val noteBodyRaw: String? = null,
 )
 
 @Composable
@@ -3306,6 +3312,7 @@ private fun DashboardScreen(
                             note.title.ifBlank { "Untitled" },
                             formatNoteCardTime(note),
                             plainNoteSnippet(note.body, 64).takeIf { noteBodyHasVisibleContent(note.body) },
+                            noteBodyRaw = note.body.takeIf { noteBodyHasVisibleContent(note.body) },
                         ) to { onOpenNote(note) },
                     )
                 }
@@ -3447,7 +3454,8 @@ private fun DashboardScreen(
                                             type = meta.type,
                                             title = meta.title,
                                             meta = meta.meta,
-                                            body = meta.body,
+                                            body = if (meta.noteBodyRaw != null) null else meta.body,
+                                            bodyAnnotated = meta.noteBodyRaw?.let { noteBodyAnnotated(it, 96) },
                                             onClick = onClick,
                                             modifier = Modifier
                                                 .weight(1f)
@@ -3611,7 +3619,7 @@ private fun DashboardNoteTile(
     featured: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val snippet = remember(note.body) { plainNoteSnippet(note.body, if (featured) 120 else 72) }
+    val snippet = remember(note.body) { noteBodyAnnotated(note.body, if (featured) 120 else 72) }
     val interaction = remember(note.id) { MutableInteractionSource() }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -3637,7 +3645,7 @@ private fun DashboardNoteTile(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                snippet.ifBlank { " " },
+                if (snippet.isEmpty()) AnnotatedString(" ") else snippet,
                 color = Color(0xFFBFBFBF),
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = if (featured) 4 else 3,
@@ -5018,7 +5026,8 @@ private fun NotesListScreen(
                     type = UnifiedItemType.NOTE,
                     title = note.title.ifBlank { "Untitled note" },
                     meta = formatNoteCardTime(note),
-                    body = plainNoteSnippet(note.body, 72).takeIf { noteBodyHasVisibleContent(note.body) },
+                    body = null,
+                    bodyAnnotated = noteBodyAnnotated(note.body, 120).takeIf { noteBodyHasVisibleContent(note.body) },
                     linkedLabel = cardHint,
                     onClick = { onOpenNote(note) },
                     imageContent = if (images.isNotEmpty()) {
@@ -5106,7 +5115,13 @@ private fun NotesListScreen(
                             ) {
                                 Column(Modifier.padding(12.dp)) {
                                     Text(note.title.ifBlank { "Untitled note" }, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground)
-                                    Text(plainNoteSnippet(note.body, 80), color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        noteBodyAnnotated(note.body, 80),
+                                        color = Color(0xFFBFBFBF),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                 }
                             }
                         }
@@ -6484,8 +6499,8 @@ private fun GlobalSearchResultsInline(
                         ) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(note.title.ifBlank { "Untitled note" }, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                val snip = plainNoteSnippet(note.body, 96)
-                                if (snip.isNotBlank()) {
+                                val snip = noteBodyAnnotated(note.body, 96)
+                                if (snip.isNotEmpty()) {
                                     Text(snip, color = Color(0xFFBFBFBF), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
                             }
@@ -7424,7 +7439,10 @@ private fun NoteEditorSheet(
     val palette = LocalBoopPalette.current
     val session = initial.sessionKey
     var title by rememberSaveable(session) { mutableStateOf(initial.title) }
-    var body by rememberSaveable(session) { mutableStateOf(htmlNoteBodyToPlain(initial.body)) }
+    var bodyField by rememberSaveable(session, stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(htmlNoteBodyToPlain(initial.body)))
+    }
+    val body = bodyField.text
     var tagsCsv by rememberSaveable(session) { mutableStateOf(initial.tagsCsv) }
     var attachmentStored by remember(session) { mutableStateOf(parseNoteAttachments(initial.attachmentUri)) }
     var previewImageIndex by remember(session) { mutableStateOf(-1) }
@@ -7489,7 +7507,8 @@ private fun NoteEditorSheet(
         val cleaned = url.trim()
         if (cleaned.isBlank()) return
         val normalized = if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) cleaned else "https://$cleaned"
-        body = if (body.isBlank()) normalized else "${body.trimEnd()}\n$normalized"
+        val next = if (body.isBlank()) normalized else "${body.trimEnd()}\n$normalized"
+        bodyField = TextFieldValue(next, TextRange(next.length))
     }
     Column(
         Modifier
@@ -7580,11 +7599,56 @@ private fun NoteEditorSheet(
                 )
             } else {
                 KeepOutlinedBodyField(
-                    value = body,
-                    onValueChange = { body = it },
+                    value = bodyField,
+                    onValueChange = { bodyField = it },
                     placeholder = "Write something...",
                     minLines = 6,
                 )
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    KeepToolbarIconButton(
+                        onClick = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.BOLD) },
+                        icon = Icons.Outlined.FormatBold,
+                        contentDescription = "Bold",
+                    )
+                    KeepToolbarIconButton(
+                        onClick = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.ITALIC) },
+                        icon = Icons.Outlined.FormatItalic,
+                        contentDescription = "Italic",
+                    )
+                    KeepToolbarIconButton(
+                        onClick = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.UNDERLINE) },
+                        icon = Icons.Outlined.FormatUnderlined,
+                        contentDescription = "Underline",
+                    )
+                    KeepToolbarIconButton(
+                        onClick = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.STRIKE) },
+                        icon = Icons.Outlined.FormatStrikethrough,
+                        contentDescription = "Strikethrough",
+                    )
+                    KeepToolbarIconButton(
+                        onClick = { bodyField = bodyField.toggleBulletLines() },
+                        icon = Icons.Outlined.FormatListBulleted,
+                        contentDescription = "Bulleted list",
+                    )
+                    KeepToolbarIconButton(
+                        onClick = { bodyField = bodyField.toggleNumberedLines() },
+                        icon = Icons.Outlined.FormatListNumbered,
+                        contentDescription = "Numbered list",
+                    )
+                    KeepToolbarIconButton(
+                        onClick = { bodyField = bodyField.toggleHeadingLine() },
+                        icon = Icons.Outlined.Title,
+                        contentDescription = "Heading",
+                    )
+                }
             }
             if (attachmentStored.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
@@ -7678,7 +7742,7 @@ private fun NoteEditorSheet(
                         if (isChecklistMode) {
                             checklistItems = listOf(ChecklistItem(text = ""))
                         } else {
-                            body = ""
+                            bodyField = TextFieldValue("")
                         }
                     },
                     icon = if (isChecklistMode) Icons.Outlined.Notes else Icons.Outlined.FormatListBulleted,

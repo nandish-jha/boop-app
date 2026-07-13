@@ -193,6 +193,28 @@ fun KeepOutlinedBodyField(
 }
 
 @Composable
+fun KeepOutlinedBodyField(
+    value: androidx.compose.ui.text.input.TextFieldValue,
+    onValueChange: (androidx.compose.ui.text.input.TextFieldValue) -> Unit,
+    placeholder: String = "Write something...",
+    modifier: Modifier = Modifier,
+    minLines: Int = 5,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        placeholder = { Text(placeholder) },
+        minLines = minLines,
+        keyboardOptions = KeepSentenceKeyboard,
+        shape = RoundedCornerShape(14.dp),
+        colors = KeepOutlinedFieldColors(),
+    )
+}
+
+@Composable
 fun KeepFormSaveButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
