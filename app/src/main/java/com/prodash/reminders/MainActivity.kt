@@ -115,6 +115,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Notifications
@@ -434,6 +435,7 @@ private sealed class ItemSheet {
 
 enum class BoopTab(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Rounded.Home),
+    PLANNER("Planner", Icons.Rounded.Dashboard),
     NOTES("Notes", Icons.Rounded.StickyNote2),
     REMINDERS("Tasks", Icons.Rounded.Notifications),
     CALENDAR("Calendar", Icons.Rounded.CalendarMonth),
@@ -441,11 +443,13 @@ enum class BoopTab(val label: String, val icon: ImageVector) {
     WALLET("Wallet", Icons.Rounded.AttachMoney),
 }
 
+private val plannerSections = listOf(BoopTab.REMINDERS, BoopTab.NOTES, BoopTab.CALENDAR)
+
+private fun BoopTab.isPlannerSection(): Boolean = this in plannerSections
+
 private fun buildVisibleTabs(showHabitsPage: Boolean, showWalletPage: Boolean): List<BoopTab> = buildList {
     add(BoopTab.HOME)
-    add(BoopTab.REMINDERS)
-    add(BoopTab.NOTES)
-    add(BoopTab.CALENDAR)
+    add(BoopTab.PLANNER)
     if (showHabitsPage) add(BoopTab.HABITS)
     if (showWalletPage) add(BoopTab.WALLET)
 }
@@ -845,12 +849,27 @@ private fun BoopApp() {
         buildVisibleTabs(showHabitsPage, showWalletPage)
     }
     var selectedBoopTab by rememberSaveable { mutableStateOf(BoopTab.HOME.name) }
+    var plannerSectionName by rememberSaveable { mutableStateOf(BoopTab.REMINDERS.name) }
+    val plannerSection = BoopTab.entries.firstOrNull { it.name == plannerSectionName && it.isPlannerSection() }
+        ?: BoopTab.REMINDERS
     val selectedTab = visibleTabs.indexOfFirst { it.name == selectedBoopTab }.let { if (it >= 0) it else 0 }
     fun selectTabIndex(index: Int) {
         visibleTabs.getOrNull(index)?.let { selectedBoopTab = it.name }
     }
     fun selectTab(tab: BoopTab) {
-        visibleTabs.indexOf(tab).takeIf { it >= 0 }?.let { selectedBoopTab = tab.name }
+        when {
+            tab.isPlannerSection() -> {
+                plannerSectionName = tab.name
+                selectedBoopTab = BoopTab.PLANNER.name
+            }
+            visibleTabs.contains(tab) -> selectedBoopTab = tab.name
+        }
+    }
+    fun selectPlannerSection(section: BoopTab) {
+        if (section.isPlannerSection()) {
+            plannerSectionName = section.name
+            selectedBoopTab = BoopTab.PLANNER.name
+        }
     }
 
     val systemDark = isSystemInDarkTheme()
@@ -1255,6 +1274,14 @@ private fun BoopApp() {
         )
         val currentTab = visibleTabs.getOrElse(selectedTab.coerceIn(0, visibleTabs.lastIndex)) { BoopTab.HOME }
         var pagerProgrammatic by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            BoopTab.entries.firstOrNull { it.name == selectedBoopTab }?.let { tab ->
+                if (tab.isPlannerSection()) {
+                    plannerSectionName = tab.name
+                    selectedBoopTab = BoopTab.PLANNER.name
+                }
+            }
+        }
         LaunchedEffect(showHabitsPage, showWalletPage) {
             if (visibleTabs.none { it.name == selectedBoopTab }) {
                 selectedBoopTab = BoopTab.HOME.name
@@ -1290,6 +1317,9 @@ private fun BoopApp() {
                 itemSheet != null -> itemSheet = null
                 createSheetOpen -> createSheetOpen = false
                 dashboardSearchOpen -> dashboardSearchOpen = false
+                currentTab == BoopTab.PLANNER && plannerSection != BoopTab.REMINDERS -> {
+                    selectPlannerSection(BoopTab.REMINDERS)
+                }
                 selectedTab != 0 -> {
                     selectTab(BoopTab.HOME)
                 }
@@ -1308,9 +1338,12 @@ private fun BoopApp() {
                         },
                         onAdd = {
                             when (visibleTabs.getOrNull(selectedTab)) {
-                                BoopTab.NOTES -> openNoteSheet(null)
-                                BoopTab.REMINDERS -> openTaskSheet(null)
-                                BoopTab.CALENDAR -> openEventSheet(startAt = calendarCreateAtMillis)
+                                BoopTab.PLANNER -> when (plannerSection) {
+                                    BoopTab.NOTES -> openNoteSheet(null)
+                                    BoopTab.REMINDERS -> openTaskSheet(null)
+                                    BoopTab.CALENDAR -> openEventSheet(startAt = calendarCreateAtMillis)
+                                    else -> createSheetOpen = true
+                                }
                                 BoopTab.HABITS -> openHabitSheet(null)
                                 BoopTab.WALLET -> openFinanceEntrySheet("expense")
                                 else -> createSheetOpen = true
@@ -1357,6 +1390,8 @@ private fun BoopApp() {
                         ) {
                         BoopPagerPage(
                             tab = visibleTabs[page],
+                            plannerSection = plannerSection,
+                            onPlannerSectionChange = { selectPlannerSection(it) },
                             visibleTabs = visibleTabs,
                             tasks = tasks,
                             notes = notes,
@@ -1632,6 +1667,8 @@ private fun BoopApp() {
 @Composable
 private fun BoopPagerPage(
     tab: BoopTab,
+    plannerSection: BoopTab,
+    onPlannerSectionChange: (BoopTab) -> Unit,
     visibleTabs: List<BoopTab>,
     tasks: List<BoopTask>,
     notes: List<BoopNote>,
@@ -1688,26 +1725,20 @@ private fun BoopPagerPage(
                 searchExpanded = dashboardSearchOpen,
                 onSearchExpandedChange = onDashboardSearchOpenChange,
             )
-            BoopTab.NOTES -> NotesListScreen(
-                notes = notes,
-                onOpenNote = onEditNote,
-                title = "Notes",
-            )
-            BoopTab.REMINDERS -> TaskListScreen(
+            BoopTab.PLANNER, BoopTab.NOTES, BoopTab.REMINDERS, BoopTab.CALENDAR -> CombinedPlannerScreen(
+                section = if (tab == BoopTab.PLANNER) plannerSection else tab,
+                onSectionChange = onPlannerSectionChange,
                 tasks = tasks,
-                onOpenTask = onEditTask,
+                notes = notes,
+                calendarSyncRequest = calendarSyncRequest,
+                onEditTask = onEditTask,
+                onEditEvent = onEditEvent,
+                onEditNote = onEditNote,
                 onArchiveTask = onArchiveTask,
                 onCompleteTask = onCompleteTask,
                 onUnarchiveTask = onUnarchiveTask,
                 onRestoreCompletedTask = onRestoreCompletedTask,
-                title = "Tasks",
-            )
-            BoopTab.CALENDAR -> CalendarScreen(
-                tasks = tasks,
-                syncRequest = calendarSyncRequest,
-                onOpenTask = onEditTask,
-                onOpenEvent = onEditEvent,
-                onSelectedDayChanged = onCalendarSelectedDayChanged,
+                onCalendarSelectedDayChanged = onCalendarSelectedDayChanged,
             )
             BoopTab.HABITS -> HabitsListScreen(
                 habits = habits,
@@ -2305,7 +2336,7 @@ private fun BoopBottomBar(
                         }
                         when (currentTab) {
                             BoopTab.HOME -> onExpandedChange(true)
-                            BoopTab.NOTES, BoopTab.REMINDERS -> onOpenTask()
+                            BoopTab.NOTES, BoopTab.REMINDERS, BoopTab.PLANNER -> onOpenTask()
                             BoopTab.CALENDAR -> onExpandedChange(true)
                             BoopTab.HABITS -> onOpenHabit()
                             BoopTab.WALLET -> onExpandedChange(true)
@@ -2584,7 +2615,7 @@ private fun BoopSpeedDialMenu(
         val onClick: () -> Unit,
     )
     val items = buildList {
-        if (currentTab == BoopTab.CALENDAR) {
+        if (currentTab == BoopTab.CALENDAR || currentTab == BoopTab.PLANNER) {
             add(SpeedDialEntry(Icons.Outlined.Notifications, "Add task") { onOpenTask(); onExpandedChange(false) })
             add(SpeedDialEntry(Icons.Outlined.CalendarMonth, "Add event") { onOpenEvent(); onExpandedChange(false) })
             add(SpeedDialEntry(Icons.Outlined.Sync, "Sync calendar") { onSyncCalendar(); onExpandedChange(false) })
@@ -4310,6 +4341,132 @@ private fun readGoogleCalendarEventsInRange(
         }
     }
     return out.sortedBy { it.beginMillis }
+}
+
+@Composable
+private fun PlannerSectionSwitcher(
+    selected: BoopTab,
+    onSelect: (BoopTab) -> Unit,
+) {
+    val palette = LocalBoopPalette.current
+    val sections = listOf(
+        BoopTab.REMINDERS to Icons.Rounded.Notifications,
+        BoopTab.NOTES to Icons.Rounded.StickyNote2,
+        BoopTab.CALENDAR to Icons.Rounded.CalendarMonth,
+    )
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = palette.surface,
+        border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.14f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            sections.forEach { (section, icon) ->
+                val active = selected == section
+                val bg by animateColorAsState(
+                    targetValue = if (active) palette.chipBg else Color.Transparent,
+                    animationSpec = tween(180),
+                    label = "planner_section_bg",
+                )
+                Surface(
+                    onClick = { onSelect(section) },
+                    shape = RoundedCornerShape(14.dp),
+                    color = bg,
+                    border = if (active) BorderStroke(1.dp, palette.accent.copy(alpha = 0.45f)) else null,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(42.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            icon,
+                            contentDescription = null,
+                            tint = if (active) palette.accent else palette.muted,
+                            modifier = Modifier.size(17.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            section.label,
+                            color = if (active) palette.onBackground else palette.muted,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                                fontSize = 12.sp,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CombinedPlannerScreen(
+    section: BoopTab,
+    onSectionChange: (BoopTab) -> Unit,
+    tasks: List<BoopTask>,
+    notes: List<BoopNote>,
+    calendarSyncRequest: Int,
+    onEditTask: (BoopTask) -> Unit,
+    onEditEvent: (Long) -> Unit,
+    onEditNote: (BoopNote) -> Unit,
+    onArchiveTask: (BoopTask) -> Unit,
+    onCompleteTask: (BoopTask) -> Unit,
+    onUnarchiveTask: (BoopTask) -> Unit,
+    onRestoreCompletedTask: (BoopTask) -> Unit,
+    onCalendarSelectedDayChanged: (Long) -> Unit,
+) {
+    val activeSection = if (section.isPlannerSection()) section else BoopTab.REMINDERS
+    Column(
+        Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        PlannerSectionSwitcher(
+            selected = activeSection,
+            onSelect = onSectionChange,
+        )
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            Crossfade(
+                targetState = activeSection,
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+                label = "planner_section",
+            ) { current ->
+                when (current) {
+                    BoopTab.REMINDERS -> TaskListScreen(
+                        tasks = tasks,
+                        onOpenTask = onEditTask,
+                        onArchiveTask = onArchiveTask,
+                        onCompleteTask = onCompleteTask,
+                        onUnarchiveTask = onUnarchiveTask,
+                        onRestoreCompletedTask = onRestoreCompletedTask,
+                        title = "Tasks",
+                    )
+                    BoopTab.NOTES -> NotesListScreen(
+                        notes = notes,
+                        onOpenNote = onEditNote,
+                        title = "Notes",
+                    )
+                    else -> CalendarScreen(
+                        tasks = tasks,
+                        syncRequest = calendarSyncRequest,
+                        onOpenTask = onEditTask,
+                        onOpenEvent = onEditEvent,
+                        onSelectedDayChanged = onCalendarSelectedDayChanged,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
