@@ -353,7 +353,7 @@ fun UnifiedFilterChips(
                     label,
                     color = palette.onBackground,
                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
-                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp),
+                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 4.dp),
                 )
             }
         }

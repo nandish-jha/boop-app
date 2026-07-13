@@ -3,7 +3,6 @@ package com.prodash.reminders
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
-import android.widget.RemoteViews
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -21,22 +20,15 @@ class BoopTasksWidget : AppWidgetProvider() {
         val todayTasks = repo.readTasks()
             .filter { !it.archived && !it.done && it.reminderAt in start until end }
             .sortedBy { it.reminderAt }
-        val title = if (todayTasks.isEmpty()) {
-            "No tasks today"
-        } else {
-            todayTasks.first().title
-        }
+        val firstTask = todayTasks.firstOrNull()
+        val title = firstTask?.title?.ifBlank { "Untitled task" } ?: "No tasks today"
         val subtitle = when (todayTasks.size) {
             0 -> "You're clear for today"
-            1 -> SimpleDateFormat("h:mm a", Locale.getDefault()).format(todayTasks.first().reminderAt)
+            1 -> SimpleDateFormat("h:mm a", Locale.getDefault()).format(firstTask!!.reminderAt)
             else -> "${todayTasks.size} tasks due today"
         }
-        appWidgetIds.forEach { id ->
-            val views = RemoteViews(context.packageName, R.layout.widget_tasks).apply {
-                setTextViewText(R.id.widget_title, title)
-                setTextViewText(R.id.widget_subtitle, subtitle)
-            }
-            appWidgetManager.updateAppWidget(id, views)
-        }
+        val clickIntent = firstTask?.let { BoopWidgetSupport.openTaskIntent(context, it.id) }
+            ?: BoopWidgetSupport.openTabIntent(context, "REMINDERS")
+        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, clickIntent)
     }
 }

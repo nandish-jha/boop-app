@@ -17,6 +17,10 @@ object BoopSyncState {
 enum class PaletteFamily(val storageKey: String, val label: String) {
     AMOLED("amoled", "AMOLED"),
     TERRACOTTA("terracotta", "Terracotta"),
+    ROSE("rose", "Rose"),
+    SLATE("slate", "Slate"),
+    FOREST("forest", "Forest"),
+    OCEAN("ocean", "Ocean"),
     ;
 
     companion object {
@@ -118,6 +122,9 @@ data class BoopHabit(
     val quantityUnit: String = "",
     val quantityDailyTarget: Int = 30,
     val quantityDayValues: String = "",
+    val reminderEnabled: Boolean = false,
+    val reminderHour: Int = 9,
+    val reminderMinute: Int = 0,
 )
 data class BoopAccount(
     val id: String,
@@ -380,6 +387,9 @@ class BoopRepository(private val store: LocalStore) {
                 item.optString("quantityUnit"),
                 item.optInt("quantityDailyTarget", 30),
                 item.optString("quantityDayValues"),
+                item.optBoolean("reminderEnabled", false),
+                item.optInt("reminderHour", 9).coerceIn(0, 23),
+                item.optInt("reminderMinute", 0).coerceIn(0, 59),
             )
         }.sortedBy { it.title.lowercase(Locale.getDefault()) }
     }
@@ -479,27 +489,29 @@ class BoopRepository(private val store: LocalStore) {
         sync("notes", arr.toString())
     }
 
+    private fun habitToJson(habit: BoopHabit): JSONObject =
+        JSONObject()
+            .put("id", habit.id)
+            .put("title", habit.title)
+            .put("dayPeriodCategory", normalizeHabitCategory(habit.dayPeriodCategory))
+            .put("goal", habit.goal)
+            .put("progress", habit.progress)
+            .put("dayKeys", habit.dayKeys)
+            .put("quantityMode", habit.quantityMode)
+            .put("quantityUnit", habit.quantityUnit)
+            .put("quantityDailyTarget", habit.quantityDailyTarget)
+            .put("quantityDayValues", habit.quantityDayValues)
+            .put("reminderEnabled", habit.reminderEnabled)
+            .put("reminderHour", habit.reminderHour.coerceIn(0, 23))
+            .put("reminderMinute", habit.reminderMinute.coerceIn(0, 59))
+
     fun saveHabit(habit: BoopHabit) {
         val updated = readHabits().toMutableList().apply {
             removeAll { it.id == habit.id }
             add(0, habit.copy(dayPeriodCategory = normalizeHabitCategory(habit.dayPeriodCategory)))
         }
         val arr = JSONArray()
-        updated.forEach {
-            arr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("title", it.title)
-                    .put("dayPeriodCategory", normalizeHabitCategory(it.dayPeriodCategory))
-                    .put("goal", it.goal)
-                    .put("progress", it.progress)
-                    .put("dayKeys", it.dayKeys)
-                    .put("quantityMode", it.quantityMode)
-                    .put("quantityUnit", it.quantityUnit)
-                    .put("quantityDailyTarget", it.quantityDailyTarget)
-                    .put("quantityDayValues", it.quantityDayValues),
-            )
-        }
+        updated.forEach { arr.put(habitToJson(it)) }
         store.save("habits", arr.toString())
         sync("habits", arr.toString())
     }
@@ -507,21 +519,7 @@ class BoopRepository(private val store: LocalStore) {
     fun deleteHabit(id: String) {
         val updated = readHabits().filterNot { it.id == id }
         val arr = JSONArray()
-        updated.forEach {
-            arr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("title", it.title)
-                    .put("dayPeriodCategory", normalizeHabitCategory(it.dayPeriodCategory))
-                    .put("goal", it.goal)
-                    .put("progress", it.progress)
-                    .put("dayKeys", it.dayKeys)
-                    .put("quantityMode", it.quantityMode)
-                    .put("quantityUnit", it.quantityUnit)
-                    .put("quantityDailyTarget", it.quantityDailyTarget)
-                    .put("quantityDayValues", it.quantityDayValues),
-            )
-        }
+        updated.forEach { arr.put(habitToJson(it)) }
         store.save("habits", arr.toString())
         sync("habits", arr.toString())
     }

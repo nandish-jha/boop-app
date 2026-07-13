@@ -112,6 +112,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Flag
@@ -200,6 +201,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -293,31 +295,43 @@ class MainActivity : ComponentActivity() {
         var pendingShortcutAction: String? = null
         var pendingOpenTaskIdAction: String? = null
         var pendingOpenEventIdAction: Long = -1L
+        var pendingOpenNoteIdAction: String? = null
+        var pendingOpenHabitIdAction: String? = null
+        var pendingHabitCheckInOnly: Boolean = false
+        var pendingOpenTabAction: String? = null
         var openTargetNonce: Int = 0
+    }
+
+    private fun applyWidgetIntent(intent: Intent?) {
+        pendingShortcutAction = intent?.getStringExtra("boop_action")
+        pendingOpenTaskIdAction = intent?.getStringExtra(BoopWidgetSupport.EXTRA_OPEN_TASK_ID)
+        pendingOpenEventIdAction = intent?.getLongExtra("openEventId", -1L) ?: -1L
+        pendingOpenNoteIdAction = intent?.getStringExtra(BoopWidgetSupport.EXTRA_OPEN_NOTE_ID)
+        pendingOpenHabitIdAction = intent?.getStringExtra(BoopWidgetSupport.EXTRA_OPEN_HABIT_ID)
+        pendingHabitCheckInOnly = intent?.getBooleanExtra(BoopWidgetSupport.EXTRA_HABIT_CHECK_IN_ONLY, false) == true
+        pendingOpenTabAction = intent?.getStringExtra(BoopWidgetSupport.EXTRA_OPEN_TAB)
+        if (!pendingOpenTaskIdAction.isNullOrBlank() ||
+            pendingOpenEventIdAction > 0L ||
+            !pendingOpenNoteIdAction.isNullOrBlank() ||
+            !pendingOpenHabitIdAction.isNullOrBlank() ||
+            !pendingOpenTabAction.isNullOrBlank()
+        ) {
+            openTargetNonce++
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         ReminderNotifier.createChannel(this)
-        pendingShortcutAction = intent?.getStringExtra("boop_action")
-        pendingOpenTaskIdAction = intent?.getStringExtra("openTaskId")
-        pendingOpenEventIdAction = intent?.getLongExtra("openEventId", -1L) ?: -1L
-        if (!pendingOpenTaskIdAction.isNullOrBlank() || pendingOpenEventIdAction > 0L) {
-            openTargetNonce++
-        }
+        applyWidgetIntent(intent)
         setContent { BoopApp() }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        pendingShortcutAction = intent.getStringExtra("boop_action")
-        pendingOpenTaskIdAction = intent.getStringExtra("openTaskId")
-        pendingOpenEventIdAction = intent.getLongExtra("openEventId", -1L)
-        if (!pendingOpenTaskIdAction.isNullOrBlank() || pendingOpenEventIdAction > 0L) {
-            openTargetNonce++
-        }
+        applyWidgetIntent(intent)
     }
 }
 
@@ -364,6 +378,10 @@ private sealed class ItemSheet {
         val quantityUnit: String,
         val quantityDailyTarget: Int,
         val quantityDayValues: String,
+        val reminderEnabled: Boolean = false,
+        val reminderHour: Int = 9,
+        val reminderMinute: Int = 0,
+        val checkInOnly: Boolean = false,
     ) : ItemSheet()
 
     data class EventSheet(
@@ -565,6 +583,234 @@ private fun boopLightPalette() = BoopPalette(
     monochrome = true,
 )
 
+private fun boopRoseDarkPalette() = BoopPalette(
+    background = Color(0xFF141012),
+    phoneBg = Color(0xFF1A1518),
+    surface = Color(0xFF2A2226),
+    surfaceVariant = Color(0xFF231C20),
+    surfaceElevated = Color(0xFF352C31),
+    onBackground = Color(0xFFFFF7F8),
+    muted = Color(0xFFB5A4A8),
+    accent = Color(0xFFE08A9A),
+    accentGlow = Color(0xFFF0B0BA),
+    accentOn = Color(0xFF1A1014),
+    navPill = Color(0x33E08A9A),
+    navSelected = Color(0xFFE08A9A),
+    navUnselected = Color(0xFF8A7A80),
+    inputField = Color(0xFF1E171A),
+    danger = Color(0xFFE07A6A),
+    recording = Color(0xFFE08A9A),
+    quoteFill = Color(0xFF2E2226),
+    quoteStroke = Color(0xFFE08A9A),
+    topbarBg = Color(0xD91A1518),
+    chipBg = Color(0xFF231C20),
+    surfaceBorder = Color(0x1AFFF7F8),
+    sheetBg = Color(0xFF2A2226),
+    overlay = Color(0x8C000000),
+    sheetHandle = Color(0x33FFF7F8),
+)
+
+private fun boopRoseLightPalette() = BoopPalette(
+    background = Color(0xFFFFF7F8),
+    phoneBg = Color(0xFFFFFBFC),
+    surface = Color(0xFFF8EEEF),
+    surfaceVariant = Color(0xFFF0E2E5),
+    surfaceElevated = Color(0xFFF5E8EA),
+    onBackground = Color(0xFF1A1214),
+    muted = Color(0xFF8A757A),
+    accent = Color(0xFFC45A6E),
+    accentGlow = Color(0xFFE08A9A),
+    accentOn = Color(0xFFFFFFFF),
+    navPill = Color(0x28C45A6E),
+    navSelected = Color(0xFFC45A6E),
+    navUnselected = Color(0xFF9A888C),
+    inputField = Color(0xFFF5EAEC),
+    danger = Color(0xFFC45850),
+    recording = Color(0xFFC45A6E),
+    quoteFill = Color(0xFFF8E8EB),
+    quoteStroke = Color(0xFFC45A6E),
+    topbarBg = Color(0xEBFFFBFC),
+    chipBg = Color(0xFFF0E2E5),
+    surfaceBorder = Color(0x141A1214),
+    sheetBg = Color(0xFFF8EEEF),
+    overlay = Color(0x591A1214),
+    sheetHandle = Color(0x261A1214),
+)
+
+private fun boopSlateDarkPalette() = BoopPalette(
+    background = Color(0xFF101216),
+    phoneBg = Color(0xFF14171C),
+    surface = Color(0xFF22262C),
+    surfaceVariant = Color(0xFF1B1F24),
+    surfaceElevated = Color(0xFF2C3138),
+    onBackground = Color(0xFFE8ECF0),
+    muted = Color(0xFF9AA3AD),
+    accent = Color(0xFF8FA8C4),
+    accentGlow = Color(0xFFA8BDD4),
+    accentOn = Color(0xFF101216),
+    navPill = Color(0x338FA8C4),
+    navSelected = Color(0xFF8FA8C4),
+    navUnselected = Color(0xFF7A838C),
+    inputField = Color(0xFF181C21),
+    danger = Color(0xFFE07A6A),
+    recording = Color(0xFF8FA8C4),
+    quoteFill = Color(0xFF1E242A),
+    quoteStroke = Color(0xFF8FA8C4),
+    topbarBg = Color(0xD914171C),
+    chipBg = Color(0xFF1B1F24),
+    surfaceBorder = Color(0x1AE8ECF0),
+    sheetBg = Color(0xFF22262C),
+    overlay = Color(0x8C000000),
+    sheetHandle = Color(0x33E8ECF0),
+)
+
+private fun boopSlateLightPalette() = BoopPalette(
+    background = Color(0xFFF2F4F7),
+    phoneBg = Color(0xFFF8FAFC),
+    surface = Color(0xFFECEFF3),
+    surfaceVariant = Color(0xFFE2E6EC),
+    surfaceElevated = Color(0xFFE8ECF1),
+    onBackground = Color(0xFF14181E),
+    muted = Color(0xFF6F7884),
+    accent = Color(0xFF4F6F8F),
+    accentGlow = Color(0xFF8FA8C4),
+    accentOn = Color(0xFFFFFFFF),
+    navPill = Color(0x284F6F8F),
+    navSelected = Color(0xFF4F6F8F),
+    navUnselected = Color(0xFF8A929C),
+    inputField = Color(0xFFE8ECF1),
+    danger = Color(0xFFC45850),
+    recording = Color(0xFF4F6F8F),
+    quoteFill = Color(0xFFE6EBF2),
+    quoteStroke = Color(0xFF4F6F8F),
+    topbarBg = Color(0xEBF8FAFC),
+    chipBg = Color(0xFFE2E6EC),
+    surfaceBorder = Color(0x1414181E),
+    sheetBg = Color(0xFFECEFF3),
+    overlay = Color(0x5914181E),
+    sheetHandle = Color(0x2614181E),
+)
+
+private fun boopForestDarkPalette() = BoopPalette(
+    background = Color(0xFF0F1410),
+    phoneBg = Color(0xFF141A15),
+    surface = Color(0xFF222A23),
+    surfaceVariant = Color(0xFF1A221C),
+    surfaceElevated = Color(0xFF2C352E),
+    onBackground = Color(0xFFEFF5EF),
+    muted = Color(0xFF9AAB9C),
+    accent = Color(0xFF7DB88A),
+    accentGlow = Color(0xFFA0CFA8),
+    accentOn = Color(0xFF0F1410),
+    navPill = Color(0x337DB88A),
+    navSelected = Color(0xFF7DB88A),
+    navUnselected = Color(0xFF7A8A7C),
+    inputField = Color(0xFF171E18),
+    danger = Color(0xFFE07A6A),
+    recording = Color(0xFF7DB88A),
+    quoteFill = Color(0xFF1E2820),
+    quoteStroke = Color(0xFF7DB88A),
+    topbarBg = Color(0xD9141A15),
+    chipBg = Color(0xFF1A221C),
+    surfaceBorder = Color(0x1AEFF5EF),
+    sheetBg = Color(0xFF222A23),
+    overlay = Color(0x8C000000),
+    sheetHandle = Color(0x33EFF5EF),
+)
+
+private fun boopForestLightPalette() = BoopPalette(
+    background = Color(0xFFF3F7F3),
+    phoneBg = Color(0xFFF8FBF8),
+    surface = Color(0xFFE8EFE8),
+    surfaceVariant = Color(0xFFDCE6DC),
+    surfaceElevated = Color(0xFFE4ECE4),
+    onBackground = Color(0xFF121814),
+    muted = Color(0xFF6E7A6F),
+    accent = Color(0xFF3F7A4E),
+    accentGlow = Color(0xFF7DB88A),
+    accentOn = Color(0xFFFFFFFF),
+    navPill = Color(0x283F7A4E),
+    navSelected = Color(0xFF3F7A4E),
+    navUnselected = Color(0xFF889488),
+    inputField = Color(0xFFE4ECE4),
+    danger = Color(0xFFC45850),
+    recording = Color(0xFF3F7A4E),
+    quoteFill = Color(0xFFE4F0E6),
+    quoteStroke = Color(0xFF3F7A4E),
+    topbarBg = Color(0xEBF8FBF8),
+    chipBg = Color(0xFFDCE6DC),
+    surfaceBorder = Color(0x14121814),
+    sheetBg = Color(0xFFE8EFE8),
+    overlay = Color(0x59121814),
+    sheetHandle = Color(0x26121814),
+)
+
+private fun boopOceanDarkPalette() = BoopPalette(
+    background = Color(0xFF0C1218),
+    phoneBg = Color(0xFF101820),
+    surface = Color(0xFF1C2730),
+    surfaceVariant = Color(0xFF162028),
+    surfaceElevated = Color(0xFF25323C),
+    onBackground = Color(0xFFECF4FA),
+    muted = Color(0xFF95A8B6),
+    accent = Color(0xFF5EB0D4),
+    accentGlow = Color(0xFF8AC8E0),
+    accentOn = Color(0xFF0C1218),
+    navPill = Color(0x335EB0D4),
+    navSelected = Color(0xFF5EB0D4),
+    navUnselected = Color(0xFF758898),
+    inputField = Color(0xFF141C24),
+    danger = Color(0xFFE07A6A),
+    recording = Color(0xFF5EB0D4),
+    quoteFill = Color(0xFF1A2832),
+    quoteStroke = Color(0xFF5EB0D4),
+    topbarBg = Color(0xD9101820),
+    chipBg = Color(0xFF162028),
+    surfaceBorder = Color(0x1AECF4FA),
+    sheetBg = Color(0xFF1C2730),
+    overlay = Color(0x8C000000),
+    sheetHandle = Color(0x33ECF4FA),
+)
+
+private fun boopOceanLightPalette() = BoopPalette(
+    background = Color(0xFFF0F6FA),
+    phoneBg = Color(0xFFF7FBFD),
+    surface = Color(0xFFE4EEF4),
+    surfaceVariant = Color(0xFFD6E4EC),
+    surfaceElevated = Color(0xFFDEEAF2),
+    onBackground = Color(0xFF101820),
+    muted = Color(0xFF667A88),
+    accent = Color(0xFF2E7FA8),
+    accentGlow = Color(0xFF5EB0D4),
+    accentOn = Color(0xFFFFFFFF),
+    navPill = Color(0x282E7FA8),
+    navSelected = Color(0xFF2E7FA8),
+    navUnselected = Color(0xFF8494A0),
+    inputField = Color(0xFFDEEAF2),
+    danger = Color(0xFFC45850),
+    recording = Color(0xFF2E7FA8),
+    quoteFill = Color(0xFFE0F0F8),
+    quoteStroke = Color(0xFF2E7FA8),
+    topbarBg = Color(0xEBF7FBFD),
+    chipBg = Color(0xFFD6E4EC),
+    surfaceBorder = Color(0x14101820),
+    sheetBg = Color(0xFFE4EEF4),
+    overlay = Color(0x59101820),
+    sheetHandle = Color(0x26101820),
+)
+
+private fun palettePreviewColors(family: PaletteFamily, useDarkTheme: Boolean): List<Color> {
+    val p = when (family) {
+        PaletteFamily.AMOLED -> if (useDarkTheme) boopDarkPalette() else boopLightPalette()
+        PaletteFamily.TERRACOTTA -> if (useDarkTheme) boopTerracottaDarkPalette() else boopTerracottaLightPalette()
+        PaletteFamily.ROSE -> if (useDarkTheme) boopRoseDarkPalette() else boopRoseLightPalette()
+        PaletteFamily.SLATE -> if (useDarkTheme) boopSlateDarkPalette() else boopSlateLightPalette()
+        PaletteFamily.FOREST -> if (useDarkTheme) boopForestDarkPalette() else boopForestLightPalette()
+        PaletteFamily.OCEAN -> if (useDarkTheme) boopOceanDarkPalette() else boopOceanLightPalette()
+    }
+    return listOf(p.background, p.surfaceVariant, p.accent, p.onBackground)
+}
+
 internal val LocalBoopPalette = staticCompositionLocalOf { boopDarkPalette() }
 private val LocalBoopDataEpoch = staticCompositionLocalOf { 0 }
 
@@ -579,7 +825,6 @@ private fun BoopApp() {
     val ledgerEntries = remember { mutableStateListOf<BoopLedgerEntry>() }
 
     var itemSheet by remember { mutableStateOf<ItemSheet?>(null) }
-    var habitCheckInOpen by remember { mutableStateOf(false) }
     var createSheetOpen by remember { mutableStateOf(false) }
     var calendarSyncRequest by rememberSaveable { mutableIntStateOf(0) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -609,6 +854,10 @@ private fun BoopApp() {
     val palette = when (paletteFamily) {
         PaletteFamily.TERRACOTTA -> if (useDarkTheme) boopTerracottaDarkPalette() else boopTerracottaLightPalette()
         PaletteFamily.AMOLED -> if (useDarkTheme) boopDarkPalette() else boopLightPalette()
+        PaletteFamily.ROSE -> if (useDarkTheme) boopRoseDarkPalette() else boopRoseLightPalette()
+        PaletteFamily.SLATE -> if (useDarkTheme) boopSlateDarkPalette() else boopSlateLightPalette()
+        PaletteFamily.FOREST -> if (useDarkTheme) boopForestDarkPalette() else boopForestLightPalette()
+        PaletteFamily.OCEAN -> if (useDarkTheme) boopOceanDarkPalette() else boopOceanLightPalette()
     }
     val view = LocalView.current
     DisposableEffect(useDarkTheme) {
@@ -640,6 +889,13 @@ private fun BoopApp() {
             onRemoteLoaded = { refresh() },
             onFailure = { /* status shown in Settings via BoopSyncState */ },
         )
+        refresh()
+        HabitReminderScheduler.scheduleAll(AppContextHolder.context, habits.toList())
+    }
+
+    fun persistHabit(habit: BoopHabit) {
+        repository.saveHabit(habit)
+        HabitReminderScheduler.schedule(AppContextHolder.context, habit)
         refresh()
     }
 
@@ -709,6 +965,31 @@ private fun BoopApp() {
             quantityUnit = habit?.quantityUnit.orEmpty(),
             quantityDailyTarget = habit?.quantityDailyTarget ?: 30,
             quantityDayValues = habit?.quantityDayValues.orEmpty(),
+            reminderEnabled = habit?.reminderEnabled ?: false,
+            reminderHour = habit?.reminderHour ?: 9,
+            reminderMinute = habit?.reminderMinute ?: 0,
+            checkInOnly = false,
+        )
+        createSheetOpen = false
+    }
+
+    fun openHabitCheckInSheet(habit: BoopHabit) {
+        itemSheet = ItemSheet.HabitSheet(
+            id = habit.id,
+            sessionKey = habit.id,
+            title = habit.title,
+            dayPeriodCategory = habit.dayPeriodCategory,
+            goal = habit.goal,
+            progress = habit.progress,
+            dayKeys = habit.dayKeys,
+            quantityMode = habit.quantityMode,
+            quantityUnit = habit.quantityUnit,
+            quantityDailyTarget = habit.quantityDailyTarget,
+            quantityDayValues = habit.quantityDayValues,
+            reminderEnabled = habit.reminderEnabled,
+            reminderHour = habit.reminderHour,
+            reminderMinute = habit.reminderMinute,
+            checkInOnly = true,
         )
         createSheetOpen = false
     }
@@ -781,7 +1062,7 @@ private fun BoopApp() {
     val context = LocalContext.current
     val launchActivity = context as? Activity
     var pendingOpenTaskId by rememberSaveable {
-        mutableStateOf(MainActivity.pendingOpenTaskIdAction ?: launchActivity?.intent?.getStringExtra("openTaskId"))
+        mutableStateOf(MainActivity.pendingOpenTaskIdAction ?: launchActivity?.intent?.getStringExtra(BoopWidgetSupport.EXTRA_OPEN_TASK_ID))
     }
     var pendingOpenEventId by rememberSaveable {
         mutableLongStateOf(
@@ -791,6 +1072,21 @@ private fun BoopApp() {
                 launchActivity?.intent?.getLongExtra("openEventId", -1L) ?: -1L
             },
         )
+    }
+    var pendingOpenNoteId by rememberSaveable {
+        mutableStateOf(MainActivity.pendingOpenNoteIdAction ?: launchActivity?.intent?.getStringExtra(BoopWidgetSupport.EXTRA_OPEN_NOTE_ID))
+    }
+    var pendingOpenHabitId by rememberSaveable {
+        mutableStateOf(MainActivity.pendingOpenHabitIdAction ?: launchActivity?.intent?.getStringExtra(BoopWidgetSupport.EXTRA_OPEN_HABIT_ID))
+    }
+    var pendingHabitCheckInOnly by rememberSaveable {
+        mutableStateOf(
+            MainActivity.pendingHabitCheckInOnly ||
+                launchActivity?.intent?.getBooleanExtra(BoopWidgetSupport.EXTRA_HABIT_CHECK_IN_ONLY, false) == true,
+        )
+    }
+    var pendingOpenTab by rememberSaveable {
+        mutableStateOf(MainActivity.pendingOpenTabAction ?: launchActivity?.intent?.getStringExtra(BoopWidgetSupport.EXTRA_OPEN_TAB))
     }
     var calendarCreateAtMillis by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
 
@@ -836,6 +1132,10 @@ private fun BoopApp() {
         if (MainActivity.pendingOpenEventIdAction > 0L) {
             pendingOpenEventId = MainActivity.pendingOpenEventIdAction
         }
+        MainActivity.pendingOpenNoteIdAction?.let { pendingOpenNoteId = it }
+        MainActivity.pendingOpenHabitIdAction?.let { pendingOpenHabitId = it }
+        pendingHabitCheckInOnly = MainActivity.pendingHabitCheckInOnly
+        MainActivity.pendingOpenTabAction?.let { pendingOpenTab = it }
     }
 
     LaunchedEffect(tasks, pendingOpenTaskId) {
@@ -843,6 +1143,32 @@ private fun BoopApp() {
         tasks.firstOrNull { it.id == targetId }?.let {
             openTaskSheet(it)
             pendingOpenTaskId = null
+        }
+    }
+    LaunchedEffect(notes, pendingOpenNoteId) {
+        val targetId = pendingOpenNoteId ?: return@LaunchedEffect
+        notes.firstOrNull { it.id == targetId }?.let {
+            openNoteSheet(it)
+            pendingOpenNoteId = null
+        }
+    }
+    LaunchedEffect(habits, pendingOpenHabitId, pendingHabitCheckInOnly) {
+        val targetId = pendingOpenHabitId ?: return@LaunchedEffect
+        habits.firstOrNull { it.id == targetId }?.let { habit ->
+            if (pendingHabitCheckInOnly) {
+                openHabitCheckInSheet(habit)
+            } else {
+                openHabitSheet(habit)
+            }
+            pendingOpenHabitId = null
+            pendingHabitCheckInOnly = false
+        }
+    }
+    LaunchedEffect(pendingOpenTab) {
+        val tabName = pendingOpenTab ?: return@LaunchedEffect
+        BoopTab.entries.firstOrNull { it.name == tabName }?.let { tab ->
+            selectTab(tab)
+            pendingOpenTab = null
         }
     }
     LaunchedEffect(pendingOpenEventId) {
@@ -918,30 +1244,36 @@ private fun BoopApp() {
             initialPage = selectedTab.coerceIn(0, (visibleTabs.size - 1).coerceAtLeast(0)),
             pageCount = { visibleTabs.size },
         )
-        val pagerScrollPosition = pagerState.currentPage + pagerState.currentPageOffsetFraction
         val currentTab = visibleTabs.getOrElse(selectedTab.coerceIn(0, visibleTabs.lastIndex)) { BoopTab.HOME }
+        var pagerSettledPage by remember { mutableIntStateOf(pagerState.currentPage) }
         LaunchedEffect(showHabitsPage, showWalletPage) {
             if (visibleTabs.none { it.name == selectedBoopTab }) {
                 selectedBoopTab = BoopTab.HOME.name
             }
         }
-        LaunchedEffect(pagerState.isScrollInProgress, pagerState.currentPage) {
-            if (!pagerState.isScrollInProgress) {
-                visibleTabs.getOrNull(pagerState.currentPage)?.let { tab ->
-                    if (tab.name != selectedBoopTab) selectedBoopTab = tab.name
+        LaunchedEffect(pagerState) {
+            snapshotFlow { pagerState.isScrollInProgress to pagerState.currentPage }
+                .collect { (scrolling, page) ->
+                    if (!scrolling && page != pagerSettledPage) {
+                        pagerSettledPage = page
+                        visibleTabs.getOrNull(page)?.let { tab ->
+                            if (tab.name != selectedBoopTab) selectedBoopTab = tab.name
+                        }
+                        createSheetOpen = false
+                    }
                 }
-                createSheetOpen = false
-            }
         }
         LaunchedEffect(selectedTab) {
             if (pagerState.currentPage != selectedTab) {
-                pagerState.animateScrollToPage(selectedTab)
+                pagerState.animateScrollToPage(
+                    page = selectedTab,
+                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+                )
             }
         }
         BackHandler {
             when {
                 settingsOpen -> settingsOpen = false
-                habitCheckInOpen -> habitCheckInOpen = false
                 itemSheet != null -> itemSheet = null
                 createSheetOpen -> createSheetOpen = false
                 dashboardSearchOpen -> dashboardSearchOpen = false
@@ -1000,16 +1332,9 @@ private fun BoopApp() {
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
-                        pageSpacing = 24.dp,
+                        pageSpacing = 0.dp,
                     ) { page ->
-                        val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
-                            .coerceIn(-1f, 1f)
-                        val pageAlpha = 1f - kotlin.math.abs(pageOffset) * 0.28f
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = pageAlpha },
-                        ) {
+                        Box(Modifier.fillMaxSize()) {
                         BoopPagerPage(
                             tab = visibleTabs[page],
                             visibleTabs = visibleTabs,
@@ -1019,10 +1344,7 @@ private fun BoopApp() {
                             accounts = accounts,
                             ledgerEntries = ledgerEntries,
                             calendarSyncRequest = calendarSyncRequest,
-                            onPersistHabit = { habit ->
-                                repository.saveHabit(habit)
-                                refresh()
-                            },
+                            onPersistHabit = { habit -> persistHabit(habit) },
                             onSelectTab = { tab -> selectTab(tab) },
                             onEditTask = { openTaskSheet(it) },
                             onEditEvent = { openEventSheetById(it) },
@@ -1054,10 +1376,7 @@ private fun BoopApp() {
                             },
                             onCalendarSelectedDayChanged = { dayMillis -> calendarCreateAtMillis = dayMillis },
                             onEditHabit = { openHabitSheet(it) },
-                            onOpenHabitCheckIn = {
-                                itemSheet = null
-                                habitCheckInOpen = true
-                            },
+                            onOpenHabitCheckIn = { openHabitCheckInSheet(it) },
                             onDeleteAccount = { accountId ->
                                 repository.deleteAccount(accountId)
                                 refresh()
@@ -1143,7 +1462,7 @@ private fun BoopApp() {
                 val isKeepEditor = sheet is ItemSheet.NoteSheet ||
                     sheet is ItemSheet.TaskSheet ||
                     sheet is ItemSheet.EventSheet ||
-                    sheet is ItemSheet.HabitSheet ||
+                    (sheet is ItemSheet.HabitSheet && !sheet.checkInOnly) ||
                     sheet is ItemSheet.AccountSheet
                 ModalBottomSheet(
                     onDismissRequest = { itemSheet = null },
@@ -1211,22 +1530,37 @@ private fun BoopApp() {
                                     itemSheet = null
                                 },
                             )
-                            is ItemSheet.HabitSheet -> HabitEditorSheet(
-                                initial = sheet,
-                                onDismiss = { itemSheet = null },
-                                onDelete = sheet.id?.let { id ->
-                                    {
-                                        repository.deleteHabit(id)
-                                        refresh()
-                                        itemSheet = null
+                            is ItemSheet.HabitSheet -> {
+                                if (sheet.checkInOnly) {
+                                    val habit = habits.firstOrNull { it.id == sheet.id }
+                                    if (habit != null) {
+                                        HabitCheckInOnlySheet(
+                                            habit = habit,
+                                            onPersist = { updated -> persistHabit(updated) },
+                                            onDismiss = { itemSheet = null },
+                                        )
+                                    } else {
+                                        LaunchedEffect(Unit) { itemSheet = null }
                                     }
-                                },
-                                onSave = { habit ->
-                                    repository.saveHabit(habit)
-                                    refresh()
-                                    itemSheet = null
-                                },
-                            )
+                                } else {
+                                    HabitEditorSheet(
+                                        initial = sheet,
+                                        onDismiss = { itemSheet = null },
+                                        onDelete = sheet.id?.let { id ->
+                                            {
+                                                HabitReminderScheduler.cancel(AppContextHolder.context, id)
+                                                repository.deleteHabit(id)
+                                                refresh()
+                                                itemSheet = null
+                                            }
+                                        },
+                                        onSave = { habit ->
+                                            persistHabit(habit)
+                                            itemSheet = null
+                                        },
+                                    )
+                                }
+                            }
                             is ItemSheet.EventSheet -> EventEditorSheet(
                                 initial = sheet,
                                 onDismiss = { itemSheet = null },
@@ -1267,29 +1601,6 @@ private fun BoopApp() {
                     }
                 }
             }
-            if (habitCheckInOpen) {
-                val habitSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-                ModalBottomSheet(
-                    onDismissRequest = { habitCheckInOpen = false },
-                    sheetState = habitSheetState,
-                    containerColor = darkSurface,
-                    dragHandle = { BottomSheetDefaults.DragHandle(color = palette.muted) },
-                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                ) {
-                    HabitTodayCheckInSheet(
-                        habits = habits,
-                        onPersist = { habit ->
-                            repository.saveHabit(habit)
-                            refresh()
-                        },
-                        onEditHabit = { habit ->
-                            habitCheckInOpen = false
-                            openHabitSheet(habit)
-                        },
-                        onDismiss = { habitCheckInOpen = false },
-                    )
-                }
-            }
 
         }
     }
@@ -1317,7 +1628,7 @@ private fun BoopPagerPage(
     onRestoreCompletedTask: (BoopTask) -> Unit,
     onCalendarSelectedDayChanged: (Long) -> Unit,
     onEditHabit: (BoopHabit) -> Unit,
-    onOpenHabitCheckIn: () -> Unit,
+    onOpenHabitCheckIn: (BoopHabit) -> Unit,
     onDeleteAccount: (String) -> Unit,
     onSaveLedgerEntry: (BoopLedgerEntry) -> Unit,
     onEditLedgerEntry: (BoopLedgerEntry) -> Unit,
@@ -1345,16 +1656,10 @@ private fun BoopPagerPage(
                 ledgerEntries = ledgerEntries,
                 onOpenTask = onEditTask,
                 onOpenNote = onEditNote,
-                onOpenHabit = onEditHabit,
-                onOpenHabitCheckIn = onOpenHabitCheckIn,
+                onOpenHabit = onOpenHabitCheckIn,
                 onSearchPickTask = { onSelectTab(BoopTab.REMINDERS); onEditTask(it) },
                 onSearchPickNote = { onSelectTab(BoopTab.NOTES); onEditNote(it) },
-                onSearchPickHabit = {
-                    if (visibleTabs.contains(BoopTab.HABITS)) {
-                        onSelectTab(BoopTab.HABITS)
-                    }
-                    onEditHabit(it)
-                },
+                onSearchPickHabit = { onOpenHabitCheckIn(it) },
                 onOpenSettings = onOpenSettings,
                 onToggleTheme = onToggleTheme,
                 darkTheme = darkTheme,
@@ -1491,64 +1796,81 @@ private fun SettingsScreen(
         Spacer(Modifier.height(20.dp))
         Text("Appearance", style = MaterialTheme.typography.titleMedium, color = palette.onBackground)
         Spacer(Modifier.height(8.dp))
-        ThemeMode.entries.forEach { mode ->
-            val selected = themeMode == mode
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-                    .clickable { onThemeModeChange(mode) },
-                shape = RoundedCornerShape(14.dp),
-                color = if (selected) palette.surface else palette.background,
-            ) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+        Text("Theme mode", style = MaterialTheme.typography.titleSmall, color = palette.muted)
+        Spacer(Modifier.height(6.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ThemeMode.entries.forEach { mode ->
+                val selected = themeMode == mode
+                Surface(
+                    onClick = { onThemeModeChange(mode) },
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (selected) palette.accent else palette.surface,
+                    border = BorderStroke(1.dp, if (selected) palette.accent else palette.surfaceBorder),
+                    modifier = Modifier.weight(1f),
                 ) {
-                    RadioButton(
-                        selected = selected,
-                        onClick = { onThemeModeChange(mode) },
-                        colors = RadioButtonDefaults.colors(
-                            selectedColor = palette.onBackground,
-                            unselectedColor = palette.muted,
-                        ),
+                    Text(
+                        mode.label,
+                        color = if (selected) palette.accentOn else palette.onBackground,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier
+                            .padding(vertical = 12.dp)
+                            .fillMaxWidth(),
+                        textAlign = TextAlign.Center,
                     )
-                    Column(Modifier.padding(start = 4.dp)) {
-                        Text(mode.label, color = palette.onBackground, style = MaterialTheme.typography.bodyMedium)
-                    }
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
         Text("Color palette", style = MaterialTheme.typography.titleSmall, color = palette.muted)
-        Spacer(Modifier.height(6.dp))
-        PaletteFamily.entries.forEach { family ->
-            val selected = paletteFamily == family
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-                    .clickable { onPaletteFamilyChange(family) },
-                shape = RoundedCornerShape(14.dp),
-                color = if (selected) palette.surface else palette.background,
-            ) {
+        Spacer(Modifier.height(8.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            PaletteFamily.entries.chunked(2).forEach { row ->
                 Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    RadioButton(
-                        selected = selected,
-                        onClick = { onPaletteFamilyChange(family) },
-                        colors = RadioButtonDefaults.colors(
-                            selectedColor = palette.onBackground,
-                            unselectedColor = palette.muted,
-                        ),
-                    )
-                    Text(family.label, color = palette.onBackground, style = MaterialTheme.typography.bodyMedium)
+                    row.forEach { family ->
+                        val selected = paletteFamily == family
+                        val swatch = palettePreviewColors(
+                            family,
+                            useDarkTheme = when (themeMode) {
+                                ThemeMode.DARK -> true
+                                ThemeMode.LIGHT -> false
+                                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                            },
+                        )
+                        Surface(
+                            onClick = { onPaletteFamilyChange(family) },
+                            shape = RoundedCornerShape(16.dp),
+                            color = palette.surface,
+                            border = BorderStroke(
+                                width = if (selected) 2.dp else 1.dp,
+                                color = if (selected) palette.accent else palette.surfaceBorder,
+                            ),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    swatch.forEach { c ->
+                                        Box(
+                                            Modifier
+                                                .size(18.dp)
+                                                .background(c, CircleShape),
+                                        )
+                                    }
+                                }
+                                Text(
+                                    family.label,
+                                    color = palette.onBackground,
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                            }
+                        }
+                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
         }
@@ -2459,24 +2781,8 @@ private fun habitStreakCount(habit: BoopHabit): Int {
     return streak
 }
 
-private fun parseHabitDayKeys(raw: String): Set<String> =
-    raw.split(',').map { it.trim() }.filter { it.length == 8 }.toSet()
-
 private fun serializeHabitDayKeys(keys: Set<String>): String =
     keys.sorted().joinToString(",")
-
-private fun parseHabitDayValues(raw: String): Map<String, Int> {
-    if (raw.isBlank()) return emptyMap()
-    return raw.split(',')
-        .mapNotNull { part ->
-            val p = part.split(':')
-            if (p.size != 2) return@mapNotNull null
-            val key = p[0].trim()
-            val value = p[1].trim().toIntOrNull() ?: return@mapNotNull null
-            if (key.length != 8) return@mapNotNull null
-            key to value.coerceAtLeast(0)
-        }.toMap()
-}
 
 private fun serializeHabitDayValues(values: Map<String, Int>): String =
     values.entries
@@ -2874,7 +3180,6 @@ private fun DashboardScreen(
     onOpenTask: (BoopTask) -> Unit,
     onOpenNote: (BoopNote) -> Unit,
     onOpenHabit: (BoopHabit) -> Unit,
-    onOpenHabitCheckIn: () -> Unit,
     onSearchPickTask: (BoopTask) -> Unit,
     onSearchPickNote: (BoopNote) -> Unit,
     onSearchPickHabit: (BoopHabit) -> Unit,
@@ -3120,33 +3425,35 @@ private fun DashboardScreen(
                         }
                     }
                 }
-                UnifiedFilterChips(
-                    chips = homeFilterChips,
-                    selected = homeFilter,
-                    onSelect = { homeFilter = it },
-                )
-                if (homeGridItems.isEmpty()) {
-                    Text("Nothing here yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        homeGridItems.chunked(2).forEach { rowItems ->
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(IntrinsicSize.Min),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                rowItems.forEach { (meta, onClick) ->
-                                    UnifiedTintCard(
-                                        type = meta.type,
-                                        title = meta.title,
-                                        meta = meta.meta,
-                                        body = meta.body,
-                                        onClick = onClick,
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight(),
-                                    )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    UnifiedFilterChips(
+                        chips = homeFilterChips,
+                        selected = homeFilter,
+                        onSelect = { homeFilter = it },
+                    )
+                    if (homeGridItems.isEmpty()) {
+                        Text("Nothing here yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            homeGridItems.chunked(2).forEach { rowItems ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Min),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    rowItems.forEach { (meta, onClick) ->
+                                        UnifiedTintCard(
+                                            type = meta.type,
+                                            title = meta.title,
+                                            meta = meta.meta,
+                                            body = meta.body,
+                                            onClick = onClick,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .fillMaxHeight(),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -4068,34 +4375,6 @@ private fun TaskListScreen(
                 }
             }
         }
-        if (completedTasks.isNotEmpty()) {
-            UnifiedSectionLabel("Completed", modifier = Modifier.padding(top = 8.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                completedTasks.take(6).chunked(2).forEach { rowTasks ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Min),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        rowTasks.forEach { task ->
-                            UnifiedTintCard(
-                                type = UnifiedItemType.REMINDER,
-                                title = task.title,
-                                meta = formatTaskReminderLine(task.reminderAt),
-                                linkedLabel = linkedNoteLabelForTask(task),
-                                checked = true,
-                                onCheckedChange = { onRestoreCompletedTask(task) },
-                                onDelete = { onArchiveTask(task) },
-                                onClick = { onOpenTask(task) },
-                                titleDecoration = TextDecoration.LineThrough,
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                            )
-                        }
-                    }
-                }
-            }
-        }
         Spacer(Modifier.height(72.dp))
     }
     if (showArchive) {
@@ -4845,6 +5124,7 @@ private fun NotesListScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HabitsListScreen(
     habits: List<BoopHabit>,
@@ -4853,6 +5133,7 @@ private fun HabitsListScreen(
 ) {
     val palette = LocalBoopPalette.current
     val epoch = LocalBoopDataEpoch.current
+    var showReminderMenu by rememberSaveable { mutableStateOf(false) }
     val sortedHabits = remember(epoch, habits) {
         habits.sortedWith(
             compareBy(
@@ -4867,7 +5148,17 @@ private fun HabitsListScreen(
             .padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        PageHeaderTile(title = "Habits")
+        PageHeaderTile(
+            title = "Habits",
+            actions = {
+                BoopHeaderIconButton(
+                    onClick = { showReminderMenu = true },
+                    icon = Icons.Outlined.Alarm,
+                    contentDescription = "Habit reminders",
+                    iconTint = if (habits.any { it.reminderEnabled }) palette.accent else palette.muted,
+                )
+            },
+        )
         LazyColumn(
             Modifier
                 .weight(1f)
@@ -4888,6 +5179,139 @@ private fun HabitsListScreen(
                 }
             }
         }
+    }
+    if (showReminderMenu) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showReminderMenu = false },
+            sheetState = sheetState,
+            containerColor = palette.surface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = palette.muted) },
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        ) {
+            HabitRemindersMenuSheet(
+                habits = sortedHabits,
+                onPersistHabit = onPersistHabit,
+                onDismiss = { showReminderMenu = false },
+            )
+        }
+    }
+}
+
+@Composable
+private fun HabitRemindersMenuSheet(
+    habits: List<BoopHabit>,
+    onPersistHabit: (BoopHabit) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = LocalBoopPalette.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.78f)
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Habit reminders", style = MaterialTheme.typography.titleLarge, color = palette.onBackground)
+        Text(
+            "Pick a daily check-in time for each habit. Notifications show the habit title with type Habit.",
+            color = palette.muted,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (habits.isEmpty()) {
+            Text("Add a habit first.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            LazyColumn(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(habits, key = { it.id }) { habit ->
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = palette.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    habit.title.ifBlank { "Untitled habit" },
+                                    color = palette.onBackground,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Switch(
+                                    checked = habit.reminderEnabled,
+                                    onCheckedChange = { enabled ->
+                                        onPersistHabit(habit.copy(reminderEnabled = enabled))
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = palette.accentOn,
+                                        checkedTrackColor = palette.accent,
+                                        uncheckedThumbColor = palette.muted,
+                                        uncheckedTrackColor = palette.surface,
+                                    ),
+                                )
+                            }
+                            if (habit.reminderEnabled) {
+                                val timeLabel = String.format(
+                                    Locale.getDefault(),
+                                    "%d:%02d %s",
+                                    ((habit.reminderHour + 11) % 12) + 1,
+                                    habit.reminderMinute,
+                                    if (habit.reminderHour < 12) "AM" else "PM",
+                                )
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("Daily at $timeLabel", color = palette.muted, style = MaterialTheme.typography.bodySmall)
+                                    Spacer(Modifier.weight(1f))
+                                    listOf(-60, -15, 15, 60).forEach { deltaMin ->
+                                        val label = when (deltaMin) {
+                                            -60 -> "-1h"
+                                            -15 -> "-15m"
+                                            15 -> "+15m"
+                                            else -> "+1h"
+                                        }
+                                        Surface(
+                                            onClick = {
+                                                val total = habit.reminderHour * 60 + habit.reminderMinute + deltaMin
+                                                val wrapped = ((total % (24 * 60)) + (24 * 60)) % (24 * 60)
+                                                onPersistHabit(
+                                                    habit.copy(
+                                                        reminderHour = wrapped / 60,
+                                                        reminderMinute = wrapped % 60,
+                                                    ),
+                                                )
+                                            },
+                                            shape = RoundedCornerShape(999.dp),
+                                            color = palette.surface,
+                                            border = BorderStroke(1.dp, palette.surfaceBorder),
+                                        ) {
+                                            Text(
+                                                label,
+                                                color = palette.onBackground,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        BoopWhiteButton("Done") { onDismiss() }
     }
 }
 
@@ -6309,52 +6733,35 @@ private fun HabitWeekStripCard(
 }
 
 @Composable
-private fun HabitTodayCheckInSheet(
-    habits: List<BoopHabit>,
+private fun HabitCheckInOnlySheet(
+    habit: BoopHabit,
     onPersist: (BoopHabit) -> Unit,
-    onEditHabit: (BoopHabit) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val palette = LocalBoopPalette.current
-    val scroll = rememberScrollState()
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.88f)
-            .verticalScroll(scroll)
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 28.dp),
-    ) {
+    Column(Modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
-                BoopSheetHeaderTitle("Habits week")
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Check-off habits toggle today; quantity habits let you add minutes/mL with +/-.",
-                    color = palette.muted,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+            BoopSheetHeaderTitle(habit.title.ifBlank { "Habit" })
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Outlined.Close, contentDescription = "Close", tint = palette.muted)
             }
         }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Check in for today",
+            color = palette.muted,
+            style = MaterialTheme.typography.bodyMedium,
+        )
         Spacer(Modifier.height(12.dp))
-        if (habits.isEmpty()) {
-            Text("No habits yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
-        } else {
-            habits.forEach { habit ->
-                key(habit.id, habit.dayKeys, habit.quantityDayValues) {
-                    HabitWeekStripCard(
-                        habit = habit,
-                        onPersist = onPersist,
-                        onOpenHabit = onEditHabit,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
-        }
+        HabitWeekStripCard(
+            habit = habit,
+            onPersist = onPersist,
+            onOpenHabit = {},
+        )
     }
 }
 
@@ -7418,6 +7825,9 @@ private fun HabitEditorSheet(
             quantityUnit = quantityUnit.trim(),
             quantityDailyTarget = (quantityTarget.toIntOrNull() ?: initial.quantityDailyTarget).coerceAtLeast(1),
             quantityDayValues = initial.quantityDayValues,
+            reminderEnabled = initial.reminderEnabled,
+            reminderHour = initial.reminderHour,
+            reminderMinute = initial.reminderMinute,
         )
     }
     DisposableEffect(sheetKey) {
@@ -7834,10 +8244,9 @@ object ReminderScheduler {
     }
 
     fun schedule(context: Context, task: BoopTask) {
-        val notePreview = linkedNotePreviewForTask(task)
         val intent = Intent(context, TaskReminderReceiver::class.java).apply {
             putExtra("title", task.title)
-            if (notePreview.isNotBlank()) putExtra("subtitle", notePreview)
+            putExtra("itemType", "Task")
             putExtra("id", task.id.hashCode())
             putExtra("taskId", task.id)
             putExtra("eventId", -1L)
@@ -7919,6 +8328,7 @@ object EventReminderScheduler {
             val requestCode = ((eventId % Int.MAX_VALUE) + (idx + 1) * 13_337).toInt()
             val intent = Intent(context, TaskReminderReceiver::class.java).apply {
                 putExtra("title", title)
+                putExtra("itemType", "Event")
                 putExtra("id", requestCode)
                 putExtra("taskId", "")
                 putExtra("eventId", eventId)
@@ -7952,7 +8362,7 @@ object EventReminderScheduler {
             val source = if (event.calendarDisplayName.isNotBlank()) event.calendarDisplayName else "Calendar"
             val intent = Intent(context, TaskReminderReceiver::class.java).apply {
                 putExtra("title", event.title)
-                putExtra("subtitle", "From $source")
+                putExtra("itemType", "Event")
                 putExtra("id", requestCode)
                 putExtra("taskId", "")
                 putExtra("eventId", event.id)
@@ -7991,6 +8401,7 @@ class TaskReminderReceiver : BroadcastReceiver() {
         val id = intent.getIntExtra("id", 1)
         val taskId = intent.getStringExtra("taskId").orEmpty()
         val subtitle = intent.getStringExtra("subtitle").orEmpty()
+        val itemType = intent.getStringExtra("itemType").orEmpty()
         val eventId = intent.getLongExtra("eventId", -1L)
         if (taskId.isNotBlank()) {
             val activeTask = runCatching {
@@ -8001,7 +8412,15 @@ class TaskReminderReceiver : BroadcastReceiver() {
                 return
             }
         }
-        ReminderNotifier.show(context, id, title, taskId, subtitle, eventId)
+        ReminderNotifier.show(
+            context = context,
+            id = id,
+            title = title,
+            taskId = taskId,
+            subtitle = subtitle,
+            eventId = eventId,
+            itemType = itemType.ifBlank { if (eventId > 0L) "Event" else "Task" },
+        )
     }
 }
 
@@ -8019,7 +8438,16 @@ object ReminderNotifier {
         LocalStore.init(context)
     }
 
-    fun show(context: Context, id: Int, title: String, taskId: String, subtitle: String = "", eventId: Long = -1L) {
+    fun show(
+        context: Context,
+        id: Int,
+        title: String,
+        taskId: String,
+        subtitle: String = "",
+        eventId: Long = -1L,
+        habitId: String = "",
+        itemType: String = "",
+    ) {
         val completeIntent = Intent(context, TaskReminderReceiver::class.java).apply {
             action = ACTION_COMPLETE_TASK
             putExtra("id", id)
@@ -8031,16 +8459,28 @@ object ReminderNotifier {
             completeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val typeLabel = itemType.ifBlank {
+            when {
+                habitId.isNotBlank() -> "Habit"
+                eventId > 0L -> "Event"
+                taskId.isNotBlank() -> "Task"
+                else -> "Reminder"
+            }
+        }
         val builder = androidx.core.app.NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification_minimal)
             .setContentTitle(title.ifBlank { "Reminder" })
-            .setContentText(subtitle.ifBlank { "Tap to open" })
+            .setContentText(typeLabel)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
         val launchIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            if (taskId.isNotBlank()) putExtra("openTaskId", taskId)
+            if (taskId.isNotBlank()) putExtra(BoopWidgetSupport.EXTRA_OPEN_TASK_ID, taskId)
             if (eventId > 0L) putExtra("openEventId", eventId)
+            if (habitId.isNotBlank()) {
+                putExtra(BoopWidgetSupport.EXTRA_OPEN_HABIT_ID, habitId)
+                putExtra(BoopWidgetSupport.EXTRA_HABIT_CHECK_IN_ONLY, true)
+            }
         }
         val launchPending = PendingIntent.getActivity(
             context,
@@ -8050,9 +8490,9 @@ object ReminderNotifier {
         )
         builder.setContentIntent(launchPending)
         builder.setStyle(
-            androidx.core.app.NotificationCompat.BigTextStyle().bigText(
-                subtitle.ifBlank { title },
-            ),
+            androidx.core.app.NotificationCompat.BigTextStyle()
+                .setBigContentTitle(title.ifBlank { "Reminder" })
+                .bigText(typeLabel),
         )
         if (taskId.isNotBlank()) {
             builder.addAction(0, "Mark as completed", completePending)
