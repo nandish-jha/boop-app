@@ -29,6 +29,6 @@ class BoopTasksWidget : AppWidgetProvider() {
         }
         val clickIntent = firstTask?.let { BoopWidgetSupport.openTaskIntent(context, it.id) }
             ?: BoopWidgetSupport.openTabIntent(context, "REMINDERS")
-        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, clickIntent)
+        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, clickIntent, accentLabel = "TASK")
     }
 }

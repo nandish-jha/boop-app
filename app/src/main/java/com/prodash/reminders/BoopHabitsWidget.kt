@@ -30,6 +30,6 @@ class BoopHabitsWidget : AppWidgetProvider() {
             ?: if (habits.isEmpty()) "Tap to add a habit" else "All habits checked in"
         val clickIntent = pending.firstOrNull()?.let { BoopWidgetSupport.openHabitCheckInIntent(context, it.id) }
             ?: BoopWidgetSupport.openTabIntent(context, "HABITS")
-        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, clickIntent)
+        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, clickIntent, accentLabel = "HABIT")
     }
 }

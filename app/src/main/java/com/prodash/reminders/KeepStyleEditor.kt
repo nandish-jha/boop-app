@@ -199,6 +199,8 @@ fun KeepOutlinedBodyField(
     placeholder: String = "Write something...",
     modifier: Modifier = Modifier,
     minLines: Int = 5,
+    visualTransformation: androidx.compose.ui.text.input.VisualTransformation =
+        androidx.compose.ui.text.input.VisualTransformation.None,
 ) {
     OutlinedTextField(
         value = value,
@@ -211,6 +213,7 @@ fun KeepOutlinedBodyField(
         keyboardOptions = KeepSentenceKeyboard,
         shape = RoundedCornerShape(14.dp),
         colors = KeepOutlinedFieldColors(),
+        visualTransformation = visualTransformation,
     )
 }
 

@@ -20,11 +20,18 @@ object BoopWidgetSupport {
         title: String,
         subtitle: String,
         clickIntent: PendingIntent?,
+        accentLabel: String = "BOOP",
     ) {
+        val colors = BoopThemeColors.resolve(context)
         appWidgetIds.forEach { id ->
             val views = RemoteViews(context.packageName, R.layout.widget_tasks).apply {
+                setTextViewText(R.id.widget_accent_label, accentLabel)
                 setTextViewText(R.id.widget_title, title)
                 setTextViewText(R.id.widget_subtitle, subtitle)
+                setTextColor(R.id.widget_accent_label, colors.accent)
+                setTextColor(R.id.widget_title, colors.title)
+                setTextColor(R.id.widget_subtitle, colors.subtitle)
+                setInt(R.id.widget_root, "setBackgroundColor", colors.surface)
                 if (clickIntent != null) {
                     setOnClickPendingIntent(R.id.widget_root, clickIntent)
                 }

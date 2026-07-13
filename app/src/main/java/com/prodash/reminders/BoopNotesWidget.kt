@@ -18,6 +18,6 @@ class BoopNotesWidget : AppWidgetProvider() {
         } ?: "Tap to add a note"
         val clickIntent = latestNote?.let { BoopWidgetSupport.openNoteIntent(context, it.id) }
             ?: BoopWidgetSupport.openTabIntent(context, "NOTES")
-        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, clickIntent)
+        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, clickIntent, accentLabel = "NOTE")
     }
 }

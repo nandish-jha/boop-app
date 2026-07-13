@@ -19,6 +19,6 @@ class BoopUpNextWidget : AppWidgetProvider() {
         } ?: "You're all caught up"
         val clickIntent = nextTask?.let { BoopWidgetSupport.openTaskIntent(context, it.id, requestCode = 7101) }
             ?: BoopWidgetSupport.openTabIntent(context, "REMINDERS", requestCode = 7102)
-        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, clickIntent)
+        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, clickIntent, accentLabel = "UP NEXT")
     }
 }

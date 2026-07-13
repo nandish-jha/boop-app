@@ -223,6 +223,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -1131,6 +1132,7 @@ private fun BoopApp() {
             ThemeMode.SYSTEM -> if (useDarkTheme) ThemeMode.LIGHT else ThemeMode.DARK
         }
         LocalStore.saveThemeMode(themeMode)
+        BoopThemeColors.refreshAllWidgets(AppContextHolder.context)
     }
 
     val openTargetNonce = MainActivity.openTargetNonce
@@ -1252,17 +1254,16 @@ private fun BoopApp() {
             pageCount = { visibleTabs.size },
         )
         val currentTab = visibleTabs.getOrElse(selectedTab.coerceIn(0, visibleTabs.lastIndex)) { BoopTab.HOME }
-        var pagerSettledPage by remember { mutableIntStateOf(pagerState.currentPage) }
+        var pagerProgrammatic by remember { mutableStateOf(false) }
         LaunchedEffect(showHabitsPage, showWalletPage) {
             if (visibleTabs.none { it.name == selectedBoopTab }) {
                 selectedBoopTab = BoopTab.HOME.name
             }
         }
         LaunchedEffect(pagerState) {
-            snapshotFlow { pagerState.isScrollInProgress to pagerState.currentPage }
+            snapshotFlow { pagerState.isScrollInProgress to pagerState.settledPage }
                 .collect { (scrolling, page) ->
-                    if (!scrolling && page != pagerSettledPage) {
-                        pagerSettledPage = page
+                    if (!scrolling && !pagerProgrammatic) {
                         visibleTabs.getOrNull(page)?.let { tab ->
                             if (tab.name != selectedBoopTab) selectedBoopTab = tab.name
                         }
@@ -1271,11 +1272,16 @@ private fun BoopApp() {
                 }
         }
         LaunchedEffect(selectedTab) {
-            if (pagerState.currentPage != selectedTab) {
-                pagerState.animateScrollToPage(
-                    page = selectedTab,
-                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-                )
+            if (pagerState.settledPage != selectedTab && pagerState.currentPage != selectedTab) {
+                pagerProgrammatic = true
+                try {
+                    pagerState.animateScrollToPage(
+                        page = selectedTab,
+                        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                    )
+                } finally {
+                    pagerProgrammatic = false
+                }
             }
         }
         BackHandler {
@@ -1286,7 +1292,6 @@ private fun BoopApp() {
                 dashboardSearchOpen -> dashboardSearchOpen = false
                 selectedTab != 0 -> {
                     selectTab(BoopTab.HOME)
-                    scope.launch { pagerState.animateScrollToPage(0) }
                 }
                 else -> launchActivity?.finish()
             }
@@ -1338,10 +1343,18 @@ private fun BoopApp() {
                 ) {
                     HorizontalPager(
                         state = pagerState,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clipToBounds(),
                         pageSpacing = 0.dp,
+                        beyondViewportPageCount = 0,
+                        key = { page -> visibleTabs.getOrNull(page)?.name ?: page },
                     ) { page ->
-                        Box(Modifier.fillMaxSize()) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(palette.phoneBg),
+                        ) {
                         BoopPagerPage(
                             tab = visibleTabs[page],
                             visibleTabs = visibleTabs,
@@ -1434,11 +1447,13 @@ private fun BoopApp() {
                             onThemeModeChange = { mode ->
                                 themeMode = mode
                                 LocalStore.saveThemeMode(mode)
+                                BoopThemeColors.refreshAllWidgets(AppContextHolder.context)
                             },
                             paletteFamily = paletteFamily,
                             onPaletteFamilyChange = { family ->
                                 paletteFamily = family
                                 LocalStore.savePaletteFamily(family)
+                                BoopThemeColors.refreshAllWidgets(AppContextHolder.context)
                             },
                             showHabitsPage = showHabitsPage,
                             onShowHabitsPageChange = { enabled ->
@@ -7603,6 +7618,7 @@ private fun NoteEditorSheet(
                     onValueChange = { bodyField = it },
                     placeholder = "Write something...",
                     minLines = 6,
+                    visualTransformation = NoteMarkupVisualTransformation,
                 )
                 Spacer(Modifier.height(6.dp))
                 Row(

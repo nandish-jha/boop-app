@@ -32,6 +32,6 @@ class BoopWalletWidget : AppWidgetProvider() {
             "${accounts.size} account${if (accounts.size == 1) "" else "s"} · net balance"
         }
         val clickIntent = BoopWidgetSupport.openTabIntent(context, "WALLET", requestCode = 7201)
-        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, clickIntent)
+        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, clickIntent, accentLabel = "WALLET")
     }
 }

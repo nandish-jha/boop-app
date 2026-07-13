@@ -25,7 +25,7 @@ class BoopOverdueWidget : AppWidgetProvider() {
         } ?: "You're caught up"
         val click = first?.let { BoopWidgetSupport.openTaskIntent(context, it.id, requestCode = 7301) }
             ?: BoopWidgetSupport.openTabIntent(context, "REMINDERS", requestCode = 7302)
-        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, click)
+        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, click, accentLabel = "OVERDUE")
     }
 }
 
@@ -40,7 +40,7 @@ class BoopStreakWidget : AppWidgetProvider() {
             ?: "Add a habit to start"
         val click = best?.let { BoopWidgetSupport.openHabitCheckInIntent(context, it.id, requestCode = 7401) }
             ?: BoopWidgetSupport.openTabIntent(context, "HABITS", requestCode = 7402)
-        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, click)
+        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, click, accentLabel = "STREAK")
     }
 }
 
@@ -68,7 +68,7 @@ class BoopTodaySummaryWidget : AppWidgetProvider() {
         val title = "Today"
         val subtitle = "$tasksDue task${if (tasksDue == 1) "" else "s"} · $habitsLeft habit${if (habitsLeft == 1) "" else "s"} left"
         val click = BoopWidgetSupport.openTabIntent(context, "HOME", requestCode = 7501)
-        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, click)
+        BoopWidgetSupport.updateWidget(context, appWidgetManager, appWidgetIds, title, subtitle, click, accentLabel = "TODAY")
     }
 }
 

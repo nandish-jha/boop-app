@@ -266,3 +266,162 @@ private fun AnnotatedString.Builder.appendParsedMarkup(input: String) {
         }
     }
 }
+
+/**
+ * Hides markdown markers in the note editor while showing real bold/italic/etc.
+ * Markers remain in the underlying stored string.
+ */
+object NoteMarkupVisualTransformation : androidx.compose.ui.text.input.VisualTransformation {
+    override fun filter(text: AnnotatedString): androidx.compose.ui.text.input.TransformedText {
+        val result = buildEditorMarkupTransform(text.text)
+        return androidx.compose.ui.text.input.TransformedText(
+            text = result.annotated,
+            offsetMapping = result.offsetMapping,
+        )
+    }
+}
+
+private data class MarkupTransform(
+    val annotated: AnnotatedString,
+    val offsetMapping: androidx.compose.ui.text.input.OffsetMapping,
+)
+
+private fun buildEditorMarkupTransform(source: String): MarkupTransform {
+    val originalToTransformed = IntArray(source.length + 1)
+    val transformedToOriginal = mutableListOf<Int>()
+    val builder = AnnotatedString.Builder()
+
+    fun emitChar(originalIndex: Int, char: Char, style: SpanStyle? = null) {
+        originalToTransformed[originalIndex] = builder.length
+        if (style != null) {
+            val start = builder.length
+            builder.append(char)
+            builder.addStyle(style, start, builder.length)
+        } else {
+            builder.append(char)
+        }
+        transformedToOriginal.add(originalIndex)
+    }
+
+    fun skipMarker(originalIndex: Int) {
+        originalToTransformed[originalIndex] = builder.length
+    }
+
+    fun process(start: Int, end: Int, inherited: SpanStyle?) {
+        var i = start
+        while (i < end) {
+            val remaining = source.substring(i, end)
+            when {
+                remaining.startsWith("**") -> {
+                    val closeRel = remaining.indexOf("**", 2)
+                    if (closeRel > 1) {
+                        val contentStart = i + 2
+                        val contentEnd = i + closeRel
+                        skipMarker(i)
+                        skipMarker(i + 1)
+                        val bold = SpanStyle(fontWeight = FontWeight.Bold).merge(inherited)
+                        process(contentStart, contentEnd, bold)
+                        skipMarker(contentEnd)
+                        skipMarker(contentEnd + 1)
+                        i = contentEnd + 2
+                    } else {
+                        emitChar(i, source[i], inherited)
+                        i++
+                    }
+                }
+                remaining.startsWith("~~") -> {
+                    val closeRel = remaining.indexOf("~~", 2)
+                    if (closeRel > 1) {
+                        val contentStart = i + 2
+                        val contentEnd = i + closeRel
+                        skipMarker(i); skipMarker(i + 1)
+                        val style = SpanStyle(textDecoration = TextDecoration.LineThrough).merge(inherited)
+                        process(contentStart, contentEnd, style)
+                        skipMarker(contentEnd); skipMarker(contentEnd + 1)
+                        i = contentEnd + 2
+                    } else {
+                        emitChar(i, source[i], inherited)
+                        i++
+                    }
+                }
+                remaining.startsWith("__") -> {
+                    val closeRel = remaining.indexOf("__", 2)
+                    if (closeRel > 1) {
+                        val contentStart = i + 2
+                        val contentEnd = i + closeRel
+                        skipMarker(i); skipMarker(i + 1)
+                        val style = SpanStyle(textDecoration = TextDecoration.Underline).merge(inherited)
+                        process(contentStart, contentEnd, style)
+                        skipMarker(contentEnd); skipMarker(contentEnd + 1)
+                        i = contentEnd + 2
+                    } else {
+                        emitChar(i, source[i], inherited)
+                        i++
+                    }
+                }
+                remaining.startsWith("*") && !remaining.startsWith("**") -> {
+                    val closeRel = remaining.indexOf('*', 1)
+                    if (closeRel > 0 && (closeRel + 1 >= remaining.length || remaining[closeRel + 1] != '*')) {
+                        val contentStart = i + 1
+                        val contentEnd = i + closeRel
+                        skipMarker(i)
+                        val style = SpanStyle(fontStyle = FontStyle.Italic).merge(inherited)
+                        process(contentStart, contentEnd, style)
+                        skipMarker(contentEnd)
+                        i = contentEnd + 1
+                    } else {
+                        emitChar(i, source[i], inherited)
+                        i++
+                    }
+                }
+                remaining.startsWith("# ") && (i == 0 || source.getOrNull(i - 1) == '\n') -> {
+                    val lineEndRel = remaining.indexOf('\n').let { if (it < 0) remaining.length else it }
+                    skipMarker(i); skipMarker(i + 1)
+                    val style = SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = 18.sp).merge(inherited)
+                    process(i + 2, i + lineEndRel, style)
+                    i = i + lineEndRel
+                }
+                else -> {
+                    emitChar(i, source[i], inherited)
+                    i++
+                }
+            }
+        }
+    }
+
+    process(0, source.length, null)
+    originalToTransformed[source.length] = builder.length
+    transformedToOriginal.add(source.length)
+
+    val transformedLen = builder.length
+    val mapping = object : androidx.compose.ui.text.input.OffsetMapping {
+        override fun originalToTransformed(offset: Int): Int {
+            val o = offset.coerceIn(0, source.length)
+            return originalToTransformed[o].coerceIn(0, transformedLen)
+        }
+
+        override fun transformedToOriginal(offset: Int): Int {
+            val t = offset.coerceIn(0, transformedToOriginal.lastIndex)
+            return transformedToOriginal[t].coerceIn(0, source.length)
+        }
+    }
+    return MarkupTransform(builder.toAnnotatedString(), mapping)
+}
+
+private fun SpanStyle.merge(other: SpanStyle?): SpanStyle {
+    if (other == null) return this
+    val thisDeco = textDecoration
+    val otherDeco = other.textDecoration
+    val mergedDeco = when {
+        thisDeco != null && otherDeco != null -> thisDeco + otherDeco
+        thisDeco != null -> thisDeco
+        else -> otherDeco
+    }
+    return SpanStyle(
+        color = if (color != androidx.compose.ui.graphics.Color.Unspecified) color else other.color,
+        fontSize = if (fontSize != androidx.compose.ui.unit.TextUnit.Unspecified) fontSize else other.fontSize,
+        fontWeight = fontWeight ?: other.fontWeight,
+        fontStyle = fontStyle ?: other.fontStyle,
+        textDecoration = mergedDeco,
+    )
+}
