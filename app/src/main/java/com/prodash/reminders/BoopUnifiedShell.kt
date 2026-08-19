@@ -11,12 +11,13 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,7 +27,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -106,16 +106,16 @@ fun UnifiedBottomNav(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
-            color = palette.topbarBg,
-            border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.14f)),
-            shadowElevation = 6.dp,
+            shape = RoundedCornerShape(28.dp),
+            color = palette.surfaceElevated.copy(alpha = 0.94f),
+            tonalElevation = 3.dp,
+            shadowElevation = 2.dp,
         ) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .height(64.dp)
-                    .padding(horizontal = 6.dp),
+                    .height(68.dp)
+                    .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 leftTabs.forEachIndexed { i, tab ->
@@ -140,7 +140,7 @@ private fun UnifiedNavIcon(
 ) {
     val palette = LocalBoopPalette.current
     val iconScale by animateFloatAsState(
-        targetValue = if (selected) 1.15f else 1f,
+        targetValue = if (selected) 1.08f else 1f,
         animationSpec = spring(stiffness = 420f, dampingRatio = 0.72f),
         label = "nav_icon_scale",
     )
@@ -150,17 +150,30 @@ private fun UnifiedNavIcon(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            tab.icon,
-            contentDescription = tab.label,
-            tint = if (selected) palette.accent else palette.navUnselected.copy(alpha = 0.55f),
+        Box(
+            contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(27.dp)
-                .graphicsLayer {
-                    scaleX = iconScale
-                    scaleY = iconScale
-                },
-        )
+                .size(width = 56.dp, height = 36.dp)
+                .then(
+                    if (selected) {
+                        Modifier.background(palette.navPill, RoundedCornerShape(18.dp))
+                    } else {
+                        Modifier
+                    },
+                ),
+        ) {
+            Icon(
+                tab.icon,
+                contentDescription = tab.label,
+                tint = if (selected) palette.navSelected else palette.navUnselected.copy(alpha = 0.65f),
+                modifier = Modifier
+                    .size(24.dp)
+                    .graphicsLayer {
+                        scaleX = iconScale
+                        scaleY = iconScale
+                    },
+            )
+        }
     }
 }
 
@@ -180,17 +193,16 @@ private fun UnifiedNavAddButton(onClick: () -> Unit) {
         label = "add_rotation",
     )
     Box(
-        Modifier.padding(horizontal = 10.dp),
+        Modifier.padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Surface(
             onClick = onClick,
-            shape = RoundedCornerShape(16.dp),
-            color = palette.onBackground,
-            border = BorderStroke(1.5.dp, palette.accent.copy(alpha = 0.55f)),
-            shadowElevation = 6.dp,
+            shape = CircleShape,
+            color = palette.accent,
+            shadowElevation = 4.dp,
             modifier = Modifier
-                .size(50.dp)
+                .size(52.dp)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -201,7 +213,7 @@ private fun UnifiedNavAddButton(onClick: () -> Unit) {
                 Icon(
                     Icons.Outlined.Add,
                     contentDescription = "Add",
-                    tint = palette.background,
+                    tint = palette.accentOn,
                     modifier = Modifier
                         .size(26.dp)
                         .graphicsLayer { rotationZ = rotation },
@@ -241,9 +253,9 @@ fun UnifiedCreateSheet(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth(),
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                 color = palette.sheetBg,
-                shadowElevation = 12.dp,
+                shadowElevation = 8.dp,
             ) {
                 Column(
                     Modifier
@@ -255,7 +267,7 @@ fun UnifiedCreateSheet(
                         "Create",
                         color = palette.onBackground,
                         style = MaterialTheme.typography.titleMedium.copy(
-                            fontFamily = FontFamily.Serif,
+                            fontFamily = BoopSansFamily,
                             fontWeight = FontWeight.SemiBold,
                         ),
                     )
@@ -330,6 +342,7 @@ fun UnifiedSectionLabel(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun UnifiedFilterChips(
     chips: List<Pair<String, String>>,
     selected: String,
@@ -337,23 +350,22 @@ fun UnifiedFilterChips(
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalBoopPalette.current
-    Row(
-        modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         chips.forEach { (id, label) ->
             val active = selected == id
             Surface(
                 onClick = { onSelect(id) },
                 shape = RoundedCornerShape(999.dp),
-                color = if (active) palette.chipBg else palette.surface,
+                color = if (active) palette.accent else palette.surface,
                 border = BorderStroke(1.dp, if (active) palette.accent else palette.surfaceBorder),
             ) {
                 Text(
                     label,
-                    color = palette.onBackground,
+                    color = if (active) palette.accentOn else palette.onBackground,
                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
                     modifier = Modifier.padding(horizontal = 13.dp, vertical = 4.dp),
                 )

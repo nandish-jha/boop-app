@@ -116,6 +116,7 @@ fun KeepChecklistEditor(
     items: List<ChecklistItem>,
     onChange: (List<ChecklistItem>) -> Unit,
     modifier: Modifier = Modifier,
+    editing: Boolean = true,
 ) {
     val palette = LocalBoopPalette.current
     androidx.compose.foundation.layout.Column(
@@ -133,7 +134,9 @@ fun KeepChecklistEditor(
                 ) {
                     Surface(
                         onClick = {
-                            onChange(items.map { if (it.id == item.id) it.copy(done = !it.done) else it })
+                            if (editing) {
+                                onChange(items.map { if (it.id == item.id) it.copy(done = !it.done) else it })
+                            }
                         },
                         shape = androidx.compose.foundation.shape.CircleShape,
                         color = if (item.done) palette.accent else Color.Transparent,
@@ -151,6 +154,7 @@ fun KeepChecklistEditor(
                         onValueChange = { next ->
                             onChange(items.map { if (it.id == item.id) it.copy(text = next) else it })
                         },
+                        enabled = editing,
                         modifier = Modifier.weight(1f),
                         textStyle = TextStyle(
                             fontFamily = BoopSansFamily,
@@ -168,29 +172,33 @@ fun KeepChecklistEditor(
                             inner()
                         },
                     )
-                    KeepToolbarIconButton(
-                        onClick = { onChange(items.filterNot { it.id == item.id }) },
-                        icon = Icons.Outlined.Close,
-                        contentDescription = "Remove item",
-                        tint = palette.muted,
-                    )
+                    if (editing) {
+                        KeepToolbarIconButton(
+                            onClick = { onChange(items.filterNot { it.id == item.id }) },
+                            icon = Icons.Outlined.Close,
+                            contentDescription = "Remove item",
+                            tint = palette.muted,
+                        )
+                    }
                 }
             }
         }
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            KeepToolbarIconButton(
-                onClick = { onChange(items + ChecklistItem(text = "")) },
-                icon = Icons.Outlined.Add,
-                contentDescription = "Add list item",
-                tint = palette.muted,
-            )
-            Text("Add item", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
+        if (editing) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                KeepToolbarIconButton(
+                    onClick = { onChange(items + ChecklistItem(text = "")) },
+                    icon = Icons.Outlined.Add,
+                    contentDescription = "Add list item",
+                    tint = palette.muted,
+                )
+                Text("Add item", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
 }

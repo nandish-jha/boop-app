@@ -2,6 +2,7 @@ package com.prodash.reminders
 
 import android.content.Context
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONArray
 import org.json.JSONObject
@@ -12,10 +13,12 @@ object BoopSyncState {
     var lastSyncError: String? = null
     var lastSyncOk: Boolean = false
     var signedInUid: String? = null
+    var signedInEmail: String? = null
+    var isGoogleLinked: Boolean = false
 }
 
 enum class PaletteFamily(val storageKey: String, val label: String) {
-    AMOLED("amoled", "AMOLED"),
+    AMOLED("amoled", "Material You"),
     TERRACOTTA("terracotta", "Terracotta"),
     ROSE("rose", "Rose"),
     SLATE("slate", "Slate"),
@@ -149,16 +152,31 @@ class BoopRepository(private val store: LocalStore) {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
 
-    fun currentUserId(): String? = auth.currentUser?.uid?.also { BoopSyncState.signedInUid = it }
+    fun currentUserId(): String? = auth.currentUser?.uid?.also { refreshAuthMeta() }
+
+    fun refreshAuthMeta() {
+        val user = auth.currentUser
+        BoopSyncState.signedInUid = user?.uid
+        BoopSyncState.signedInEmail = user?.email ?: user?.providerData
+            ?.firstOrNull { it.providerId == GoogleAuthProvider.PROVIDER_ID }
+            ?.email
+        BoopSyncState.isGoogleLinked = user?.providerData
+            ?.any { it.providerId == GoogleAuthProvider.PROVIDER_ID } == true
+    }
 
     private fun friendlyAuthError(error: Exception): String {
         val raw = error.message.orEmpty()
         return when {
             raw.contains("ADMIN_RESTRICTED", ignoreCase = true) ||
-                raw.contains("operation is not allowed", ignoreCase = true) ->
-                "Anonymous sign-in is disabled in Firebase. Local data still works."
+                raw.contains("operation is not allowed", ignoreCase = true) ||
+                raw.contains("CONFIGURATION_NOT_FOUND", ignoreCase = true) ->
+                "Anonymous sign-in is turned off in Firebase. Use Sign in with Google."
             raw.contains("network", ignoreCase = true) ->
                 "Network error — check your connection"
+            raw.contains("credential-already-in-use", ignoreCase = true) ->
+                "This Google account is already used on another Boop profile"
+            raw.contains("provider-already-linked", ignoreCase = true) ->
+                "Google account already linked"
             else -> raw.ifBlank { "Sign-in failed" }
         }
     }
@@ -174,109 +192,256 @@ class BoopRepository(private val store: LocalStore) {
         }
     }
 
-    private fun jsonArrayLength(raw: String): Int =
-        runCatching { JSONArray(raw).length() }.getOrDefault(0)
+    private fun parseIdArray(raw: String): JSONArray =
+        runCatching { JSONArray(raw) }.getOrElse { JSONArray() }
 
-    /** Only apply remote data when local store for that key is empty — avoids wiping local tasks. */
-    private fun mergeRemoteField(key: String, remoteValue: String?) {
-        if (remoteValue.isNullOrBlank()) return
-        val localRaw = store.read(key)
-        val localEmpty = jsonArrayLength(localRaw) == 0 || localRaw == "[]"
-        if (localEmpty) {
-            store.save(key, remoteValue)
+    private fun mergeJsonArraysById(
+        localRaw: String,
+        remoteRaw: String?,
+        preferNewerKey: String? = null,
+    ): String {
+        if (remoteRaw.isNullOrBlank()) return localRaw
+        val byId = linkedMapOf<String, JSONObject>()
+        fun ingest(raw: String, preferIncoming: Boolean) {
+            val arr = parseIdArray(raw)
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val id = obj.optString("id")
+                if (id.isBlank()) continue
+                val existing = byId[id]
+                if (existing == null) {
+                    byId[id] = obj
+                    continue
+                }
+                if (!preferIncoming) continue
+                if (preferNewerKey != null) {
+                    val incomingTs = obj.optLong(preferNewerKey, 0L)
+                    val existingTs = existing.optLong(preferNewerKey, 0L)
+                    if (incomingTs >= existingTs) byId[id] = obj
+                } else {
+                    byId[id] = obj
+                }
+            }
         }
+        // Remote first, then local wins on conflicts (device is source of truth when both exist).
+        ingest(remoteRaw, preferIncoming = true)
+        ingest(localRaw, preferIncoming = true)
+        val out = JSONArray()
+        byId.values.forEach { out.put(it) }
+        return out.toString()
+    }
+
+    private fun mergeTasksJson(localRaw: String, remoteRaw: String?): String {
+        if (remoteRaw.isNullOrBlank()) return localRaw
+        val byId = linkedMapOf<String, JSONObject>()
+        fun ingest(raw: String) {
+            val arr = parseIdArray(raw)
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val id = obj.optString("id")
+                if (id.isBlank()) continue
+                val existing = byId[id]
+                if (existing == null) {
+                    byId[id] = obj
+                    continue
+                }
+                val incomingDone = obj.optBoolean("done", false)
+                val existingDone = existing.optBoolean("done", false)
+                when {
+                    !incomingDone && existingDone -> byId[id] = obj
+                    incomingDone && !existingDone -> Unit
+                    else -> {
+                        if (obj.optLong("reminderAt", 0L) >= existing.optLong("reminderAt", 0L)) {
+                            byId[id] = obj
+                        }
+                    }
+                }
+            }
+        }
+        ingest(remoteRaw)
+        ingest(localRaw)
+        val out = JSONArray()
+        byId.values.sortedBy { it.optLong("reminderAt", 0L) }.forEach { out.put(it) }
+        return out.toString()
+    }
+
+    private fun applyMergedCloud(remote: Map<String, Any?>) {
+        val keys = listOf("tasks", "notes", "habits", "accounts", "ledgerEntries")
+        keys.forEach { key ->
+            val remoteRaw = remote[key] as? String
+            val localRaw = store.read(key)
+            val merged = when (key) {
+                "tasks" -> mergeTasksJson(localRaw, remoteRaw)
+                "notes" -> mergeJsonArraysById(localRaw, remoteRaw, preferNewerKey = "updatedAt")
+                "ledgerEntries" -> mergeJsonArraysById(localRaw, remoteRaw, preferNewerKey = "createdAt")
+                else -> mergeJsonArraysById(localRaw, remoteRaw)
+            }
+            store.save(key, merged)
+        }
+    }
+
+    /**
+     * Sign in / link with Google so phone and web share the same Firebase UID.
+     * - Anonymous user: try link; if Google already exists elsewhere, switch to that account and keep local data.
+     * - Already signed in: refresh session with Google credential.
+     */
+    fun signInOrLinkGoogle(idToken: String, onComplete: (Boolean, String?) -> Unit) {
+        val credential = GoogleAuthProvider.getCredential(idToken, null)
+        val current = auth.currentUser
+
+        fun afterGoogleAuth(successMessage: String?) {
+            refreshAuthMeta()
+            syncBidirectional { ok, error ->
+                if (ok) onComplete(true, successMessage)
+                else onComplete(true, successMessage ?: "Signed in — sync had an issue: ${error ?: "unknown"}")
+            }
+        }
+
+        fun signIntoGoogleAccount() {
+            auth.signInWithCredential(credential)
+                .addOnSuccessListener {
+                    afterGoogleAuth("Signed in with Google — phone and web can now sync")
+                }
+                .addOnFailureListener { error ->
+                    onComplete(false, friendlyAuthError(error))
+                }
+        }
+
+        if (current == null) {
+            signIntoGoogleAccount()
+            return
+        }
+
+        if (current.providerData.any { it.providerId == GoogleAuthProvider.PROVIDER_ID }) {
+            // Already linked — re-auth then sync.
+            current.reauthenticate(credential)
+                .addOnSuccessListener {
+                    afterGoogleAuth("Already signed in with Google — synced")
+                }
+                .addOnFailureListener {
+                    // Reauth failed (token mismatch) — still try sync with current session.
+                    afterGoogleAuth("Google already linked — synced")
+                }
+            return
+        }
+
+        // Anonymous (or other) → link Google to keep the same UID when possible.
+        current.linkWithCredential(credential)
+            .addOnSuccessListener {
+                afterGoogleAuth("Google linked — use the same account on the web app")
+            }
+            .addOnFailureListener { error ->
+                val alreadyInUse = error.message?.contains("credential-already-in-use", ignoreCase = true) == true ||
+                    error.message?.contains("email-already-in-use", ignoreCase = true) == true
+                if (alreadyInUse) {
+                    // Google account already has a Boop profile — switch to it; local SharedPreferences stay on device.
+                    signIntoGoogleAccount()
+                } else {
+                    onComplete(false, friendlyAuthError(error))
+                }
+            }
     }
 
     fun ensureAnonymousAuth(onComplete: (Boolean, String?) -> Unit) {
         store.init(AppContextHolder.context)
         val existing = auth.currentUser
         if (existing != null) {
-            BoopSyncState.signedInUid = existing.uid
+            refreshAuthMeta()
             BoopSyncState.lastSyncError = null
             onComplete(true, null)
             return
         }
-        auth.signInAnonymously()
-            .addOnSuccessListener {
-                BoopSyncState.signedInUid = auth.currentUser?.uid
+        // Anonymous auth is often disabled in Firebase ("operation is not allowed to admins/restricted").
+        // Do not attempt it — Google sign-in is required for cloud sync.
+        onComplete(false, "Sign in with Google to enable cloud sync")
+    }
+
+    fun ensureSession(onRemoteLoaded: () -> Unit, onFailure: ((String) -> Unit)? = null) {
+        store.init(AppContextHolder.context)
+        refreshAuthMeta()
+        val uid = auth.currentUser?.uid
+        if (uid == null) {
+            // Local-only until the user signs in with Google.
+            onRemoteLoaded()
+            return
+        }
+        db.collection("boopUsers").document(uid).get()
+            .addOnSuccessListener { snap ->
+                if (snap.exists()) {
+                    applyMergedCloud(snap.data ?: emptyMap())
+                }
+                BoopSyncState.lastSyncMillis = System.currentTimeMillis()
+                BoopSyncState.lastSyncOk = true
                 BoopSyncState.lastSyncError = null
-                onComplete(true, null)
+                onRemoteLoaded()
             }
             .addOnFailureListener { error ->
-                val msg = friendlyAuthError(error)
+                val msg = friendlyFirestoreError(error)
                 BoopSyncState.lastSyncOk = false
                 BoopSyncState.lastSyncError = msg
-                BoopSyncState.signedInUid = null
+                onFailure?.invoke(msg)
+                onRemoteLoaded()
+            }
+    }
+
+    fun syncBidirectional(onComplete: (Boolean, String?) -> Unit) {
+        refreshAuthMeta()
+        val user = auth.currentUser
+        if (user == null) {
+            onComplete(false, "Sign in with Google first, then tap Sync now")
+            return
+        }
+        if (!BoopSyncState.isGoogleLinked) {
+            onComplete(false, "Sign in with Google first — guest/anonymous sync is disabled")
+            return
+        }
+        val uid = user.uid
+        db.collection("boopUsers").document(uid).get()
+            .addOnSuccessListener { snap ->
+                if (snap.exists()) {
+                    applyMergedCloud(snap.data ?: emptyMap())
+                }
+                val payload = mapOf(
+                    "tasks" to store.read("tasks"),
+                    "notes" to store.read("notes"),
+                    "habits" to store.read("habits"),
+                    "accounts" to store.read("accounts"),
+                    "ledgerEntries" to store.read("ledgerEntries"),
+                )
+                db.collection("boopUsers").document(uid)
+                    .set(payload, com.google.firebase.firestore.SetOptions.merge())
+                    .addOnSuccessListener {
+                        BoopSyncState.lastSyncMillis = System.currentTimeMillis()
+                        BoopSyncState.lastSyncOk = true
+                        BoopSyncState.lastSyncError = null
+                        onComplete(true, null)
+                    }
+                    .addOnFailureListener { error ->
+                        val msg = friendlyFirestoreError(error)
+                        BoopSyncState.lastSyncOk = false
+                        BoopSyncState.lastSyncError = msg
+                        onComplete(false, msg)
+                    }
+            }
+            .addOnFailureListener { error ->
+                val msg = friendlyFirestoreError(error)
+                BoopSyncState.lastSyncOk = false
+                BoopSyncState.lastSyncError = msg
                 onComplete(false, msg)
             }
     }
 
-    fun ensureSession(onRemoteLoaded: () -> Unit, onFailure: ((String) -> Unit)? = null) {
-        ensureAnonymousAuth { signedIn, authError ->
-            if (!signedIn) {
-                authError?.let { onFailure?.invoke(it) }
-                onRemoteLoaded()
-                return@ensureAnonymousAuth
-            }
-            val uid = auth.currentUser?.uid
-            if (uid == null) {
-                onRemoteLoaded()
-                return@ensureAnonymousAuth
-            }
-            db.collection("boopUsers").document(uid).get()
-                .addOnSuccessListener { snap ->
-                    mergeRemoteField("tasks", snap.getString("tasks"))
-                    mergeRemoteField("notes", snap.getString("notes"))
-                    mergeRemoteField("habits", snap.getString("habits"))
-                    mergeRemoteField("accounts", snap.getString("accounts"))
-                    mergeRemoteField("ledgerEntries", snap.getString("ledgerEntries"))
-                    BoopSyncState.lastSyncMillis = System.currentTimeMillis()
-                    BoopSyncState.lastSyncOk = true
-                    BoopSyncState.lastSyncError = null
-                    onRemoteLoaded()
-                }
-                .addOnFailureListener { error ->
-                    val msg = friendlyFirestoreError(error)
-                    BoopSyncState.lastSyncOk = false
-                    BoopSyncState.lastSyncError = msg
-                    onFailure?.invoke(msg)
-                    onRemoteLoaded()
-                }
-        }
+    fun pushAllToCloud(onComplete: (Boolean, String?) -> Unit) {
+        syncBidirectional(onComplete)
     }
 
-    fun pushAllToCloud(onComplete: (Boolean, String?) -> Unit) {
-        ensureAnonymousAuth { signedIn, authError ->
-            if (!signedIn) {
-                onComplete(false, authError ?: "Not signed in")
-                return@ensureAnonymousAuth
-            }
-            val uid = auth.currentUser?.uid ?: run {
-                onComplete(false, "Not signed in")
-                return@ensureAnonymousAuth
-            }
-            val payload = mapOf(
-                "tasks" to store.read("tasks"),
-                "notes" to store.read("notes"),
-                "habits" to store.read("habits"),
-                "accounts" to store.read("accounts"),
-                "ledgerEntries" to store.read("ledgerEntries"),
-            )
-            db.collection("boopUsers").document(uid)
-                .set(payload, com.google.firebase.firestore.SetOptions.merge())
-                .addOnSuccessListener {
-                    BoopSyncState.lastSyncMillis = System.currentTimeMillis()
-                    BoopSyncState.lastSyncOk = true
-                    BoopSyncState.lastSyncError = null
-                    onComplete(true, null)
-                }
-                .addOnFailureListener { error ->
-                    val msg = friendlyFirestoreError(error)
-                    BoopSyncState.lastSyncOk = false
-                    BoopSyncState.lastSyncError = msg
-                    onComplete(false, msg)
-                }
-        }
+    fun signOutCloud(onComplete: () -> Unit) {
+        auth.signOut()
+        BoopSyncState.signedInUid = null
+        BoopSyncState.signedInEmail = null
+        BoopSyncState.isGoogleLinked = false
+        BoopSyncState.lastSyncError = null
+        onComplete()
     }
 
     fun exportBackupJson(): String = JSONObject()

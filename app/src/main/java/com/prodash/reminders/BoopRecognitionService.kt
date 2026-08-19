@@ -8,7 +8,7 @@ import android.speech.SpeechRecognizer
 import android.speech.SpeechRecognizer.ERROR_CLIENT
 
 /**
- * Required companion for [BoopVoiceInteractionService] so Android lists BOOP as a
+ * Required companion for [BoopVoiceInteractionService] so Android lists Boop as a
  * selectable digital assistant. Forwards recognition to the platform SpeechRecognizer.
  */
 class BoopRecognitionService : RecognitionService() {

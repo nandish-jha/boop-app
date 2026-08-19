@@ -1,14 +1,15 @@
 package com.prodash.reminders
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -44,6 +45,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.FormatBold
+import androidx.compose.material.icons.outlined.FormatItalic
+import androidx.compose.material.icons.outlined.FormatListBulleted
+import androidx.compose.material.icons.outlined.FormatListNumbered
+import androidx.compose.material.icons.outlined.FormatStrikethrough
+import androidx.compose.material.icons.outlined.FormatUnderlined
+import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -76,14 +84,14 @@ fun KeepToolbarIconButton(
         shape = CircleShape,
         color = palette.chipBg,
         border = BorderStroke(1.dp, palette.surfaceBorder),
-        modifier = modifier.size(34.dp),
+        modifier = modifier.size(40.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 icon,
                 contentDescription = contentDescription,
                 tint = tint ?: palette.onBackground,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(20.dp),
             )
         }
     }
@@ -156,13 +164,30 @@ fun KeepOutlinedTitleField(
     placeholder: String = "Title",
     modifier: Modifier = Modifier,
 ) {
+    val palette = LocalBoopPalette.current
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        placeholder = { Text(placeholder) },
+        textStyle = TextStyle(
+            fontFamily = BoopSansFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 22.sp,
+            color = palette.onBackground,
+        ),
+        placeholder = {
+            Text(
+                placeholder,
+                style = TextStyle(
+                    fontFamily = BoopSansFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 22.sp,
+                    color = palette.muted.copy(alpha = 0.65f),
+                ),
+            )
+        },
         singleLine = true,
         keyboardOptions = KeepSentenceKeyboard,
         shape = RoundedCornerShape(14.dp),
@@ -253,6 +278,7 @@ fun KeepFormSaveButton(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun KeepReminderLinkSection(
     options: List<Pair<String?, String>>,
@@ -262,12 +288,12 @@ fun KeepReminderLinkSection(
 ) {
     Column(modifier) {
         KeepSectionLabel("LINK TO REMINDER")
-        Row(
+        FlowRow(
             Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             options.forEach { (id, label) ->
                 KeepPaletteChip(
@@ -298,7 +324,7 @@ fun KeepBorderlessTitleField(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         textStyle = TextStyle(
-            fontFamily = BoopSerifFamily,
+            fontFamily = BoopSansFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 22.sp,
             color = palette.onBackground,
@@ -313,7 +339,7 @@ fun KeepBorderlessTitleField(
                     Text(
                         placeholder,
                         style = TextStyle(
-                            fontFamily = BoopSerifFamily,
+                            fontFamily = BoopSansFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 22.sp,
                             color = palette.muted.copy(alpha = 0.65f),
@@ -386,25 +412,98 @@ fun KeepEditorDockedBottomBar(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun KeepNoteLabelChips(
     tagsCsv: String,
     modifier: Modifier = Modifier,
+    onRemoveTag: ((String) -> Unit)? = null,
 ) {
     val tags = parseNoteTagsForEditor(tagsCsv)
     if (tags.isEmpty()) return
-    Row(
+    FlowRow(
         modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         tags.forEach { tag ->
             KeepPaletteChip(
                 label = tag,
                 selected = true,
-                onClick = {},
+                onClick = { onRemoveTag?.invoke(tag) },
+            )
+        }
+    }
+}
+
+@Composable
+fun KeepNoteTagDock(
+    tagsCsv: String,
+    onTagsChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = LocalBoopPalette.current
+    val tags = parseNoteTagsForEditor(tagsCsv)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (tags.isNotEmpty()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                tags.forEach { tag ->
+                    KeepPaletteChip(
+                        label = tag,
+                        selected = true,
+                        onClick = {
+                            onTagsChange(
+                                tags.filterNot { it.equals(tag, ignoreCase = true) }.joinToString(", "),
+                            )
+                        },
+                    )
+                }
+            }
+        }
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = palette.surfaceVariant,
+            border = BorderStroke(1.dp, palette.surfaceBorder),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            BasicTextField(
+                value = tagsCsv,
+                onValueChange = onTagsChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                textStyle = TextStyle(
+                    fontFamily = BoopSansFamily,
+                    fontSize = 14.sp,
+                    color = palette.onBackground,
+                ),
+                cursorBrush = SolidColor(palette.accent),
+                singleLine = true,
+                decorationBox = { inner ->
+                    Box {
+                        if (tagsCsv.isBlank()) {
+                            Text(
+                                "Add labels (comma separated)",
+                                color = palette.muted,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        inner()
+                    }
+                },
             )
         }
     }
@@ -429,19 +528,101 @@ fun htmlNoteBodyToPlain(body: String): String {
         trimmed
     }
 }
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun KeepEditorBottomBar(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    Row(
+    FlowRow(
         modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         content()
+    }
+}
+
+@Composable
+fun KeepNoteFormatToolbar(
+    onBold: () -> Unit,
+    onItalic: () -> Unit,
+    onUnderline: () -> Unit,
+    onStrike: () -> Unit,
+    onBullets: () -> Unit,
+    onNumbers: () -> Unit,
+    onHeading: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        KeepToolbarIconButton(onClick = onBold, icon = Icons.Outlined.FormatBold, contentDescription = "Bold")
+        KeepToolbarIconButton(onClick = onItalic, icon = Icons.Outlined.FormatItalic, contentDescription = "Italic")
+        KeepToolbarIconButton(onClick = onUnderline, icon = Icons.Outlined.FormatUnderlined, contentDescription = "Underline")
+        KeepToolbarIconButton(onClick = onStrike, icon = Icons.Outlined.FormatStrikethrough, contentDescription = "Strikethrough")
+        KeepToolbarIconButton(onClick = onBullets, icon = Icons.Outlined.FormatListBulleted, contentDescription = "Bulleted list")
+        KeepToolbarIconButton(onClick = onNumbers, icon = Icons.Outlined.FormatListNumbered, contentDescription = "Numbered list")
+        KeepToolbarIconButton(onClick = onHeading, icon = Icons.Outlined.Title, contentDescription = "Heading")
+    }
+}
+
+@Composable
+fun KeepNoteEditDock(
+    showFormat: Boolean,
+    onBold: () -> Unit,
+    onItalic: () -> Unit,
+    onUnderline: () -> Unit,
+    onStrike: () -> Unit,
+    onBullets: () -> Unit,
+    onNumbers: () -> Unit,
+    onHeading: () -> Unit,
+    modifier: Modifier = Modifier,
+    insertActions: @Composable () -> Unit,
+) {
+    val palette = LocalBoopPalette.current
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = palette.sheetBg,
+        tonalElevation = 3.dp,
+        shadowElevation = 6.dp,
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(palette.surfaceBorder),
+            )
+            if (showFormat) {
+                KeepNoteFormatToolbar(
+                    onBold = onBold,
+                    onItalic = onItalic,
+                    onUnderline = onUnderline,
+                    onStrike = onStrike,
+                    onBullets = onBullets,
+                    onNumbers = onNumbers,
+                    onHeading = onHeading,
+                )
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(start = 10.dp, end = 10.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                insertActions()
+            }
+        }
     }
 }
 
@@ -544,6 +725,7 @@ fun KeepPaletteChip(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun KeepEditorRepeatSection(
     repeatEveryDays: Int,
@@ -562,12 +744,12 @@ fun KeepEditorRepeatSection(
     )
     Column(modifier) {
         KeepSectionLabel("Repeat")
-        Row(
+        FlowRow(
             Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             repeatOptions.forEach { (days, label) ->
                 KeepPaletteChip(

@@ -14,7 +14,7 @@
         android:layout_height="wrap_content"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="BOOP"
+        android:text="Boop"
         android:textAllCaps="true"
         android:textColor="#E0E0E0"
         android:textSize="10sp"

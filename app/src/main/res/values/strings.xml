@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BOOP</string>
-    <string name="voice_interaction_service_label">BOOP</string>
-    <string name="voice_recognition_service_label">BOOP speech recognition</string>
+    <string name="app_name">Boop</string>
+    <string name="voice_interaction_service_label">Boop</string>
+    <string name="voice_recognition_service_label">Boop speech recognition</string>
     <string name="widget_tasks_title">Today\'s tasks</string>
     <string name="widget_tasks_description">Shows your next task due today</string>
     <string name="widget_notes_title">Recent note</string>

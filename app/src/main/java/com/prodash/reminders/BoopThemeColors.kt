@@ -67,16 +67,16 @@ object BoopThemeColors {
         background = AndroidColor.parseColor("#000000"),
         surface = AndroidColor.parseColor("#1A1A1A"),
         title = AndroidColor.parseColor("#FFFFFF"),
-        subtitle = AndroidColor.parseColor("#9E9E9E"),
-        accent = AndroidColor.parseColor("#E0E0E0"),
+        subtitle = AndroidColor.parseColor("#D0D0D0"),
+        accent = AndroidColor.parseColor("#F2F2F2"),
     )
 
     private fun amoledLight() = WidgetColors(
         background = AndroidColor.parseColor("#FFFFFF"),
         surface = AndroidColor.parseColor("#EDEDED"),
         title = AndroidColor.parseColor("#121212"),
-        subtitle = AndroidColor.parseColor("#757575"),
-        accent = AndroidColor.parseColor("#3A3A3A"),
+        subtitle = AndroidColor.parseColor("#3A3A3A"),
+        accent = AndroidColor.parseColor("#1F1F1F"),
     )
 
     private fun terracottaDark() = WidgetColors(

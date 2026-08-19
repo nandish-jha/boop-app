@@ -20,7 +20,7 @@ object BoopWidgetSupport {
         title: String,
         subtitle: String,
         clickIntent: PendingIntent?,
-        accentLabel: String = "BOOP",
+        accentLabel: String = "Boop",
     ) {
         val colors = BoopThemeColors.resolve(context)
         appWidgetIds.forEach { id ->

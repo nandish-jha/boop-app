@@ -67,19 +67,40 @@ data class UnifiedTypeColors(
 )
 
 fun unifiedTypeColors(type: UnifiedItemType, dark: Boolean, monochrome: Boolean = false): UnifiedTypeColors {
+    if (monochrome) {
+        val (bgL, borderL, accentL) = when (type) {
+            UnifiedItemType.NOTE -> Triple(0.16f, 0.82f, 0.98f)
+            UnifiedItemType.REMINDER -> Triple(0.22f, 0.74f, 1f)
+            UnifiedItemType.CALENDAR -> Triple(0.12f, 0.90f, 0.94f)
+            UnifiedItemType.HABIT -> Triple(0.28f, 0.66f, 1f)
+            UnifiedItemType.WALLET -> Triple(0.20f, 0.86f, 0.92f)
+        }
+        return if (dark) {
+            UnifiedTypeColors(
+                bg = Color.hsl(0f, 0f, bgL),
+                border = Color.hsl(0f, 0f, borderL),
+                accent = Color.hsl(0f, 0f, accentL),
+            )
+        } else {
+            UnifiedTypeColors(
+                bg = Color.hsl(0f, 0f, 1f - bgL * 0.22f),
+                border = Color.hsl(0f, 0f, 1f - borderL * 0.55f),
+                accent = Color.hsl(0f, 0f, 0.12f),
+            )
+        }
+    }
     val h = type.hue
-    val sat = if (monochrome) 0f else 1f
     return if (dark) {
         UnifiedTypeColors(
-            bg = Color.hsl(h, 0.12f * sat, if (monochrome) 0.16f else 0.22f),
-            border = Color.hsl(h, 0.18f * sat, if (monochrome) 0.34f else 0.42f),
-            accent = Color.hsl(h, 0.14f * sat, if (monochrome) 0.86f else 0.78f),
+            bg = Color.hsl(h, 0.12f, 0.22f),
+            border = Color.hsl(h, 0.18f, 0.42f),
+            accent = Color.hsl(h, 0.14f, 0.78f),
         )
     } else {
         UnifiedTypeColors(
-            bg = Color.hsl(h, 0.10f * sat, if (monochrome) 0.95f else 0.94f),
-            border = Color.hsl(h, 0.16f * sat, if (monochrome) 0.80f else 0.72f),
-            accent = Color.hsl(h, 0.18f * sat, if (monochrome) 0.28f else 0.38f),
+            bg = Color.hsl(h, 0.10f, 0.94f),
+            border = Color.hsl(h, 0.16f, 0.72f),
+            accent = Color.hsl(h, 0.18f, 0.38f),
         )
     }
 }
@@ -122,9 +143,10 @@ fun UnifiedTintCard(
                 scaleX = scale
                 scaleY = scale
             },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         color = colors.bg,
         border = BorderStroke(1.dp, colors.border),
+        tonalElevation = 1.dp,
         interactionSource = interaction,
     ) {
         Column(
@@ -138,7 +160,13 @@ fun UnifiedTintCard(
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = if (dark) Color.Black.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.5f),
+                    color = if (palette.monochrome) {
+                        if (dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
+                    } else if (dark) {
+                        Color.Black.copy(alpha = 0.25f)
+                    } else {
+                        Color.White.copy(alpha = 0.5f)
+                    },
                 ) {
                     Row(
                         Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -202,7 +230,7 @@ fun UnifiedTintCard(
             Text(
                 title,
                 style = MaterialTheme.typography.titleSmall.copy(
-                    fontFamily = FontFamily.Serif,
+                    fontFamily = BoopSansFamily,
                     fontSize = 14.sp,
                 ),
                 color = palette.onBackground,
@@ -234,7 +262,7 @@ fun UnifiedTintCard(
                 Text(
                     amount,
                     color = amountColor ?: colors.accent,
-                    style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Serif),
+                    style = MaterialTheme.typography.titleMedium.copy(fontFamily = BoopSansFamily),
                 )
             }
             if (!linkedLabel.isNullOrBlank()) {
@@ -286,7 +314,7 @@ fun UnifiedWalletHero(
                 balance,
                 color = palette.onBackground,
                 style = MaterialTheme.typography.headlineMedium.copy(
-                    fontFamily = FontFamily.Serif,
+                    fontFamily = BoopSansFamily,
                     fontWeight = FontWeight.SemiBold,
                 ),
             )
@@ -371,7 +399,7 @@ fun UnifiedWeekStrip(
                         dayCal.get(Calendar.DAY_OF_MONTH).toString(),
                         color = if (isSelected) colors.accent else palette.onBackground,
                         style = MaterialTheme.typography.titleSmall.copy(
-                            fontFamily = FontFamily.Serif,
+                            fontFamily = BoopSansFamily,
                             fontWeight = FontWeight.SemiBold,
                         ),
                         textAlign = TextAlign.Center,

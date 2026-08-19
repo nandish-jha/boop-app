@@ -1,5 +1,6 @@
 @file:OptIn(
     androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
     androidx.compose.material.ExperimentalMaterialApi::class,
 )
 
@@ -13,6 +14,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.AlertDialog
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
 import android.text.TextUtils
@@ -81,6 +84,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -171,7 +175,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ModalBottomSheet
@@ -246,7 +253,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.foundation.border
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.Dp
@@ -279,6 +285,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.DecimalFormat
@@ -537,61 +546,61 @@ private fun boopTerracottaLightPalette() = BoopPalette(
     sheetHandle = Color(0x26141313),
 )
 
-/** AMOLED monochrome — true black with whites and greys */
+/** AMOLED monochrome — true black with high-contrast greys */
 private fun boopDarkPalette() = BoopPalette(
     background = Color(0xFF000000),
     phoneBg = Color(0xFF000000),
-    surface = Color(0xFF1A1A1A),
-    surfaceVariant = Color(0xFF141414),
-    surfaceElevated = Color(0xFF222222),
+    surface = Color(0xFF1F1F1F),
+    surfaceVariant = Color(0xFF121212),
+    surfaceElevated = Color(0xFF2C2C2C),
     onBackground = Color(0xFFFFFFFF),
-    muted = Color(0xFF9E9E9E),
-    accent = Color(0xFFE0E0E0),
-    accentGlow = Color(0xFFBDBDBD),
+    muted = Color(0xFFC8C8C8),
+    accent = Color(0xFFFFFFFF),
+    accentGlow = Color(0xFFF5F5F5),
     accentOn = Color(0xFF000000),
-    navPill = Color(0x33FFFFFF),
+    navPill = Color(0x66FFFFFF),
     navSelected = Color(0xFFFFFFFF),
-    navUnselected = Color(0xFF8A8A8A),
-    inputField = Color(0xFF141414),
-    danger = Color(0xFFE57373),
-    recording = Color(0xFFE0E0E0),
-    quoteFill = Color(0xFF1A1A1A),
-    quoteStroke = Color(0xFFE0E0E0),
-    topbarBg = Color(0xD9000000),
-    chipBg = Color(0xFF1F1F1F),
-    surfaceBorder = Color(0x1AFFFFFF),
-    sheetBg = Color(0xFF1A1A1A),
+    navUnselected = Color(0xFFB0B0B0),
+    inputField = Color(0xFF161616),
+    danger = Color(0xFFFF8A80),
+    recording = Color(0xFFFFFFFF),
+    quoteFill = Color(0xFF242424),
+    quoteStroke = Color(0xFFF0F0F0),
+    topbarBg = Color(0xE6000000),
+    chipBg = Color(0xFF3A3A3A),
+    surfaceBorder = Color(0x8AFFFFFF),
+    sheetBg = Color(0xFF1F1F1F),
     overlay = Color(0x8C000000),
-    sheetHandle = Color(0x33FFFFFF),
+    sheetHandle = Color(0x66FFFFFF),
     monochrome = true,
 )
 
-/** AMOLED monochrome light — white with greys */
+/** High-contrast grayscale light */
 private fun boopLightPalette() = BoopPalette(
-    background = Color(0xFFF2F2F2),
+    background = Color(0xFFF4F4F4),
     phoneBg = Color(0xFFFFFFFF),
     surface = Color(0xFFFFFFFF),
-    surfaceVariant = Color(0xFFEDEDED),
+    surfaceVariant = Color(0xFFE4E4E4),
     surfaceElevated = Color(0xFFFFFFFF),
-    onBackground = Color(0xFF121212),
-    muted = Color(0xFF757575),
-    accent = Color(0xFF3A3A3A),
-    accentGlow = Color(0xFF9E9E9E),
+    onBackground = Color(0xFF0A0A0A),
+    muted = Color(0xFF2A2A2A),
+    accent = Color(0xFF111111),
+    accentGlow = Color(0xFF4A4A4A),
     accentOn = Color(0xFFFFFFFF),
-    navPill = Color(0x1F000000),
-    navSelected = Color(0xFF121212),
-    navUnselected = Color(0xFF9E9E9E),
-    inputField = Color(0xFFF5F5F5),
-    danger = Color(0xFFC45850),
-    recording = Color(0xFF3A3A3A),
-    quoteFill = Color(0xFFF5F5F5),
-    quoteStroke = Color(0xFF3A3A3A),
-    topbarBg = Color(0xEBFFFFFF),
-    chipBg = Color(0xFFEDEDED),
-    surfaceBorder = Color(0x14121212),
+    navPill = Color(0x33000000),
+    navSelected = Color(0xFF0A0A0A),
+    navUnselected = Color(0xFF3D3D3D),
+    inputField = Color(0xFFECECEC),
+    danger = Color(0xFFB3261E),
+    recording = Color(0xFF111111),
+    quoteFill = Color(0xFFE8E8E8),
+    quoteStroke = Color(0xFF111111),
+    topbarBg = Color(0xF2FFFFFF),
+    chipBg = Color(0xFFD0D0D0),
+    surfaceBorder = Color(0x73111111),
     sheetBg = Color(0xFFFFFFFF),
-    overlay = Color(0x59121212),
-    sheetHandle = Color(0x26121212),
+    overlay = Color(0x66111111),
+    sheetHandle = Color(0x40111111),
     monochrome = true,
 )
 
@@ -826,6 +835,40 @@ private fun palettePreviewColors(family: PaletteFamily, useDarkTheme: Boolean): 
 internal val LocalBoopPalette = staticCompositionLocalOf { boopDarkPalette() }
 private val LocalBoopDataEpoch = staticCompositionLocalOf { 0 }
 
+/** Maps a Material You [ColorScheme] into Boop's app-wide palette tokens. */
+private fun boopPaletteFromMaterialYou(scheme: ColorScheme, dark: Boolean): BoopPalette {
+    val surface = scheme.surfaceContainerHigh
+    val surfaceVariant = scheme.surfaceContainer
+    val elevated = scheme.surfaceContainerHighest
+    return BoopPalette(
+        background = if (dark) Color.Black else scheme.background,
+        phoneBg = if (dark) Color.Black else scheme.background,
+        surface = surface,
+        surfaceVariant = surfaceVariant,
+        surfaceElevated = elevated,
+        onBackground = scheme.onBackground,
+        muted = scheme.onSurfaceVariant,
+        accent = scheme.primary,
+        accentGlow = scheme.primaryContainer,
+        accentOn = scheme.onPrimary,
+        navPill = scheme.secondaryContainer.copy(alpha = 0.55f),
+        navSelected = scheme.primary,
+        navUnselected = scheme.onSurfaceVariant,
+        inputField = scheme.surfaceContainerLowest,
+        danger = scheme.error,
+        recording = scheme.primary,
+        quoteFill = scheme.secondaryContainer.copy(alpha = 0.45f),
+        quoteStroke = scheme.primary,
+        topbarBg = (if (dark) Color.Black else scheme.surface).copy(alpha = 0.88f),
+        chipBg = scheme.surfaceContainer,
+        surfaceBorder = scheme.outlineVariant.copy(alpha = 0.45f),
+        sheetBg = scheme.surfaceContainerHigh,
+        overlay = Color.Black.copy(alpha = if (dark) 0.55f else 0.35f),
+        sheetHandle = scheme.onSurfaceVariant.copy(alpha = 0.35f),
+        monochrome = false,
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BoopApp() {
@@ -878,7 +921,9 @@ private fun BoopApp() {
         ThemeMode.LIGHT -> false
         ThemeMode.SYSTEM -> systemDark
     }
-    val palette = when (paletteFamily) {
+    val context = LocalContext.current
+    val materialYouAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val staticPalette = when (paletteFamily) {
         PaletteFamily.TERRACOTTA -> if (useDarkTheme) boopTerracottaDarkPalette() else boopTerracottaLightPalette()
         PaletteFamily.AMOLED -> if (useDarkTheme) boopDarkPalette() else boopLightPalette()
         PaletteFamily.ROSE -> if (useDarkTheme) boopRoseDarkPalette() else boopRoseLightPalette()
@@ -886,6 +931,12 @@ private fun BoopApp() {
         PaletteFamily.FOREST -> if (useDarkTheme) boopForestDarkPalette() else boopForestLightPalette()
         PaletteFamily.OCEAN -> if (useDarkTheme) boopOceanDarkPalette() else boopOceanLightPalette()
     }
+    val dynamicScheme = if (materialYouAvailable && paletteFamily == PaletteFamily.AMOLED) {
+        if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else {
+        null
+    }
+    val palette = dynamicScheme?.let { boopPaletteFromMaterialYou(it, useDarkTheme) } ?: staticPalette
     val view = LocalView.current
     DisposableEffect(useDarkTheme) {
         val window = (view.context as Activity).window
@@ -1086,7 +1137,6 @@ private fun BoopApp() {
         MainActivity.pendingShortcutAction = null
     }
 
-    val context = LocalContext.current
     val launchActivity = context as? Activity
     var pendingOpenTaskId by rememberSaveable {
         mutableStateOf(MainActivity.pendingOpenTaskIdAction ?: launchActivity?.intent?.getStringExtra(BoopWidgetSupport.EXTRA_OPEN_TASK_ID))
@@ -1206,7 +1256,7 @@ private fun BoopApp() {
         }
     }
 
-    val colorScheme = if (useDarkTheme) {
+    val colorScheme = dynamicScheme ?: if (useDarkTheme) {
         darkColorScheme(
             background = palette.phoneBg,
             surface = palette.surface,
@@ -1243,6 +1293,7 @@ private fun BoopApp() {
     MaterialTheme(
         colorScheme = colorScheme,
         typography = boopTypography(),
+        shapes = BoopShapes,
     ) {
         BoopTextTheme {
         val scope = rememberCoroutineScope()
@@ -1584,7 +1635,6 @@ private fun BoopApp() {
                                 onSave = { note ->
                                     repository.saveNote(note)
                                     refresh()
-                                    itemSheet = null
                                 },
                             )
                             is ItemSheet.HabitSheet -> {
@@ -1778,13 +1828,22 @@ private fun SettingsScreen(
     val palette = LocalBoopPalette.current
     val context = LocalContext.current
     var syncBusy by remember { mutableStateOf(false) }
-    var authBusy by remember { mutableStateOf(false) }
+    var googleBusy by remember { mutableStateOf(false) }
     var authUid by remember { mutableStateOf(BoopSyncState.signedInUid ?: repository.currentUserId()) }
+    var authEmail by remember { mutableStateOf(BoopSyncState.signedInEmail) }
+    var googleLinked by remember { mutableStateOf(BoopSyncState.isGoogleLinked) }
     var syncStatusTick by remember { mutableIntStateOf(0) }
     DisposableEffect(Unit) {
+        repository.refreshAuthMeta()
+        authUid = BoopSyncState.signedInUid
+        authEmail = BoopSyncState.signedInEmail
+        googleLinked = BoopSyncState.isGoogleLinked
         val listener = FirebaseAuth.AuthStateListener { auth ->
-            authUid = auth.currentUser?.uid
             BoopSyncState.signedInUid = auth.currentUser?.uid
+            repository.refreshAuthMeta()
+            authUid = BoopSyncState.signedInUid
+            authEmail = BoopSyncState.signedInEmail
+            googleLinked = BoopSyncState.isGoogleLinked
             syncStatusTick++
         }
         FirebaseAuth.getInstance().addAuthStateListener(listener)
@@ -1817,6 +1876,53 @@ private fun SettingsScreen(
             }
         }.onFailure {
             Toast.makeText(context, "Import failed", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        fun googleSignInErrorMessage(err: Throwable): String {
+            val api = err as? ApiException
+            return when (api?.statusCode) {
+                10 -> "Google Sign-In needs this app’s SHA-1 in Firebase (error 10). Tap “Copy debug SHA-1” below, then add it in Firebase Console → Project settings → Your Android app."
+                12500 -> "Google Sign-In failed (12500). Check that Google sign-in is enabled in Firebase Authentication."
+                12501 -> "Google sign-in cancelled"
+                7 -> "Network error during Google sign-in"
+                else -> "Google sign-in failed${api?.statusCode?.let { " (code $it)" } ?: ""}: ${err.message ?: "unknown"}"
+            }
+        }
+
+        // Important: DEVELOPER_ERROR (10) often returns RESULT_CANCELED — still parse the intent.
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        runCatching {
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account.idToken
+            if (idToken.isNullOrBlank()) {
+                googleBusy = false
+                Toast.makeText(
+                    context,
+                    "Google returned no ID token. Add the debug SHA-1 fingerprint in Firebase (tap Copy below).",
+                    Toast.LENGTH_LONG,
+                ).show()
+                return@rememberLauncherForActivityResult
+            }
+            repository.signInOrLinkGoogle(idToken) { ok, message ->
+                googleBusy = false
+                syncStatusTick++
+                repository.refreshAuthMeta()
+                authUid = BoopSyncState.signedInUid
+                authEmail = BoopSyncState.signedInEmail
+                googleLinked = BoopSyncState.isGoogleLinked
+                if (ok) {
+                    onDataRefresh()
+                    Toast.makeText(context, message ?: "Signed in with Google", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(context, message ?: "Google sign-in failed", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.onFailure { err ->
+            googleBusy = false
+            Toast.makeText(context, googleSignInErrorMessage(err), Toast.LENGTH_LONG).show()
         }
     }
     Column(
@@ -1935,47 +2041,94 @@ private fun SettingsScreen(
                 BoopSyncState.lastSyncOk && BoopSyncState.lastSyncMillis > 0L ->
                     "Last synced ${SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(BoopSyncState.lastSyncMillis)}"
                 BoopSyncState.lastSyncError != null -> BoopSyncState.lastSyncError!!
-                else -> "Local data ready — tap Sync now to back up"
+                else -> "Local data ready — sign in with Google, then Sync"
             }
         }
         Text(syncLabel, color = palette.muted, style = MaterialTheme.typography.bodySmall)
         Text(
-            if (authUid != null) "Account ID: ${authUid!!.take(8)}…" else "Not signed in to cloud yet",
+            when {
+                googleLinked && !authEmail.isNullOrBlank() -> "Signed in: $authEmail"
+                googleLinked -> "Signed in with Google"
+                authUid != null -> "Cloud guest ID: ${authUid!!.take(8)}… — sign in with Google to sync with web"
+                else -> "Not signed in to cloud yet"
+            },
             color = palette.muted,
             style = MaterialTheme.typography.labelSmall,
         )
         Text(
-            "Tasks and notes always save on this device, even if cloud sync fails.",
+            "Use the same Google account on phone and web. Sync merges both sides.",
             color = palette.muted,
             style = MaterialTheme.typography.labelSmall,
         )
-        Spacer(Modifier.height(8.dp))
-        if (authUid == null) {
-            BoopWhiteButton(if (authBusy) "Signing in…" else "Retry sign-in") {
-                if (authBusy) return@BoopWhiteButton
-                authBusy = true
-                repository.ensureAnonymousAuth { ok, error ->
-                    authBusy = false
-                    syncStatusTick++
-                    if (ok) {
-                        Toast.makeText(context, "Signed in", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(context, error ?: "Sign-in failed", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
+        if (!googleLinked) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "If Google sign-in fails: copy the SHA-1 below → Firebase Console → Project settings → Your apps → Android app → Add fingerprint. Wait 1–2 minutes, then try again.",
+                color = palette.muted,
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
+        Spacer(Modifier.height(8.dp))
+        BoopWhiteButton(
+            when {
+                googleBusy -> "Signing in…"
+                googleLinked -> "Re-sync Google account"
+                else -> "Sign in with Google"
+            },
+        ) {
+            if (googleBusy) return@BoopWhiteButton
+            googleBusy = true
+            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken("948809119707-spaplnadjur8eogs9sbavv4pqj9l259i.apps.googleusercontent.com")
+                .requestEmail()
+                .build()
+            val client = GoogleSignIn.getClient(context, gso)
+            // Clear cached account so the picker always shows (avoids silent stale failures).
+            client.signOut().addOnCompleteListener {
+                googleSignInLauncher.launch(client.signInIntent)
+            }
+        }
+        if (!googleLinked) {
+            Spacer(Modifier.height(8.dp))
+            BoopWhiteButton("Copy debug SHA-1 for Firebase") {
+                val sha = "FE:02:6A:81:2C:9F:2E:3D:96:DF:F4:17:93:3A:BB:BB:C8:21:1A:65"
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("Boop debug SHA-1", sha))
+                Toast.makeText(context, "SHA-1 copied. Paste it in Firebase → Project settings → Android app fingerprints.", Toast.LENGTH_LONG).show()
+            }
+        }
+        Spacer(Modifier.height(8.dp))
         BoopWhiteButton(if (syncBusy) "Syncing…" else "Sync now") {
             if (syncBusy) return@BoopWhiteButton
+            if (!googleLinked) {
+                Toast.makeText(context, "Sign in with Google first, then Sync", Toast.LENGTH_LONG).show()
+                return@BoopWhiteButton
+            }
             syncBusy = true
-            repository.pushAllToCloud { ok, error ->
+            repository.syncBidirectional { ok, error ->
                 syncBusy = false
                 syncStatusTick++
                 if (ok) {
-                    Toast.makeText(context, "Synced to cloud", Toast.LENGTH_SHORT).show()
+                    onDataRefresh()
+                    Toast.makeText(context, "Synced with cloud", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(context, error ?: "Sync failed", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        if (googleLinked) {
+            Spacer(Modifier.height(8.dp))
+            BoopWhiteButton("Sign out of Google") {
+                GoogleSignIn.getClient(
+                    context,
+                    GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build(),
+                ).signOut()
+                repository.signOutCloud {
+                    syncStatusTick++
+                    authUid = null
+                    authEmail = null
+                    googleLinked = false
+                    Toast.makeText(context, "Signed out — local data stays on this phone", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -2014,6 +2167,8 @@ private fun SettingsScreen(
         Text("Voice", style = MaterialTheme.typography.titleMedium, color = palette.onBackground)
         Spacer(Modifier.height(8.dp))
         AssistantSetupRow()
+        Spacer(Modifier.height(8.dp))
+        VoiceHowToCard()
         Spacer(Modifier.height(24.dp))
         Text("Navigation", style = MaterialTheme.typography.titleMedium, color = palette.onBackground)
         Spacer(Modifier.height(8.dp))
@@ -2089,11 +2244,75 @@ private fun AssistantSetupRow() {
                 color = palette.onBackground,
             )
             Text(
-                "Tap above, then choose BOOP in the assistant list. After that, long-press the power button opens BOOP voice capture.",
+                "Tap above, then choose Boop in the assistant list. After that, long-press the power button opens Boop voice capture.",
                 color = palette.muted,
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+    }
+}
+
+@Composable
+private fun VoiceHowToCard() {
+    val palette = LocalBoopPalette.current
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = palette.surface,
+    ) {
+        Column(
+            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                "How to use voice",
+                style = MaterialTheme.typography.titleSmall,
+                color = palette.onBackground,
+            )
+            Text(
+                "1. Tap the mic on the home bar, or set Boop as your assistant below so a long-press of the power button opens capture.",
+                color = palette.onBackground,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "2. Speak one full sentence. Start with the kind of item: reminder, note, habit, expense, income, or event.",
+                color = palette.onBackground,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "3. Boop shows what it heard and saves it. Open the item afterward if you need to change details.",
+                color = palette.onBackground,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "Try saying",
+                style = MaterialTheme.typography.titleSmall,
+                color = palette.onBackground,
+            )
+            VoiceHowToLine("Task", "Remind me to call Alex tomorrow at 3")
+            VoiceHowToLine("Note", "Take a note: eggs, milk, bread")
+            VoiceHowToLine("Habit", "Add habit stretch every morning")
+            VoiceHowToLine("Expense", "Spent 12 dollars on lunch")
+            VoiceHowToLine("Income", "I got paid 200")
+            VoiceHowToLine("Event", "Schedule dentist next Tuesday at 10")
+        }
+    }
+}
+
+@Composable
+private fun VoiceHowToLine(kind: String, example: String) {
+    val palette = LocalBoopPalette.current
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            kind.uppercase(),
+            color = palette.muted,
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
+        )
+        Text(
+            "“$example”",
+            color = palette.onBackground,
+            style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+        )
     }
 }
 
@@ -3064,27 +3283,28 @@ private fun DashboardStatCard(
     val palette = LocalBoopPalette.current
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(20.dp),
         color = palette.surface,
-        shadowElevation = 0.dp,
         border = BorderStroke(1.dp, palette.surfaceBorder),
+        tonalElevation = 1.dp,
     ) {
         Column(
-            Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+            Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 label.uppercase(),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 0.5.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 0.8.sp),
                 color = palette.muted,
             )
             Text(
                 value,
                 style = MaterialTheme.typography.titleLarge.copy(
-                    fontFamily = BoopSerifFamily,
-                    fontSize = 22.sp,
+                    fontFamily = BoopSansFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 26.sp,
                 ),
-                color = palette.accent,
+                color = palette.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -3308,8 +3528,6 @@ private fun DashboardScreen(
         }
     }
     val dateLine = SimpleDateFormat("EEEE, MMMM d", Locale.US).format(now)
-    var greetingVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { greetingVisible = true }
     val quotes = remember {
         listOf(
             "Hope is a discipline. Keep showing up." to null,
@@ -3414,71 +3632,123 @@ private fun DashboardScreen(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(scroll),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            dateLine.uppercase(),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                letterSpacing = 1.1.sp,
+                                fontSize = 11.sp,
+                            ),
+                            color = palette.muted,
+                        )
+                        Text(
+                            text = greetingLine,
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontFamily = BoopSansFamily,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 32.sp,
+                                lineHeight = 38.sp,
+                            ),
+                            color = palette.onBackground,
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DashboardCircleButton(
+                            icon = Icons.Outlined.Search,
+                            contentDescription = "Search",
+                            onClick = { onSearchExpandedChange(true) },
+                        )
+                        DashboardCircleButton(
+                            icon = Icons.Outlined.Settings,
+                            contentDescription = "Settings",
+                            onClick = onOpenSettings,
+                        )
+                    }
+                }
+                val quoteOfDay = quotes[Calendar.getInstance().get(Calendar.DAY_OF_YEAR) % quotes.size]
                 Surface(
-                    shape = RoundedCornerShape(22.dp),
-                    color = palette.surfaceVariant,
-                    border = BorderStroke(1.dp, palette.accentGlow.copy(alpha = 0.14f)),
+                    shape = RoundedCornerShape(20.dp),
+                    color = palette.quoteFill,
+                    border = BorderStroke(1.dp, palette.quoteStroke.copy(alpha = 0.35f)),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Column(
-                                Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Text(
-                                    text = greetingLine,
-                                    style = MaterialTheme.typography.headlineMedium.copy(
-                                        fontFamily = BoopSerifFamily,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 27.sp,
-                                    ),
-                                    color = palette.onBackground,
-                                )
-                                Text(
-                                    text = dateLine,
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
-                                    color = palette.muted,
-                                )
-                            }
-                            DashboardCircleButton(
-                                icon = Icons.Outlined.Settings,
-                                contentDescription = "Settings",
-                                onClick = onOpenSettings,
-                            )
-                        }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            DashboardStatCard(
-                                label = "Today",
-                                value = tasksDueToday.size.toString(),
-                                caption = "due",
-                                modifier = Modifier.weight(1f),
-                            )
-                            DashboardStatCard(
-                                label = "Habits",
-                                value = if (activeHabits.isEmpty()) "—" else "$habitsDoneToday/${activeHabits.size}",
-                                caption = "done",
-                                modifier = Modifier.weight(1f),
-                            )
-                            DashboardStatCard(
-                                label = "Balance",
-                                value = if (accounts.isNotEmpty()) formatCadAmountNumber(netBalance, decimals = 0) else notes.count { !it.archived }.toString(),
-                                caption = if (accounts.isNotEmpty()) "net" else "notes",
-                                modifier = Modifier.weight(1f),
+                    Column(
+                        Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            quoteOfDay.first,
+                            color = palette.onBackground,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontFamily = BoopSansFamily,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 16.sp,
+                                lineHeight = 23.sp,
+                            ),
+                        )
+                        quoteOfDay.second?.let { author ->
+                            Text(
+                                "— $author",
+                                color = palette.muted,
+                                style = MaterialTheme.typography.labelMedium,
                             )
                         }
                     }
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    DashboardStatCard(
+                        label = "Today",
+                        value = tasksDueToday.size.toString(),
+                        caption = "due",
+                        modifier = Modifier.weight(1f),
+                    )
+                    DashboardStatCard(
+                        label = "Habits",
+                        value = if (activeHabits.isEmpty()) "—" else "$habitsDoneToday/${activeHabits.size}",
+                        caption = "done",
+                        modifier = Modifier.weight(1f),
+                    )
+                    DashboardStatCard(
+                        label = "Balance",
+                        value = if (accounts.isNotEmpty()) formatCadAmountNumber(netBalance, decimals = 0) else notes.count { !it.archived }.toString(),
+                        caption = if (accounts.isNotEmpty()) "net" else "notes",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (tasksDueToday.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        UnifiedSectionLabel("Today")
+                        tasksDueToday.take(6).forEach { task ->
+                            val subtaskCount = parseSubtasksJson(task.subtasksJson).size
+                            val taskBody = linkedNoteLabelForTask(task)
+                                ?: task.details.trim().ifBlank {
+                                    if (subtaskCount > 0) "$subtaskCount subtask${if (subtaskCount == 1) "" else "s"}" else ""
+                                }.takeIf { it.isNotBlank() }
+                            UnifiedTintCard(
+                                type = UnifiedItemType.REMINDER,
+                                title = task.title,
+                                meta = formatTaskReminderLine(task.reminderAt),
+                                body = taskBody,
+                                onClick = { onOpenTask(task) },
+                            )
+                        }
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    UnifiedSectionLabel("Up next")
                     UnifiedFilterChips(
                         chips = homeFilterChips,
                         selected = homeFilter,
@@ -3488,27 +3758,15 @@ private fun DashboardScreen(
                         Text("Nothing here yet.", color = palette.muted, style = MaterialTheme.typography.bodyMedium)
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            homeGridItems.chunked(2).forEach { rowItems ->
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(IntrinsicSize.Min),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    rowItems.forEach { (meta, onClick) ->
-                                        UnifiedTintCard(
-                                            type = meta.type,
-                                            title = meta.title,
-                                            meta = meta.meta,
-                                            body = if (meta.noteBodyRaw != null) null else meta.body,
-                                            bodyAnnotated = meta.noteBodyRaw?.let { noteBodyAnnotated(it, 96) },
-                                            onClick = onClick,
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .fillMaxHeight(),
-                                        )
-                                    }
-                                }
+                            homeGridItems.forEach { (meta, onClick) ->
+                                UnifiedTintCard(
+                                    type = meta.type,
+                                    title = meta.title,
+                                    meta = meta.meta,
+                                    body = if (meta.noteBodyRaw != null) null else meta.body,
+                                    bodyAnnotated = meta.noteBodyRaw?.let { noteBodyAnnotated(it, 96) },
+                                    onClick = onClick,
+                                )
                             }
                         }
                     }
@@ -3607,6 +3865,7 @@ private fun DashboardHabitCompactCard(
     habit: BoopHabit,
     onOpenHabit: (BoopHabit) -> Unit,
 ) {
+    val palette = LocalBoopPalette.current
     val todayKey = todayHabitDayKey()
     val doneToday = if (habit.quantityMode) {
         val todayAmount = parseHabitDayValues(habit.quantityDayValues)[todayKey] ?: 0
@@ -3649,11 +3908,11 @@ private fun DashboardHabitCompactCard(
                     } else {
                         "$doneCount/${habit.goal} days · " + if (doneToday) "Logged today" else "Not logged today"
                     },
-                    color = Color(0xFFBFBFBF),
+                    color = palette.muted,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Icon(Icons.Outlined.Flag, contentDescription = null, tint = Color(0xFF8E8E90))
+            Icon(Icons.Outlined.Flag, contentDescription = null, tint = palette.muted)
         }
     }
 }
@@ -3665,6 +3924,7 @@ private fun DashboardNoteTile(
     featured: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val palette = LocalBoopPalette.current
     val snippet = remember(note.body) { noteBodyAnnotated(note.body, if (featured) 120 else 72) }
     val interaction = remember(note.id) { MutableInteractionSource() }
     Card(
@@ -3692,14 +3952,14 @@ private fun DashboardNoteTile(
             )
             Text(
                 if (snippet.isEmpty()) AnnotatedString(" ") else snippet,
-                color = Color(0xFFBFBFBF),
+                color = palette.muted,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = if (featured) 4 else 3,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 formatNoteCardTime(note),
-                color = Color(0xFF8E8E90),
+                color = palette.muted,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -4981,7 +5241,7 @@ private fun CalendarScreen(
                         endMillis = maxOf(end, task.reminderAt + 5 * 60 * 1000L),
                         title = task.title,
                         kindLabel = if (task.repeatEveryDays > 0) "Repetitive task" else "One-time task",
-                        sourceLabel = "BOOP task",
+                        sourceLabel = "Boop task",
                         isTask = true,
                     ),
                 )
@@ -5134,11 +5394,10 @@ private fun NotesListScreen(
             },
         )
         if (availableTags.isNotEmpty()) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
+            FlowRow(
+                Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 (listOf("All") + availableTags).forEach { tag ->
                     val active = selectedTag.equals(tag, ignoreCase = true)
@@ -5209,6 +5468,7 @@ private fun NotesListScreen(
                                     .fillMaxWidth()
                                     .height(76.dp)
                                     .clip(RoundedCornerShape(10.dp))
+                                    .border(1.dp, palette.surfaceBorder, RoundedCornerShape(10.dp))
                                     .clickable {
                                         previewImages = images
                                         previewImageIndex = 0
@@ -7556,7 +7816,8 @@ private fun TaskEditorSheet(
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
                                         .size(46.dp)
-                                        .clip(RoundedCornerShape(10.dp)),
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .border(1.dp, palette.surfaceBorder, RoundedCornerShape(10.dp)),
                                 )
                             } else {
                                 Surface(
@@ -7659,14 +7920,17 @@ private fun NoteEditorSheet(
         }
         attachmentStored = existing.distinct().take(25)
     }
-    DisposableEffect(session) {
-        onDispose {
-            if (!hasExplicitSave && !skipAutoSaveOnDispose) {
+    var editing by rememberSaveable(session) { mutableStateOf(initial.id == null) }
+    val autoSaveOnLeave by rememberUpdatedState(
+        newValue = {
+            if (editing && !hasExplicitSave && !skipAutoSaveOnDispose) {
                 buildNoteForSaveOrNull()?.let(onSave)
             }
-        }
+        },
+    )
+    DisposableEffect(session) {
+        onDispose { autoSaveOnLeave() }
     }
-    var tagsExpanded by rememberSaveable(session) { mutableStateOf(initial.tagsCsv.isNotBlank()) }
     var showLinkSheet by remember(session) { mutableStateOf(false) }
     val linkRegex = remember { Regex("""https?://[^\s<>()]+""") }
     val previewLinks = remember(body) { linkRegex.findAll(body).map { it.value }.distinct().toList() }
@@ -7685,13 +7949,31 @@ private fun NoteEditorSheet(
     Column(
         Modifier
             .fillMaxWidth()
-            .fillMaxHeight(),
+            .fillMaxHeight()
+            .imePadding(),
     ) {
         KeepEditorTopBar(
             onBack = { saveAndDismiss() },
-            title = if (initial.id == null) "New Note" else "Edit Note",
+            title = when {
+                initial.id == null -> "New Note"
+                editing -> "Edit Note"
+                else -> "Note"
+            },
             actions = {
                 if (initial.id != null) {
+                    KeepToolbarIconButton(
+                        onClick = {
+                            if (editing) {
+                                buildNoteForSaveOrNull()?.let(onSave)
+                                editing = false
+                            } else {
+                                editing = true
+                            }
+                        },
+                        icon = if (editing) Icons.Outlined.Check else Icons.Outlined.Edit,
+                        contentDescription = if (editing) "Done editing" else "Edit note",
+                        tint = if (editing) palette.accent else palette.muted,
+                    )
                     KeepToolbarIconButton(
                         onClick = {
                             hasExplicitSave = true
@@ -7711,6 +7993,7 @@ private fun NoteEditorSheet(
                                     updatedAtMillis = System.currentTimeMillis(),
                                 ),
                             )
+                            onDismiss()
                         },
                         icon = if (initial.archived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
                         contentDescription = if (initial.archived) "Restore note" else "Archive note",
@@ -7730,98 +8013,83 @@ private fun NoteEditorSheet(
                 }
             },
         )
+        if (editing) {
+            KeepBorderlessTitleField(
+                value = title,
+                onValueChange = { title = it },
+                placeholder = "Title",
+            )
+            KeepNoteTagDock(
+                tagsCsv = tagsCsv,
+                onTagsChange = { tagsCsv = it },
+            )
+        }
         Column(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState()),
         ) {
-            if (initial.id != null) {
-                KeepEditorMetaLine(
-                    formatNoteCardTime(
-                        BoopNote(
-                            id = initial.id,
-                            title = "",
-                            body = "",
-                            attachmentUri = null,
-                            tagsCsv = "",
-                            ocrText = "",
-                            archived = false,
-                            createdAtMillis = initial.createdAtMillis,
-                            updatedAtMillis = initial.updatedAtMillis,
+            if (!editing) {
+                if (initial.id != null) {
+                    KeepEditorMetaLine(
+                        formatNoteCardTime(
+                            BoopNote(
+                                id = initial.id,
+                                title = "",
+                                body = "",
+                                attachmentUri = null,
+                                tagsCsv = "",
+                                ocrText = "",
+                                archived = false,
+                                createdAtMillis = initial.createdAtMillis,
+                                updatedAtMillis = initial.updatedAtMillis,
+                            ),
                         ),
+                    )
+                }
+                Text(
+                    title.ifBlank { "Untitled" },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { editing = true }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    color = palette.onBackground,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontFamily = BoopSansFamily,
+                        fontWeight = FontWeight.Medium,
                     ),
                 )
-            }
-            Spacer(Modifier.height(6.dp))
-            KeepOutlinedTitleField(
-                value = title,
-                onValueChange = { title = it },
-                placeholder = "Title",
-            )
-            Spacer(Modifier.height(12.dp))
-            if (tagsCsv.isNotBlank()) {
-                KeepNoteLabelChips(tagsCsv = tagsCsv)
-                Spacer(Modifier.height(8.dp))
+                if (tagsCsv.isNotBlank()) {
+                    KeepNoteLabelChips(tagsCsv = tagsCsv)
+                }
+                Spacer(Modifier.height(4.dp))
             }
             if (isChecklistMode) {
                 KeepChecklistEditor(
                     items = checklistItems,
                     onChange = { checklistItems = it.ifEmpty { listOf(ChecklistItem(text = "")) } },
+                    editing = editing,
                 )
-            } else {
+            } else if (editing) {
                 KeepOutlinedBodyField(
                     value = bodyField,
                     onValueChange = { bodyField = it },
                     placeholder = "Write something...",
-                    minLines = 6,
+                    minLines = 8,
                     visualTransformation = NoteMarkupVisualTransformation,
                 )
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    Modifier
+            } else {
+                val annotated = remember(body) { noteBodyAnnotated(body) }
+                Text(
+                    text = if (body.isBlank()) AnnotatedString("Tap to write something…") else annotated,
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    KeepToolbarIconButton(
-                        onClick = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.BOLD) },
-                        icon = Icons.Outlined.FormatBold,
-                        contentDescription = "Bold",
-                    )
-                    KeepToolbarIconButton(
-                        onClick = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.ITALIC) },
-                        icon = Icons.Outlined.FormatItalic,
-                        contentDescription = "Italic",
-                    )
-                    KeepToolbarIconButton(
-                        onClick = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.UNDERLINE) },
-                        icon = Icons.Outlined.FormatUnderlined,
-                        contentDescription = "Underline",
-                    )
-                    KeepToolbarIconButton(
-                        onClick = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.STRIKE) },
-                        icon = Icons.Outlined.FormatStrikethrough,
-                        contentDescription = "Strikethrough",
-                    )
-                    KeepToolbarIconButton(
-                        onClick = { bodyField = bodyField.toggleBulletLines() },
-                        icon = Icons.Outlined.FormatListBulleted,
-                        contentDescription = "Bulleted list",
-                    )
-                    KeepToolbarIconButton(
-                        onClick = { bodyField = bodyField.toggleNumberedLines() },
-                        icon = Icons.Outlined.FormatListNumbered,
-                        contentDescription = "Numbered list",
-                    )
-                    KeepToolbarIconButton(
-                        onClick = { bodyField = bodyField.toggleHeadingLine() },
-                        icon = Icons.Outlined.Title,
-                        contentDescription = "Heading",
-                    )
-                }
+                        .clickable { editing = true }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = if (body.isBlank()) palette.muted else palette.onBackground,
+                    style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
+                )
             }
             if (attachmentStored.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
@@ -7840,6 +8108,7 @@ private fun NoteEditorSheet(
                                     .weight(1f)
                                     .fillMaxHeight()
                                     .clip(RoundedCornerShape(12.dp))
+                                    .border(1.dp, palette.surfaceBorder, RoundedCornerShape(12.dp))
                                     .clickable { if (imageIndex >= 0) previewImageIndex = imageIndex },
                             ) {
                                 AsyncImage(
@@ -7851,22 +8120,24 @@ private fun NoteEditorSheet(
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize(),
                                 )
-                                Surface(
-                                    onClick = { attachmentStored = attachmentStored.filterNot { it == stored } },
-                                    shape = CircleShape,
-                                    color = Color.Black.copy(alpha = 0.55f),
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(4.dp)
-                                        .size(24.dp),
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            Icons.Outlined.Close,
-                                            contentDescription = "Remove image",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(15.dp),
-                                        )
+                                if (editing) {
+                                    Surface(
+                                        onClick = { attachmentStored = attachmentStored.filterNot { it == stored } },
+                                        shape = CircleShape,
+                                        color = Color.Black.copy(alpha = 0.55f),
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(4.dp)
+                                            .size(24.dp),
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Outlined.Close,
+                                                contentDescription = "Remove image",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(15.dp),
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -7875,25 +8146,6 @@ private fun NoteEditorSheet(
                     }
                     Spacer(Modifier.height(6.dp))
                 }
-            }
-            if (tagsExpanded) {
-                TextField(
-                    value = tagsCsv,
-                    onValueChange = { tagsCsv = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    placeholder = { Text("Add labels, comma separated", color = palette.muted) },
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = palette.onBackground),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        cursorColor = palette.accent,
-                    ),
-                    singleLine = true,
-                )
             }
             if (previewLinks.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
@@ -7907,8 +8159,17 @@ private fun NoteEditorSheet(
             }
             Spacer(Modifier.height(16.dp))
         }
-        Column(Modifier.fillMaxWidth()) {
-            KeepEditorBottomBar {
+        if (editing) {
+            KeepNoteEditDock(
+                showFormat = !isChecklistMode,
+                onBold = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.BOLD) },
+                onItalic = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.ITALIC) },
+                onUnderline = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.UNDERLINE) },
+                onStrike = { bodyField = bodyField.toggleInlineFormat(NoteInlineFormat.STRIKE) },
+                onBullets = { bodyField = bodyField.toggleBulletLines() },
+                onNumbers = { bodyField = bodyField.toggleNumberedLines() },
+                onHeading = { bodyField = bodyField.toggleHeadingLine() },
+            ) {
                 KeepToolbarIconButton(
                     onClick = {
                         isChecklistMode = !isChecklistMode
@@ -7929,12 +8190,6 @@ private fun NoteEditorSheet(
                     tint = if (attachmentStored.isNotEmpty()) palette.accent else palette.muted,
                 )
                 KeepToolbarIconButton(
-                    onClick = { tagsExpanded = !tagsExpanded },
-                    icon = Icons.Outlined.Label,
-                    contentDescription = "Add labels",
-                    tint = if (tagsCsv.isNotBlank()) palette.accent else palette.muted,
-                )
-                KeepToolbarIconButton(
                     onClick = {
                         if (previewLinks.size >= 25) {
                             Toast.makeText(context, "Maximum 25 links per note.", Toast.LENGTH_SHORT).show()
@@ -7947,9 +8202,6 @@ private fun NoteEditorSheet(
                     tint = if (previewLinks.isNotEmpty()) palette.accent else palette.muted,
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            KeepFormSaveButton(onClick = { saveAndDismiss() })
-            Spacer(Modifier.height(10.dp))
         }
         KeepLinkInputSheet(
             open = showLinkSheet,
@@ -7987,15 +8239,25 @@ private fun ImagePreviewOverlay(
                 .background(Color.Black.copy(alpha = 0.96f)),
         ) {
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(storedAttachmentForCoil(images[page]))
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(storedAttachmentForCoil(images[page]))
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(16.dp))
+                            .border(1.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(16.dp)),
+                    )
+                }
             }
             Surface(
                 onClick = onDismiss,
@@ -8669,7 +8931,7 @@ object ReminderNotifier {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL, "BOOP Reminders", NotificationManager.IMPORTANCE_DEFAULT),
+                NotificationChannel(CHANNEL, "Boop Reminders", NotificationManager.IMPORTANCE_DEFAULT),
             )
         }
         LocalStore.init(context)

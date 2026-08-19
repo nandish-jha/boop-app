@@ -90,6 +90,50 @@ private fun voiceSaveSuccessStatus(parsed: ParsedVoiceCapture): String {
 }
 
 @Composable
+private fun VoicePhraseHints() {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.surfaceVariant.copy(alpha = 0.55f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            "How to use",
+            color = colors.onBackground,
+            style = MaterialTheme.typography.labelMedium,
+        )
+        Text(
+            "Speak one full sentence. Start with the item type — reminder, note, habit, or money.",
+            color = colors.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "“Remind me to call Alex tomorrow”",
+            color = colors.onBackground,
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "“Take a note: eggs, milk, bread”",
+            color = colors.onBackground,
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "“Spent 12 dollars on lunch”",
+            color = colors.onBackground,
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
 private fun FloatingVoicePanel(
     status: String,
     listening: Boolean,
@@ -176,6 +220,9 @@ private fun FloatingVoicePanel(
                         .background(colors.surfaceVariant.copy(alpha = 0.55f))
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                 )
+            } else if (!showSaveUi) {
+                Spacer(Modifier.height(10.dp))
+                VoicePhraseHints()
             } else if (showSaveUi && previewType != null) {
                 Spacer(Modifier.height(10.dp))
                 Surface(
@@ -787,6 +834,9 @@ private fun VoiceCaptureSheetCore(
                     modifier = Modifier.padding(14.dp),
                 )
             }
+        } else {
+            Spacer(Modifier.height(16.dp))
+            VoicePhraseHints()
         }
 
         Spacer(Modifier.height(16.dp))
